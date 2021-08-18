@@ -125,7 +125,7 @@ void extractRecord (std::vector<uint8_t>& buffer, std::vector<uint8_t>& record) 
     buffer.erase (buffer.begin (), to);
 }
 
-void parseDataRecord (
+void parseGenericDataRecord (
     RecProps& recProps,
     std::vector<uint8_t>& record, RecLeader& recLeader,
     std::vector<DirEntry>& directory,
@@ -191,6 +191,19 @@ void splitFieldUnits (std::vector<uint8_t>& field, std::vector<std::vector<uint8
     splitBinaryBuffer (field, units, '\x1f');
 }
 
+void parseDataRecord (
+    std::vector<uint8_t>& record,
+    RecProps& recProps
+) {
+    RecLeader recLeader;
+    std::vector<uint8_t> fieldArea;
+    std::vector<std::vector<uint8_t>> fields;
+    std::vector<std::vector<uint8_t>> units;
+
+    parseGenericDataRecord (recProps, record, recLeader, directory, fieldArea);
+    splitFieldArea (fieldArea, fields);
+}
+
 void parseDataDescriptiveRecord (
     std::vector<uint8_t>& record,
     RecProps& recProps,
@@ -206,7 +219,7 @@ void parseDataDescriptiveRecord (
     std::vector<std::vector<uint8_t>> fields;
     std::vector<std::vector<uint8_t>> units;
 
-    parseDataRecord (recProps, record, recLeader, directory, fieldArea);
+    parseGenericDataRecord (recProps, record, recLeader, directory, fieldArea);
     splitFieldArea (fieldArea, fields);
 
     // Process field area
@@ -416,7 +429,7 @@ int main (int argCount, char *args []) {
         catalog = fopen (filePath, "rb+");
 
         if (catalog) {
-            std::vector<uint8_t> buffer, ddr;
+            std::vector<uint8_t> buffer, ddr, dr;
             std::vector<DirEntry> directory;
             std::vector<FieldPair> fieldPairs;
             DataStructCode dataStructCode;
@@ -428,6 +441,9 @@ int main (int argCount, char *args []) {
             loadFile (catalog, buffer);
             extractRecord (buffer, ddr);
             parseDataDescriptiveRecord (ddr, recProps, directory, fieldPairs, dataStructCode, dataTypeCode, lexLevel, dataDescFields);
+
+            extractRecord (buffer, dr);
+            parseDataRecord (dr, recProps);
             //readDdr (catalog);
             fclose (catalog);
             break;
