@@ -23,6 +23,7 @@ struct CatDirEntry: GenericField {
     std::string fileName;
     std::string fileLongName;
     std::string volume;
+    std::string impl;
     bool binary;
     double southernmost;
     double westernmost;
@@ -232,8 +233,8 @@ void parseDataRecord (
 void parseDataDescriptiveRecord (
     std::vector<uint8_t>& record,
     RecProps& recProps,
-    std::vector<DirEntry> directory,
-    std::vector<FieldPair> fieldPairs,
+    std::vector<DirEntry>& directory,
+    std::vector<FieldPair>& fieldPairs,
     DataStructCode& dataStructCode,
     DataTypeCode& dataTypeCode,
     int& lexLevel,
@@ -455,7 +456,7 @@ int main (int argCount, char *args []) {
 
         if (catalog) {
             std::vector<uint8_t> buffer, ddr, dr;
-            std::vector<DirEntry> directory;
+            std::vector<DirEntry> ddrDirectory;
             std::vector<FieldPair> fieldPairs;
             DataStructCode dataStructCode;
             DataTypeCode dataTypeCode;
@@ -466,24 +467,97 @@ int main (int argCount, char *args []) {
 
             loadFile (catalog, buffer);
             extractRecord (buffer, ddr);
-            parseDataDescriptiveRecord (ddr, recProps, directory, fieldPairs, dataStructCode, dataTypeCode, lexLevel, dataDescFields);
+            parseDataDescriptiveRecord (ddr, recProps, ddrDirectory, fieldPairs, dataStructCode, dataTypeCode, lexLevel, dataDescFields);
 
-            auto recParser = [&catDir] (DirEntry& dirEntry, std::vector<uint8_t>& field) {
+            auto findFieldIndex = [&ddrDirectory] (DirEntry& dirEntry) -> int {
+                for (size_t i = 0; i <  ddrDirectory.size (); ++ i) {
+                    if (ddrDirectory [i].tag.compare (dirEntry.tag) == 0) return (int) i;
+                }
+
+                return -1;
+            };
+
+            auto extractField = [] (
+                DataDescriptiveField& ddf,
+                size_t& curUnit,
+                size_t& offset,
+                size_t& field,
+                std::vector<std::vector<uint8_t>>& units,
+                void *value
+            ) {
+                char data [100];
+                
+                memset (data, 0, sizeof (data));
+
+                // Remember the format specifier
+                auto formatSpecifier = ddf.formatControls [field].specifier;
+
+                // Extract the data against DDF
+                if (ddf.formatControls [field].length > 0) {
+                    // width present, we stay at the same unit but increase the offset accordingly
+                    memcpy (data, units [curUnit].data () + offset, ddf.formatControls [field].length);
+                    offset += ddf.formatControls [field].length;
+                } else {
+                    // width is auto, we extract all data till the end of unit, then increase the unit index and set the offset to begin of the next unit
+                    memcpy (data, units [curUnit].data () + offset, units [curUnit].size () - offset);
+                    offset = 0;
+                    curUnit ++;
+                }
+
+                // Parse the data against DDF (using format specifier)
+                switch (formatSpecifier) {
+                    case 'I': {
+                        *((uint32_t *) value) = atoi (data); break;
+                    }
+                    case 'R': {
+                        *((double *) value) = atof (data); break;
+                    }
+                    case 'A': {
+                        *((std::string *) value) = data; break;
+                    }
+                }
+
+                ++ field;
+            };
+
+            auto recParser = [&catDir, &dataDescFields, &ddrDirectory, &findFieldIndex, &extractField] (DirEntry& dirEntry, std::vector<uint8_t>& field) {
                 std::vector<std::vector<uint8_t>> units;
 
                 splitFieldUnits (field, units);
 
-                if (dirEntry.tag.compare ("CATD") == 0) {
+                auto fieldIndex = findFieldIndex (dirEntry);
+
+                if (fieldIndex < 0) return;
+
+                auto& fieldDesc = ddrDirectory [fieldIndex];
+                auto& dataDescField = dataDescFields [fieldIndex];
+
+                uint32_t curRcid;
+
+                // Extract all data against data description       
+                if (dirEntry.tag.compare ("0001") == 0) {
+                    size_t offset = 0, curUnit = 0, field = 0;
+
+                    extractField (dataDescField, curUnit, offset, field, units, & curRcid);
+                } else if (dirEntry.tag.compare ("CATD") == 0) {
                     catDir.emplace_back ();
 
                     auto& catDirEntry = catDir.back ();
 
-                    catDirEntry.rcnm.append ((char *) units [0].data (), 2);
-                    catDirEntry.rcid = char2int ((char *) units [0].data () + 2, 10);
-                    if (units [0].size () > 12) catDirEntry.fileName.append ((char *) units [0].data () + 12, units [0].size () - 12);
-                    if (units [1].size () > 0) catDirEntry.fileLongName.append ((char *) units [1].data (), units [1].size ());
-                    if (units [2].size () > 0) catDirEntry.volume.append ((char *) units [2].data (), units [2].size ());
-                    if (units [3].size () > 2) catDirEntry.binary = memcmp (units [3].data (), "BIN") == 0;
+                    size_t offset = 0, curUnit = 0, field = 0;
+
+                    catDirEntry.rcid = curRcid;
+                    
+                    extractField (dataDescField, curUnit, offset, field, units, & catDirEntry.rcnm);
+                    extractField (dataDescField, curUnit, offset, field, units, & catDirEntry.rcid);
+                    extractField (dataDescField, curUnit, offset, field, units, & catDirEntry.fileName);
+                    extractField (dataDescField, curUnit, offset, field, units, & catDirEntry.fileLongName);
+                    extractField (dataDescField, curUnit, offset, field, units, & catDirEntry.volume);
+                    extractField (dataDescField, curUnit, offset, field, units, & catDirEntry.impl);
+                    extractField (dataDescField, curUnit, offset, field, units, & catDirEntry.southernmost);
+                    extractField (dataDescField, curUnit, offset, field, units, & catDirEntry.westernmost);
+                    extractField (dataDescField, curUnit, offset, field, units, & catDirEntry.northernmost);
+                    extractField (dataDescField, curUnit, offset, field, units, & catDirEntry.easternmost);
                 }
             };
 
