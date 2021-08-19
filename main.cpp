@@ -5,13 +5,29 @@
 #include <vector>
 #include <string>
 #include <map>
-
+#include <functional>
 struct RecProps {
     size_t recLength;
     size_t fieldLengthFieldSize;
     size_t fieldPosFieldSize;
     size_t fieldTagFieldSize;
     size_t baseAddrOfFieldArea;
+};
+
+struct GenericField {
+    std::string rcnm;
+    uint32_t rcid;
+};
+
+struct CatDirEntry: GenericField {
+    std::string fileName;
+    std::string fileLongName;
+    std::string volume;
+    bool binary;
+    double southernmost;
+    double westernmost;
+    double northernmost;
+    double easternmost;
 };
 
 struct FormatCtl {
@@ -193,15 +209,24 @@ void splitFieldUnits (std::vector<uint8_t>& field, std::vector<std::vector<uint8
 
 void parseDataRecord (
     std::vector<uint8_t>& record,
-    RecProps& recProps
+    RecProps& recProps,
+    std::function<void (DirEntry&, std::vector<uint8_t>&)> fieldParser
 ) {
     RecLeader recLeader;
     std::vector<uint8_t> fieldArea;
     std::vector<std::vector<uint8_t>> fields;
     std::vector<std::vector<uint8_t>> units;
+    std::vector<DirEntry> directory;
 
     parseGenericDataRecord (recProps, record, recLeader, directory, fieldArea);
     splitFieldArea (fieldArea, fields);
+
+    for (size_t i = 0; i < directory.size (); ++ i) {
+        auto& dirEntry = directory [i];
+        auto& field = fields [i];
+
+        fieldParser (dirEntry, field);
+    }
 }
 
 void parseDataDescriptiveRecord (
@@ -437,14 +462,36 @@ int main (int argCount, char *args []) {
             std::vector<DataDescriptiveField> dataDescFields;
             int lexLevel;
             RecProps recProps;
+            std::vector<CatDirEntry> catDir;
 
             loadFile (catalog, buffer);
             extractRecord (buffer, ddr);
             parseDataDescriptiveRecord (ddr, recProps, directory, fieldPairs, dataStructCode, dataTypeCode, lexLevel, dataDescFields);
 
-            extractRecord (buffer, dr);
-            parseDataRecord (dr, recProps);
-            //readDdr (catalog);
+            auto recParser = [&catDir] (DirEntry& dirEntry, std::vector<uint8_t>& field) {
+                std::vector<std::vector<uint8_t>> units;
+
+                splitFieldUnits (field, units);
+
+                if (dirEntry.tag.compare ("CATD") == 0) {
+                    catDir.emplace_back ();
+
+                    auto& catDirEntry = catDir.back ();
+
+                    catDirEntry.rcnm.append ((char *) units [0].data (), 2);
+                    catDirEntry.rcid = char2int ((char *) units [0].data () + 2, 10);
+                    if (units [0].size () > 12) catDirEntry.fileName.append ((char *) units [0].data () + 12, units [0].size () - 12);
+                    if (units [1].size () > 0) catDirEntry.fileLongName.append ((char *) units [1].data (), units [1].size ());
+                    if (units [2].size () > 0) catDirEntry.volume.append ((char *) units [2].data (), units [2].size ());
+                    if (units [3].size () > 2) catDirEntry.binary = memcmp (units [3].data (), "BIN") == 0;
+                }
+            };
+
+            while (buffer.size () > 0) {
+                extractRecord (buffer, dr);
+                parseDataRecord (dr, recProps, recParser);
+            }
+
             fclose (catalog);
             break;
         }
