@@ -299,7 +299,7 @@ void parseDataDescriptiveRecord (
                 for (auto& formatControl: formatControls) {
                     size_t numOfDigits = 0;
 
-                    while (std::isdigit (formatControl [numOfDigits])) ++ numOfDigits;
+                    while (isdigit (formatControl [numOfDigits])) ++ numOfDigits;
 
                     size_t multiplier = numOfDigits > 0 ? char2int ((char *) formatControl.data (), numOfDigits) : 1;
 
