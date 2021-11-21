@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <optional>
 
 #pragma pack(1)
 
@@ -123,15 +124,55 @@ enum RIND {
     PeerAnsi = 'P',
 };
 
-inline char FT = '\xe';
-inline char UT = '\xf';
+inline char FT = '\x1e';
+inline char UT = '\x1f';
 
-union EntryMap {
+inline uint32_t parseField (char *field, size_t size) {
+    uint32_t result = 0;
+
+    for (size_t i = 0; i < size; ++ i) {
+        result *= 10;
+        result += field [i] - '0';
+    }
+
+    return result;
+}
+
+struct EntryMap {
                                 // Meaning or mandatory content
     char fieldLengthSize;       // Field length field size (1..9)
     char fieldPosSize;          // Field position field size (1..9)
     char reserved;              // 0
     char fieldTagSize;          // 4
+};
+
+struct DirEntry {
+    std::string tag;
+    uint32_t length;
+    uint32_t position;
+
+    DirEntry (char *& source, EntryMap *entryMap) {
+        int fieldTagSize = entryMap->fieldTagSize - '0';
+        int fieldPosSize = entryMap->fieldPosSize - '0';
+        int fieldLengthSize = entryMap->fieldLengthSize - '0';
+
+        tag.append (source, fieldTagSize);
+        source += fieldTagSize;
+
+        length = parseField (source, fieldLengthSize);
+        source += fieldLengthSize;
+
+        position = parseField (source, fieldPosSize);
+        source += fieldPosSize;
+    }
+};
+
+struct FieldControls {
+    char dataStructureCode;     // 0 - field control field (tree), 1 - linear, 2 - multi-dim
+    char dataTypeCode;          // 0 - char string, 1 - implicit point, 5 - binary form, 6 - mixed data type
+    char auxControls [2];       // 00
+    char printableGraphics [2]; // ;&
+    char truncatedEscSeq [3];   // <space><space><space> - lex lvl 0, -A<space> - lex lvl 1, %/A - lex lvl 2
 };
 
 struct Leader {
@@ -147,6 +188,37 @@ struct Leader {
     char fldAreaBaseAddr [5];   // Base address of field area (number of bytes in leader & dir)
     char extendedCharsetInd [3];// <space>!<space>                  <space><space><space>
     EntryMap entryMap;
+};
+
+struct ParsedLeader {
+    uint32_t recLength;         // number of bytes in the record
+    uint8_t versionNo;          // 1                                <space>
+    uint8_t fieldCtlLength;     // 09                               <space><space>
+    uint32_t fldAreaBaseAddr;   // Base address of field area (number of bytes in leader & dir)
+    uint8_t fieldLengthSize;    // Field length field size (1..9)
+    uint8_t fieldPosSize;       // Field position field size (1..9)
+    uint8_t fieldTagSize;
+
+    ParsedLeader (Leader *leader) {
+        recLength = parseField (leader->recLength, sizeof (leader->recLength));
+        versionNo = parseField (& leader->versionNo, sizeof (leader->versionNo));
+        fieldCtlLength = parseField (leader->fieldCtlLength, sizeof (leader->fieldCtlLength));
+        fldAreaBaseAddr = parseField (leader->fldAreaBaseAddr, sizeof (leader->fldAreaBaseAddr));
+        fieldTagSize = leader->entryMap.fieldTagSize - '0';
+        fieldPosSize = leader->entryMap.fieldPosSize - '0';
+        fieldLengthSize = leader->entryMap.fieldLengthSize - '0';
+    }
+};
+
+struct RecordFieldDesc {
+    std::string tag;
+    char format;
+    std::optional<size_t> modifier;
+};
+
+struct DdfDesc {
+    std::string name;
+    std::vector<RecordFieldDesc> fields;
 };
 
 #pragma pack()
