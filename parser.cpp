@@ -4,6 +4,7 @@
 #include <vector>
 #include <map>
 #include <string>
+#include <tuple>
 #include "s57defs.h"
 
 size_t splitString (std::string source, std::vector<std::string>& parts, char separator) {
@@ -154,12 +155,82 @@ size_t parseRecordLeaderAndDirectory (const char *start, std::vector<DirEntry>& 
     return source - start;
 }
 
+std::tuple<bool, std::string> getStrValue (RecordFieldDesc& fld, const char *& fieldPos) {
+    if (*fieldPos == FT || *fieldPos == UT) {
+        fieldPos ++; return std::tuple (false, std::string ());
+    }
+
+    std::string value;
+
+    if (fld.modifier.has_value ()) {
+        value.append (fieldPos, fld.modifier.value ());
+        fieldPos += fld.modifier.value ();
+    } else {
+        size_t k;
+        for (k = 0; fieldPos [k] != UT; ++ k) {
+            value += fieldPos [k];
+        }
+        fieldPos += k + 1;
+    }
+    
+    return std::tuple (true, value);
+}
+
+std::tuple<bool, uint32_t> getIntValue (RecordFieldDesc& fld, const char *& fieldPos) {
+    if (*fieldPos == FT || *fieldPos == UT) {
+        fieldPos ++; return std::tuple (false, 0);
+    }
+
+    char value [100];
+
+    memset (value, 0, sizeof (value));
+
+    if (fld.modifier.has_value ()) {
+        memcpy (value, fieldPos, fld.modifier.value ());
+        fieldPos += fld.modifier.value ();
+    } else {
+        size_t k;
+        for (k = 0; isdigit (fieldPos [k]) && fieldPos [k] != UT; ++ k) {
+            value [k] = fieldPos [k];
+        }
+        fieldPos += k + 1;
+    }
+    
+    return std::tuple (true, std::atoi (value));
+}
+
+std::tuple<bool, double> getFloatValue (RecordFieldDesc& fld, const char *& fieldPos) {
+    if (*fieldPos == FT || *fieldPos == UT) {
+        fieldPos ++; return std::tuple (false, 0.0);
+    }
+
+    char value [100];
+
+    memset (value, 0, sizeof (value));
+
+    if (fld.modifier.has_value ()) {
+        memcpy (value, fieldPos, fld.modifier.value ());
+        fieldPos += fld.modifier.value ();
+    } else {
+        size_t k;
+        for (k = 0; isdigit (fieldPos [k]) && fieldPos [k] != UT; ++ k) {
+            value [k] = fieldPos [k];
+        }
+        fieldPos += k + 1;
+    }
+    
+    return std::tuple (true, std::atof (value));
+}
+
 size_t parseDataRecord (
     const char *start,
-    std::vector<DdfDesc>& dataDescriptiveFields
+    std::vector<DdfDesc>& dataDescriptiveFields,
+    std::vector<std::map<std::string, FieldInstance>>& fieldInstanceTable
 ) {
     std::vector<DirEntry> directory;
     ParsedLeader parsedLeader ((Leader *) start);
+
+    fieldInstanceTable.clear ();
 
     size_t headerSize = parseRecordLeaderAndDirectory (start, directory);
     const char *source = start + headerSize;
@@ -168,49 +239,29 @@ size_t parseDataRecord (
         auto& dirEntry = directory [i];
         auto& ddf = dataDescriptiveFields [i];
         const char *fieldPos = source + dirEntry.position;
+        std::map<std::string, FieldInstance>& fieldInstances = fieldInstanceTable.emplace_back ();
 
         for (auto j = 0; j < ddf.fields.size (); ++ j) {
             auto& fld = ddf.fields [j];
-            uint32_t intValue;
-            std::string stringValue;
-            auto getIntValue = [&fld, &fieldPos] () {
-                char value [100];
+            auto& fieldInstance = fieldInstances.emplace (std::pair<std::string, FieldInstance> (fld.tag, FieldInstance ())).first;
 
-                memset (value, 0, sizeof (value));
+            fieldInstance->second.type = fld.format;
 
-                if (fld.modifier.has_value ()) {
-                    memcpy (value, fieldPos, fld.modifier.value ());
-                    fieldPos += fld.modifier.value ();
-                } else {
-                    size_t k;
-                    for (k = 0; isdigit (fieldPos [k]) && fieldPos [k] != UT; ++ k) {
-                        value [k] = fieldPos [k];
-                    }
-                    fieldPos += k + 1;
-                }
-                return std::atoi (value);
-            };
-            auto getStrValue = [&fld, &fieldPos] () {
-                std::string value;
-
-                if (fld.modifier.has_value ()) {
-                    value.append (fieldPos, fld.modifier.value ());
-                    fieldPos += fld.modifier.value ();
-                } else {
-                    size_t k;
-                    for (k = 0; fieldPos [k] != UT; ++ k) {
-                        value += fieldPos [k];
-                    }
-                    fieldPos += k + 1;
-                }
-                return value;
-            };
             switch (fld.format) {
                 case 'I': {
-                    intValue = getIntValue (); break;
+                    auto [hasValue, intValue] = getIntValue (fld, fieldPos);
+                    if (hasValue) fieldInstance->second.intValue = intValue;
+                    break;
                 }
                 case 'A': {
-                    stringValue = getStrValue (); break;
+                    auto [hasValue, stringValue] = getStrValue (fld, fieldPos);
+                    if (hasValue) fieldInstance->second.stringValue = stringValue;
+                    break;
+                }
+                case 'R': {
+                    auto [hasValue, floatValue] = getFloatValue (fld, fieldPos);
+                    if (hasValue) fieldInstance->second.floatValue = floatValue;
+                    break;
                 }
             }
         }
@@ -278,15 +329,18 @@ size_t parseDataDescriptiveRecord (
     return parsedLeader.recLength;
 }
 
-bool parseCatalog (const char *catPath) {
+bool parseCatalog (const char *catPath, std::vector<CatalogItem>& catalog) {
     char *catalogContent = 0;
     size_t size = loadFile (catPath, catalogContent);
     bool result = false;
+
+    catalog.clear ();
 
     if (size) {
         char *recStart = catalogContent;
         std::vector<std::pair<std::string, std::string>> fieldTree;
         std::vector<DdfDesc> dataDescriptiveFields;
+        std::vector<std::map<std::string, FieldInstance>> fieldInstanceTable;
         size_t processedSize = 0;
         
         size_t ddrSize = parseDataDescriptiveRecord (recStart, fieldTree, dataDescriptiveFields);
@@ -295,9 +349,49 @@ bool parseCatalog (const char *catPath) {
         processedSize += ddrSize;
 
         while (processedSize < size) {
-            size_t drSize = parseDataRecord (recStart, dataDescriptiveFields);
+            size_t drSize = parseDataRecord (recStart, dataDescriptiveFields, fieldInstanceTable);
 
-            recStart += ddrSize;
+            auto& item = catalog.emplace_back ();
+            auto& fields = fieldInstanceTable [1];
+
+            auto& rcid = fields.find ("RCID");
+            if (rcid != fields.end () && rcid->second.intValue.has_value ()) {
+                item.rcid = rcid->second.intValue.value ();
+            }
+            auto& file = fields.find ("FILE");
+            if (file != fields.end () && file->second.stringValue.has_value ()) {
+                item.fileName = file->second.stringValue.value ();
+            }
+            auto& volume = fields.find ("VOLM");
+            if (volume != fields.end () && volume->second.stringValue.has_value ()) {
+                item.volume = volume->second.stringValue.value ();
+            }
+            auto& impl = fields.find ("IMPL");
+            if (impl != fields.end () && impl->second.stringValue.has_value ()) {
+                item.binary = impl->second.stringValue.value ().compare ("BIN") == 0;
+            }
+            auto& southern = fields.find ("SLAT");
+            if (southern != fields.end () && southern->second.floatValue.has_value ()) {
+                item.southern = southern->second.floatValue.value ();
+            }
+            auto& northern = fields.find ("NLAT");
+            if (northern != fields.end () && northern->second.floatValue.has_value ()) {
+                item.northern = northern->second.floatValue.value ();
+            }
+            auto& western = fields.find ("WLON");
+            if (western != fields.end () && western->second.floatValue.has_value ()) {
+                item.western = western->second.floatValue.value ();
+            }
+            auto& eastern = fields.find ("ELON");
+            if (eastern != fields.end () && eastern->second.floatValue.has_value ()) {
+                item.eastern = eastern->second.floatValue.value ();
+            }
+            auto& crc = fields.find ("CRCS");
+            if (crc != fields.end () && crc->second.stringValue.has_value ()) {
+                item.crc = crc->second.stringValue.value ();
+            }
+
+            recStart += drSize;
             processedSize += ddrSize;
         }
         

@@ -221,4 +221,23 @@ struct DdfDesc {
     std::vector<RecordFieldDesc> fields;
 };
 
+struct FieldInstance {
+    char type;
+    std::optional<uint32_t> intValue;
+    std::optional<double> floatValue;
+    std::optional<std::string> stringValue;
+};
+
+struct CatalogItem {
+    bool binary;
+    uint32_t rcid;
+    std::string fileName;
+    std::string volume;
+    std::optional<std::string> crc;
+    std::optional<double> northern;
+    std::optional<double> southern;
+    std::optional<double> eastern;
+    std::optional<double> western;
+};
+
 #pragma pack()

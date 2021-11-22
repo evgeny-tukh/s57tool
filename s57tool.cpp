@@ -1,6 +1,7 @@
 #include <Windows.h>
 #include <cstdint>
 #include <string>
+#include <vector>
 #include "resource.h"
 #include "parser.h"
 
@@ -67,7 +68,9 @@ void loadCatalog (Ctx *ctx) {
 
     if (GetOpenFileName (& ofn)) {
         std::string msg (path);
-        if (parseCatalog (path)) {
+        std::vector<CatalogItem> catalog;
+        
+        if (parseCatalog (path, catalog)) {
             std::string msg (path);
 
             MessageBox (ctx->mainWnd, msg.append (" has been parsed").c_str (), "Information", MB_ICONINFORMATION);
