@@ -213,7 +213,25 @@ std::tuple<bool, double> getFloatValue (RecordFieldDesc& fld, const char *& fiel
         fieldPos += fld.modifier.value ();
     } else {
         size_t k;
-        for (k = 0; isdigit (fieldPos [k]) && fieldPos [k] != UT; ++ k) {
+        bool minusPassed = false;
+        bool dotPassed = false;
+        bool digitPassed = false;
+        auto validChar = [&digitPassed, &minusPassed, &dotPassed] (char chr) {
+            if (isdigit (chr)) {
+                digitPassed = true; return true;
+            }
+            if (chr == FT || chr == UT) return false;
+            if (chr == '-') {
+                if (digitPassed || dotPassed || minusPassed) return false;
+                minusPassed = true; return true;
+            }
+            if (chr == '.') {
+                if (!digitPassed || dotPassed) return false;
+                dotPassed = true; return true;
+            }
+            return false;
+        };
+        for (k = 0; validChar (fieldPos [k]); ++ k) {
             value [k] = fieldPos [k];
         }
         fieldPos += k + 1;
