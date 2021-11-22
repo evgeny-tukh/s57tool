@@ -9,3 +9,5 @@
 #define ID_EXIT         200
 #define ID_OPEN_CATALOG 201
 
+#define IDC_CATALOG     300
+

@@ -5,3 +5,5 @@
 
 bool parseCatalog (const char *catPath, std::vector<CatalogItem>& catalog);
 size_t parseRecord (const char *start);
+std::string formatLat (double lat);
+std::string formatLon (double lon);

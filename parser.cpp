@@ -410,7 +410,7 @@ bool parseCatalog (const char *catPath, std::vector<CatalogItem>& catalog) {
             }
 
             recStart += drSize;
-            processedSize += ddrSize;
+            processedSize += drSize;
         }
         
         result = true;
@@ -420,3 +420,22 @@ bool parseCatalog (const char *catPath, std::vector<CatalogItem>& catalog) {
     return result;
 }
 
+std::string formatLat (double lat) {
+    double absLat = fabs (lat);
+    int deg = (int) absLat;
+    double min = (absLat - (double) deg) * 60.0;
+    char buffer [30];
+    sprintf (buffer, "%02d %06.3f%C", deg, min, lat < 0.0 ? 'S' : 'N');
+
+    return std::string (buffer);
+}
+
+std::string formatLon (double lon) {
+    double absLon = fabs (lon);
+    int deg = (int) absLon;
+    double min = (absLon - (double) deg) * 60.0;
+    char buffer [30];
+    sprintf (buffer, "%03d %06.3f%C", deg, min, lon < 0.0 ? 'W' : 'E');
+
+    return std::string (buffer);
+}
