@@ -223,6 +223,7 @@ struct DdfDesc {
 
 struct FieldInstance {
     char type;
+    bool signedValue;
     std::optional<uint32_t> intValue;
     std::optional<double> floatValue;
     std::optional<std::string> stringValue;

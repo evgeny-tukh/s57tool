@@ -6,6 +6,8 @@ BEGIN
     POPUP "&File"
     BEGIN
         MENUITEM "Open Catalog...", ID_OPEN_CATALOG
+        menuitem separator
+        MENUITEM "Open File...", ID_OPEN_FILE
         MENUITEM "E&xit\tAlt-F4", ID_EXIT
     END    
 END

@@ -1,5 +1,6 @@
 #include <Windows.h>
 #include <CommCtrl.h>
+#include <Shlwapi.h>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -18,9 +19,11 @@ const int COL_CRC = 7;
 
 struct Ctx {
     HINSTANCE instance;
-    HWND mainWnd, catalog;
+    HWND mainWnd, catalogCtl;
     HMENU mainMenu;
     bool keepRunning;
+    std::vector<CatalogItem> catalog;
+    std::string basePath;
 
     Ctx (HINSTANCE _instance, HMENU _menu): instance (_instance), mainMenu (_menu), keepRunning (true) {}
 
@@ -56,7 +59,8 @@ void initWindow (HWND wnd, void *data) {
 
     SetWindowLongPtr (wnd, GWLP_USERDATA, (LONG_PTR) data);
 
-    ctx->catalog = createControl (WC_LISTVIEW, "", LVS_REPORT, true, 0, 9, client.right, client.bottom, IDC_CATALOG);
+    ctx->catalogCtl = createControl (WC_LISTVIEW, "", LVS_REPORT, true, 0, 9, client.right, client.bottom, IDC_CATALOG);
+    SendMessage (ctx->catalogCtl, LVM_SETEXTENDEDLISTVIEWSTYLE, LVS_EX_FULLROWSELECT, LVS_EX_FULLROWSELECT);
 
     auto addColumn = [ctx] (int columnIndex, char *caption, int width) {
         LVCOLUMN column;
@@ -68,7 +72,7 @@ void initWindow (HWND wnd, void *data) {
         column.pszText = caption;
         column.mask = LVCF_FMT | LVCF_WIDTH | LVCF_TEXT;
 
-        SendMessage (ctx->catalog, LVM_INSERTCOLUMN, columnIndex, (LPARAM) & column);
+        SendMessage (ctx->catalogCtl, LVM_INSERTCOLUMN, columnIndex, (LPARAM) & column);
     };
 
     addColumn (COL_FILENAME, "Filename", 170);
@@ -101,62 +105,76 @@ void loadCatalog (Ctx *ctx) {
 
     if (GetOpenFileName (& ofn)) {
         std::string msg (path);
-        std::vector<CatalogItem> catalog;
         
-        SendMessage (ctx->catalog, LVM_DELETEALLITEMS, 0, 0);
+        SendMessage (ctx->catalogCtl, LVM_DELETEALLITEMS, 0, 0);
 
-        if (parseCatalog (path, catalog)) {
+        if (parseCatalog (path, ctx->catalog)) {
+            char basePath [MAX_PATH];
+
+            strcpy (basePath, path);
+            PathRemoveFileSpec (basePath);
+            ctx->basePath = basePath;
+            
             std::string msg (path);
 
             MessageBox (ctx->mainWnd, msg.append (" has been parsed").c_str (), "Information", MB_ICONINFORMATION);
 
-            for (size_t i = 0; i < catalog.size (); ++ i) {
+            for (size_t i = 0; i < ctx->catalog.size (); ++ i) {
                 LVITEMA item;
-                std::string northern = catalog [i].northern.has_value () ? formatLat (catalog [i].northern.value ()).c_str () : "N/A";
-                std::string southern = catalog [i].southern.has_value () ? formatLat (catalog [i].southern.value ()).c_str () : "N/A";
-                std::string western = catalog [i].western.has_value () ? formatLon (catalog [i].western.value ()).c_str () : "N/A";
-                std::string eastern = catalog [i].eastern.has_value () ? formatLon (catalog [i].eastern.value ()).c_str () : "N/A";
+                std::string northern = ctx->catalog [i].northern.has_value () ? formatLat (ctx->catalog [i].northern.value ()).c_str () : "N/A";
+                std::string southern = ctx->catalog [i].southern.has_value () ? formatLat (ctx->catalog [i].southern.value ()).c_str () : "N/A";
+                std::string western = ctx->catalog [i].western.has_value () ? formatLon (ctx->catalog [i].western.value ()).c_str () : "N/A";
+                std::string eastern = ctx->catalog [i].eastern.has_value () ? formatLon (ctx->catalog [i].eastern.value ()).c_str () : "N/A";
 
                 memset (& item, 0, sizeof (item));
 
                 item.iItem = i;
-                item.mask = LVIF_TEXT;
-                item.pszText = (char *) catalog [i].fileName.c_str ();
+                item.mask = LVIF_TEXT | LVIF_PARAM;
+                item.pszText = (char *) ctx->catalog [i].fileName.c_str ();
+                item.lParam = (LPARAM) & ctx->catalog [i];
 
-                SendMessage (ctx->catalog, LVM_INSERTITEMA, 0, (LPARAM) & item);
+                SendMessage (ctx->catalogCtl, LVM_INSERTITEMA, 0, (LPARAM) & item);
 
                 item.iSubItem = COL_VOLUME;
-                item.pszText = (char *) catalog [i].volume.c_str ();
-                SendMessage (ctx->catalog, LVM_SETITEMTEXT, i, (LPARAM) & item);
+                item.pszText = (char *) ctx->catalog [i].volume.c_str ();
+                SendMessage (ctx->catalogCtl, LVM_SETITEMTEXT, i, (LPARAM) & item);
 
                 item.iSubItem = COL_IMPL;
-                item.pszText = catalog [i].binary ? "bin" : "asc";
-                SendMessage (ctx->catalog, LVM_SETITEMTEXT, i, (LPARAM) & item);
+                item.pszText = ctx->catalog [i].binary ? "bin" : "asc";
+                SendMessage (ctx->catalogCtl, LVM_SETITEMTEXT, i, (LPARAM) & item);
 
                 item.iSubItem = COL_CRC;
-                item.pszText = (char *) (catalog [i].crc.has_value () ? catalog [i].crc.value ().c_str () : "N/A");
-                SendMessage (ctx->catalog, LVM_SETITEMTEXT, i, (LPARAM) & item);
+                item.pszText = (char *) (ctx->catalog [i].crc.has_value () ? ctx->catalog [i].crc.value ().c_str () : "N/A");
+                SendMessage (ctx->catalogCtl, LVM_SETITEMTEXT, i, (LPARAM) & item);
 
                 item.iSubItem = COL_NORTH;
                 item.pszText = (char *) northern.c_str ();
-                SendMessage (ctx->catalog, LVM_SETITEMTEXT, i, (LPARAM) & item);
+                SendMessage (ctx->catalogCtl, LVM_SETITEMTEXT, i, (LPARAM) & item);
 
                 item.iSubItem = COL_SOUTH;
                 item.pszText = (char *) southern.c_str ();
-                SendMessage (ctx->catalog, LVM_SETITEMTEXT, i, (LPARAM) & item);
+                SendMessage (ctx->catalogCtl, LVM_SETITEMTEXT, i, (LPARAM) & item);
 
                 item.iSubItem = COL_WEST;
                 item.pszText = (char *) western.c_str ();
-                SendMessage (ctx->catalog, LVM_SETITEMTEXT, i, (LPARAM) & item);
+                SendMessage (ctx->catalogCtl, LVM_SETITEMTEXT, i, (LPARAM) & item);
 
                 item.iSubItem = COL_EAST;
                 item.pszText = (char *) eastern.c_str ();
-                SendMessage (ctx->catalog, LVM_SETITEMTEXT, i, (LPARAM) & item);
+                SendMessage (ctx->catalogCtl, LVM_SETITEMTEXT, i, (LPARAM) & item);
             }
         } else {
             MessageBox (ctx->mainWnd, msg.insert (0, " has been parsed").c_str (), "Problem", MB_ICONEXCLAMATION);
         }
     }
+}
+
+void openFile (Ctx *ctx, CatalogItem *item) {
+    char path [MAX_PATH];
+
+    PathCombine (path, ctx->basePath.c_str (), item->fileName.c_str ());
+
+    loadParseS57File (path);
 }
 
 void doCommand (HWND wnd, uint16_t command, uint16_t notification) {
@@ -168,6 +186,25 @@ void doCommand (HWND wnd, uint16_t command, uint16_t notification) {
         }
         case ID_EXIT: {
             if (queryExit (wnd)) DestroyWindow (wnd);
+            break;
+        }
+        case ID_OPEN_FILE: {
+            int selection = (int) SendMessage (ctx->catalogCtl, LVM_GETNEXTITEM, -1, LVNI_SELECTED);
+
+            if (selection >= 0) {
+                LVITEM item;
+
+                memset (& item, 0, sizeof (item));
+
+                item.iItem = selection;
+                item.mask = LVIF_PARAM;
+
+                SendMessage (ctx->catalogCtl, LVM_GETITEM, 0, (LPARAM) & item);
+
+                openFile (ctx, (CatalogItem *) item.lParam);
+                break;
+            }
+
             break;
         }
     }

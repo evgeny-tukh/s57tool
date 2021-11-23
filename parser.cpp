@@ -65,13 +65,14 @@ void processFieldControlField (
 }
 
 bool processDataDesciptiveField (
-    std::vector<DdfDesc>& dataDescriptiveFields,
+    std::map<std::string, DdfDesc>& dataDescriptiveFields,
     FieldControls *fieldControls,
+    std::string& fieldTag,
     std::string& fieldName,
     std::string& arrayDesc,
     std::string& fieldValue
 ) {
-    auto& item = dataDescriptiveFields.emplace_back ();
+    auto& item = dataDescriptiveFields.emplace (fieldTag, DdfDesc ()).first->second;
     std::vector<std::string> tags;
     std::vector<std::string> formats;
 
@@ -91,7 +92,9 @@ bool processDataDesciptiveField (
         
         formatDesc.format = format [0];
 
-        if (format.length () > 1 && format [1] == '(') {
+        if (formatDesc.format == 'b') {
+            formatDesc.modifier = (format [1] - '0') * 10 + format [2] - '0';
+        } else if (format.length () > 1 && format [1] == '(') {
             formatDesc.modifier = std::atoi (format.substr (2, format.length () - 3).c_str ());
         }
     };
@@ -118,20 +121,21 @@ bool processDataDesciptiveField (
 
 bool parseDdrField (
     FieldControls *fieldControls,
+    std::string& fieldTag,
     std::string& fieldName,
     std::string& arrayDesc,
     std::string& fieldValue,
     std::vector<DirEntry>& directory,
     ParsedLeader& parsedLeader,
     std::vector<std::pair<std::string, std::string>>& fieldTree,
-    std::vector<DdfDesc>& dataDescriptiveFields
+    std::map<std::string, DdfDesc>& dataDescriptiveFields
 ) {
     bool result = false;
     
     if (memcmp (fieldControls, "0000", 4) == 0) {
         processFieldControlField (fieldName, arrayDesc, directory, parsedLeader, fieldTree); result = true;
     } else {
-        processDataDesciptiveField (dataDescriptiveFields, fieldControls, fieldName, arrayDesc, fieldValue); result = true;
+        processDataDesciptiveField (dataDescriptiveFields, fieldControls, fieldTag, fieldName, arrayDesc, fieldValue); result = true;
     }
 
     return result;
@@ -161,13 +165,17 @@ std::tuple<bool, std::string> getStrValue (RecordFieldDesc& fld, const char *& f
     }
 
     std::string value;
-
+if(fld.tag.compare("COMT")==0){
+    int iii=0;
+    ++iii;
+    --iii;
+}
     if (fld.modifier.has_value ()) {
         value.append (fieldPos, fld.modifier.value ());
         fieldPos += fld.modifier.value ();
     } else {
         size_t k;
-        for (k = 0; fieldPos [k] != UT; ++ k) {
+        for (k = 0; fieldPos [k] != UT && fieldPos [k] != FT; ++ k) {
             value += fieldPos [k];
         }
         fieldPos += k + 1;
@@ -190,13 +198,36 @@ std::tuple<bool, uint32_t> getIntValue (RecordFieldDesc& fld, const char *& fiel
         fieldPos += fld.modifier.value ();
     } else {
         size_t k;
-        for (k = 0; isdigit (fieldPos [k]) && fieldPos [k] != UT; ++ k) {
+        for (k = 0; isdigit (fieldPos [k]); ++ k) {
             value [k] = fieldPos [k];
         }
         fieldPos += k + 1;
     }
     
     return std::tuple (true, std::atoi (value));
+}
+
+std::tuple<bool, uint32_t> getBinValue (RecordFieldDesc& fld, const char *& fieldPos) {
+    if (*fieldPos == FT || *fieldPos == UT) {
+        fieldPos ++; return std::tuple (false, 0);
+    }
+
+    uint32_t value = 0;
+
+    if (fld.modifier.has_value ()) {
+        size_t width = fld.modifier.value () % 10;
+        memcpy (& value, fieldPos, width);
+        fieldPos += width;
+    } else {
+        size_t k;
+        uint8_t *dest = (uint8_t *) & value;
+        for (k = 0; k < 4 && fieldPos [k] != FT && fieldPos [k] != UT; ++ k) {
+            dest [k] = fieldPos [k];
+        }
+        fieldPos += k + 1;
+    }
+    
+    return std::tuple (true, value);
 }
 
 std::tuple<bool, double> getFloatValue (RecordFieldDesc& fld, const char *& fieldPos) {
@@ -242,7 +273,7 @@ std::tuple<bool, double> getFloatValue (RecordFieldDesc& fld, const char *& fiel
 
 size_t parseDataRecord (
     const char *start,
-    std::vector<DdfDesc>& dataDescriptiveFields,
+    std::map<std::string, DdfDesc>& dataDescriptiveFields,
     std::vector<std::map<std::string, FieldInstance>>& fieldInstanceTable
 ) {
     std::vector<DirEntry> directory;
@@ -255,7 +286,7 @@ size_t parseDataRecord (
 
     for (size_t i = 0; i < directory.size (); ++ i) {
         auto& dirEntry = directory [i];
-        auto& ddf = dataDescriptiveFields [i];
+        auto& ddf = dataDescriptiveFields [dirEntry.tag];
         const char *fieldPos = source + dirEntry.position;
         std::map<std::string, FieldInstance>& fieldInstances = fieldInstanceTable.emplace_back ();
 
@@ -281,6 +312,11 @@ size_t parseDataRecord (
                     if (hasValue) fieldInstance->second.floatValue = floatValue;
                     break;
                 }
+                case 'b': {
+                    auto [hasValue, intValue] = getBinValue (fld, fieldPos);
+                    if (hasValue) fieldInstance->second.intValue = intValue;
+                    break;
+                }
             }
         }
     }
@@ -297,7 +333,7 @@ size_t parseDataRecord (
 size_t parseDataDescriptiveRecord (
     const char *start,
     std::vector<std::pair<std::string, std::string>>& fieldTree,
-    std::vector<DdfDesc>& dataDescriptiveFields
+    std::map<std::string, DdfDesc>& dataDescriptiveFields
 ) {
     std::vector<DirEntry> directory;
     ParsedLeader parsedLeader ((Leader *) start);
@@ -318,6 +354,7 @@ size_t parseDataDescriptiveRecord (
     #endif
     size_t headerSize = parseRecordLeaderAndDirectory (start, directory);
     const char *source = start + headerSize;
+    size_t dirIndex = 0;
 
     while ((source - start) < parsedLeader.recLength) {
         FieldControls *fieldControls = (FieldControls *) source;
@@ -339,12 +376,45 @@ size_t parseDataDescriptiveRecord (
             }
         }
 
-        parseDdrField (fieldControls, fieldName, arrayDesc, fieldValue, directory, parsedLeader, fieldTree, dataDescriptiveFields);
+        parseDdrField (fieldControls, directory [dirIndex].tag, fieldName, arrayDesc, fieldValue, directory, parsedLeader, fieldTree, dataDescriptiveFields);
 
         source = curPtr + 1;
+        ++ dirIndex;
     }
 
     return parsedLeader.recLength;
+}
+
+bool loadParseS57File (char *path) {
+    char *content = 0;
+    size_t size = loadFile (path, content);
+    bool result = false;
+
+    if (size) {
+        char *recStart = content;
+        std::vector<std::pair<std::string, std::string>> fieldTree;
+        std::map<std::string, DdfDesc> dataDescriptiveFields;
+        std::vector<std::map<std::string, FieldInstance>> fieldInstanceTable;
+        size_t processedSize = 0;
+        
+        size_t ddrSize = parseDataDescriptiveRecord (recStart, fieldTree, dataDescriptiveFields);
+
+        recStart += ddrSize;
+        processedSize += ddrSize;
+
+        while (processedSize < size) {
+            size_t drSize = parseDataRecord (recStart, dataDescriptiveFields, fieldInstanceTable);
+
+
+            recStart += drSize;
+            processedSize += drSize;
+        }
+        
+        result = true;
+        free (content);
+    }
+
+    return result;
 }
 
 bool parseCatalog (const char *catPath, std::vector<CatalogItem>& catalog) {
@@ -357,7 +427,7 @@ bool parseCatalog (const char *catPath, std::vector<CatalogItem>& catalog) {
     if (size) {
         char *recStart = catalogContent;
         std::vector<std::pair<std::string, std::string>> fieldTree;
-        std::vector<DdfDesc> dataDescriptiveFields;
+        std::map<std::string, DdfDesc> dataDescriptiveFields;
         std::vector<std::map<std::string, FieldInstance>> fieldInstanceTable;
         size_t processedSize = 0;
         
