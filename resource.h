@@ -11,4 +11,5 @@
 #define ID_OPEN_FILE    202
 
 #define IDC_CATALOG     300
+#define IDC_RECORDS     301
 

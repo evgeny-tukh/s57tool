@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <string>
 #include <vector>
+#include <map>
 #include "resource.h"
 #include "parser.h"
 
@@ -19,7 +20,7 @@ const int COL_CRC = 7;
 
 struct Ctx {
     HINSTANCE instance;
-    HWND mainWnd, catalogCtl;
+    HWND mainWnd, catalogCtl, recordTree;
     HMENU mainMenu;
     bool keepRunning;
     std::vector<CatalogItem> catalog;
@@ -59,7 +60,9 @@ void initWindow (HWND wnd, void *data) {
 
     SetWindowLongPtr (wnd, GWLP_USERDATA, (LONG_PTR) data);
 
-    ctx->catalogCtl = createControl (WC_LISTVIEW, "", LVS_REPORT, true, 0, 9, client.right, client.bottom, IDC_CATALOG);
+    ctx->catalogCtl = createControl (WC_LISTVIEW, "", LVS_REPORT, true, 0, 0, client.right, client.bottom / 2, IDC_CATALOG);
+    ctx->recordTree = createControl (WC_TREEVIEW, "", TVS_HASBUTTONS | TVS_HASLINES | TVS_LINESATROOT, true, 0, client.bottom / 2, client.right, client.bottom / 2, IDC_RECORDS);
+
     SendMessage (ctx->catalogCtl, LVM_SETEXTENDEDLISTVIEWSTYLE, LVS_EX_FULLROWSELECT, LVS_EX_FULLROWSELECT);
 
     auto addColumn = [ctx] (int columnIndex, char *caption, int width) {
@@ -174,7 +177,58 @@ void openFile (Ctx *ctx, CatalogItem *item) {
 
     PathCombine (path, ctx->basePath.c_str (), item->fileName.c_str ());
 
-    loadParseS57File (path);
+    std::vector<std::vector<FieldInstance>> records;
+
+    loadParseS57File (path, records);
+    
+    SendMessage (ctx->recordTree, TVM_DELETEITEM, (WPARAM) TVI_ROOT, 0);
+
+    for (auto& rec: records) {
+        TV_INSERTSTRUCT data;
+        char rcidText [50];
+
+        auto rcidField = rec [0].subFieldInstances.begin ();
+
+        if (rcidField->second.intValue.has_value ()) {
+            sprintf (rcidText, "RCID %d", rcidField->second.intValue.value ());
+        } else {
+            strcpy (rcidText, "N/A");
+        }
+        
+        memset (& data, 0, sizeof (data));
+
+        data.hParent = TVI_ROOT;
+        data.hInsertAfter = TVI_LAST;
+        data.item.mask = TVIF_TEXT;
+        data.item.pszText = rcidText;
+
+        HTREEITEM recItem = (HTREEITEM) SendMessage (ctx->recordTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+
+        for (auto field: rec) {
+            memset (& data, 0, sizeof (data));
+
+            data.hParent = recItem;
+            data.hInsertAfter = TVI_LAST;
+            data.item.mask = TVIF_TEXT;
+            data.item.pszText = (char *) field.name.c_str ();
+
+            HTREEITEM fieldItem = (HTREEITEM) SendMessage (ctx->recordTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+
+        }
+    }
+}
+
+void openFileByIndex (Ctx *ctx, int itemIndex) {
+    LVITEM item;
+
+    memset (& item, 0, sizeof (item));
+
+    item.iItem = itemIndex;
+    item.mask = LVIF_PARAM;
+
+    SendMessage (ctx->catalogCtl, LVM_GETITEM, 0, (LPARAM) & item);
+
+    openFile (ctx, (CatalogItem *) item.lParam);
 }
 
 void doCommand (HWND wnd, uint16_t command, uint16_t notification) {
@@ -191,19 +245,7 @@ void doCommand (HWND wnd, uint16_t command, uint16_t notification) {
         case ID_OPEN_FILE: {
             int selection = (int) SendMessage (ctx->catalogCtl, LVM_GETNEXTITEM, -1, LVNI_SELECTED);
 
-            if (selection >= 0) {
-                LVITEM item;
-
-                memset (& item, 0, sizeof (item));
-
-                item.iItem = selection;
-                item.mask = LVIF_PARAM;
-
-                SendMessage (ctx->catalogCtl, LVM_GETITEM, 0, (LPARAM) & item);
-
-                openFile (ctx, (CatalogItem *) item.lParam);
-                break;
-            }
+            if (selection >= 0) openFileByIndex (ctx, selection);
 
             break;
         }
@@ -212,12 +254,35 @@ void doCommand (HWND wnd, uint16_t command, uint16_t notification) {
 
 void onSize (HWND wnd, int width, int height) {
     Ctx *ctx = (Ctx *) GetWindowLongPtr (wnd, GWLP_USERDATA);
+
+    height /= 2;
+
+    MoveWindow (ctx->catalogCtl, 0, 0, width, height, true);
+    MoveWindow (ctx->recordTree, 0, height, width, height, true);
+}
+
+void onNotify (HWND wnd, NMHDR *hdr) {
+    Ctx *ctx = (Ctx *) GetWindowLongPtr (wnd, GWLP_USERDATA);
+
+    switch (hdr->code) {
+        case NM_DBLCLK: {
+            NMITEMACTIVATE *item = (NMITEMACTIVATE *) hdr;
+            
+            if (item->iItem >= 0) {
+                openFileByIndex (ctx, item->iItem);
+            }
+            break;
+        }
+    }
 }
 
 LRESULT wndProc (HWND wnd, UINT msg, WPARAM param1, LPARAM param2) {
     LRESULT result = 0;
 
     switch (msg) {
+        case WM_NOTIFY: {
+            onNotify (wnd, (NMHDR *) param2); break;
+        }
         case WM_COMMAND:
             doCommand (wnd, LOWORD (param1), HIWORD (param1)); break;
         case WM_SIZE:

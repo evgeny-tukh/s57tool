@@ -2,6 +2,10 @@
 
 #include <cstdint>
 #include <optional>
+#include <vector>
+#include <map>
+#include <tuple>
+#include <optional>
 
 #pragma pack(1)
 
@@ -221,12 +225,18 @@ struct DdfDesc {
     std::vector<RecordFieldDesc> fields;
 };
 
-struct FieldInstance {
+struct SubFieldInstance {
     char type;
     bool signedValue;
     std::optional<uint32_t> intValue;
     std::optional<double> floatValue;
     std::optional<std::string> stringValue;
+};
+
+struct FieldInstance {
+    std::string tag;
+    std::string name;
+    std::map<std::string, SubFieldInstance> subFieldInstances;
 };
 
 struct CatalogItem {
