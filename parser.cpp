@@ -388,6 +388,68 @@ size_t parseDataDescriptiveRecord (
     return parsedLeader.recLength;
 }
 
+void extractDatasetParameters (std::vector<std::vector<FieldInstance>>& records, DatasetParams& datasetParams) {
+    bool found = false;
+
+    for (auto& record: records) {
+        for (auto& field: record) {
+            if (field.tag.compare ("DSPM") == 0) {
+                for (auto& subField: field.subFieldInstances) {
+                    if (subField.first.compare ("COMF") == 0) {
+                        if (subField.second.intValue.has_value ()) {
+                            datasetParams.coordMultiplier = subField.second.intValue.value ();
+                        }
+                    } else if (subField.first.compare ("COMT") == 0) {
+                        if (subField.second.stringValue.has_value ()) {
+                            datasetParams.comment = subField.second.stringValue.value ();
+                        }
+                    } else if (subField.first.compare ("COUN") == 0) {
+                        if (subField.second.intValue.has_value ()) {
+                            datasetParams.coordUnit = (COUN) subField.second.intValue.value ();
+                        }
+                    } else if (subField.first.compare ("CSCL") == 0) {
+                        if (subField.second.intValue.has_value ()) {
+                            datasetParams.compilationScale = subField.second.intValue.value ();
+                        }
+                    } else if (subField.first.compare ("DUNI") == 0) {
+                        if (subField.second.intValue.has_value ()) {
+                            datasetParams.depthMeasurement = (DUNI) subField.second.intValue.value ();
+                        }
+                    } else if (subField.first.compare ("HDAT") == 0) {
+                        if (subField.second.intValue.has_value ()) {
+                            datasetParams.horDatum = (HDAT) subField.second.intValue.value ();
+                        }
+                    } else if (subField.first.compare ("HUNI") == 0) {
+                        if (subField.second.intValue.has_value ()) {
+                            datasetParams.heightMeasurement = (HUNI) subField.second.intValue.value ();
+                        }
+                    } else if (subField.first.compare ("PUNI") == 0) {
+                        if (subField.second.intValue.has_value ()) {
+                            datasetParams.posMeasurement = (PUNI) subField.second.intValue.value ();
+                        }
+                    } else if (subField.first.compare ("SDAT") == 0) {
+                        if (subField.second.intValue.has_value ()) {
+                            datasetParams.soundingDatum = subField.second.intValue.value ();
+                        }
+                    } else if (subField.first.compare ("SOMF") == 0) {
+                        if (subField.second.intValue.has_value ()) {
+                            datasetParams.soundingMultiplier = subField.second.intValue.value ();
+                        }
+                    } else if (subField.first.compare ("VDAT") == 0) {
+                        if (subField.second.intValue.has_value ()) {
+                            datasetParams.verDatum = subField.second.intValue.value ();
+                        }
+                    }
+                }
+
+                found = true; break;
+            }
+        }
+
+        if (found) break;
+    }
+}
+
 bool loadParseS57File (char *path, std::vector<std::vector<FieldInstance>>& records) {
     char *content = 0;
     size_t size = loadFile (path, content);
@@ -400,7 +462,7 @@ bool loadParseS57File (char *path, std::vector<std::vector<FieldInstance>>& reco
         size_t processedSize = 0;
         
         records.clear ();
-        
+
         size_t ddrSize = parseDataDescriptiveRecord (recStart, fieldTree, dataDescriptiveFields);
 
         recStart += ddrSize;

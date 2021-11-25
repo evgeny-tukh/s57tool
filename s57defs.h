@@ -70,6 +70,30 @@ namespace COUN_ANSI {
     inline const char *UnitsOnChart = "UC";
 }
 
+enum DUNI {
+    DepthMeters = 1,
+    DepthFathomsFeet = 2,
+    DepthFeet = 3,
+    DepthFathomsFractions = 4,
+};
+
+enum HUNI {
+    HorMeters = 1,
+    HorFeet = 2,
+};
+
+enum PUNI {
+    PosMeters = 1,
+    PosDegreesOfArc = 2,
+    PosMillimeters = 3,
+    PosFeet = 4,
+    PosCables = 5,
+};
+
+enum HDAT {
+    WGS84 = 2,
+};
+
 enum PRIM {
     Point = 1,
     PointAnsi = 'P',
@@ -249,6 +273,20 @@ struct CatalogItem {
     std::optional<double> southern;
     std::optional<double> eastern;
     std::optional<double> western;
+};
+
+struct DatasetParams {
+    std::optional<uint32_t> coordMultiplier;   // COMF
+    std::optional<uint32_t> soundingMultiplier;// SOMF
+    std::optional<std::string> comment;        // COMT
+    std::optional<COUN> coordUnit;             // COUN
+    std::optional<uint32_t> compilationScale;  // CSCL
+    std::optional<DUNI> depthMeasurement;      // DUNI
+    std::optional<HUNI> heightMeasurement;     // HUNI
+    std::optional<PUNI> posMeasurement;        // PUNI
+    std::optional<HDAT> horDatum;              // HDAT
+    std::optional<uint32_t> soundingDatum;     // VERDAT values
+    std::optional<uint32_t> verDatum;          // VERDAT values
 };
 
 #pragma pack()

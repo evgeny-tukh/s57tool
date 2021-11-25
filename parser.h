@@ -5,6 +5,7 @@
 
 bool parseCatalog (const char *catPath, std::vector<CatalogItem>& catalog);
 bool loadParseS57File (char *path, std::vector<std::vector<FieldInstance>>& records);
+void extractDatasetParameters (std::vector<std::vector<FieldInstance>>& records, DatasetParams& datasetParams);
 size_t parseRecord (const char *start);
 std::string formatLat (double lat);
 std::string formatLon (double lon);

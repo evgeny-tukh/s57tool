@@ -17,10 +17,12 @@ const int COL_SOUTH = 4;
 const int COL_WEST = 5;
 const int COL_EAST = 6;
 const int COL_CRC = 7;
+const int COL_PROPNAME = 0;
+const int COL_PROPVALUE = 1;
 
 struct Ctx {
     HINSTANCE instance;
-    HWND mainWnd, catalogCtl, recordTree;
+    HWND mainWnd, catalogCtl, recordTree, propsList;
     HMENU mainMenu;
     bool keepRunning;
     std::vector<CatalogItem> catalog;
@@ -60,12 +62,17 @@ void initWindow (HWND wnd, void *data) {
 
     SetWindowLongPtr (wnd, GWLP_USERDATA, (LONG_PTR) data);
 
-    ctx->catalogCtl = createControl (WC_LISTVIEW, "", LVS_REPORT, true, 0, 0, client.right, client.bottom / 2, IDC_CATALOG);
-    ctx->recordTree = createControl (WC_TREEVIEW, "", TVS_HASBUTTONS | TVS_HASLINES | TVS_LINESATROOT, true, 0, client.bottom / 2, client.right, client.bottom / 2, IDC_RECORDS);
+    int halfWidth = client.right / 2;
+    int halfHeight = client.bottom / 2;
+
+    ctx->catalogCtl = createControl (WC_LISTVIEW, "", LVS_REPORT | WS_VSCROLL | WS_HSCROLL, true, 0, 0, client.right, halfHeight, IDC_CATALOG);
+    ctx->recordTree = createControl (WC_TREEVIEW, "", TVS_HASBUTTONS | TVS_HASLINES | TVS_LINESATROOT | WS_VSCROLL, true, 0, halfHeight, halfWidth, halfHeight, IDC_RECORDS);
+    ctx->propsList = createControl (WC_LISTVIEW, "", LVS_REPORT | WS_VSCROLL | WS_HSCROLL, true, halfWidth, halfHeight, halfWidth, halfHeight, IDC_CATALOG);
 
     SendMessage (ctx->catalogCtl, LVM_SETEXTENDEDLISTVIEWSTYLE, LVS_EX_FULLROWSELECT, LVS_EX_FULLROWSELECT);
+    SendMessage (ctx->propsList, LVM_SETEXTENDEDLISTVIEWSTYLE, LVS_EX_FULLROWSELECT, LVS_EX_FULLROWSELECT);
 
-    auto addColumn = [ctx] (int columnIndex, char *caption, int width) {
+    auto addColumn = [ctx] (HWND ctl, int columnIndex, char *caption, int width) {
         LVCOLUMN column;
 
         memset (& column, 0, sizeof (column));
@@ -75,17 +82,20 @@ void initWindow (HWND wnd, void *data) {
         column.pszText = caption;
         column.mask = LVCF_FMT | LVCF_WIDTH | LVCF_TEXT;
 
-        SendMessage (ctx->catalogCtl, LVM_INSERTCOLUMN, columnIndex, (LPARAM) & column);
+        SendMessage (ctl, LVM_INSERTCOLUMN, columnIndex, (LPARAM) & column);
     };
 
-    addColumn (COL_FILENAME, "Filename", 170);
-    addColumn (COL_VOLUME, "Volume", 60);
-    addColumn (COL_IMPL, "Type", 40);
-    addColumn (COL_NORTH, "North", 100);
-    addColumn (COL_SOUTH, "South", 100);
-    addColumn (COL_WEST, "West", 100);
-    addColumn (COL_EAST, "East", 100);
-    addColumn (COL_CRC, "CRC", 100);
+    addColumn (ctx->catalogCtl, COL_FILENAME, "Filename", 170);
+    addColumn (ctx->catalogCtl, COL_VOLUME, "Volume", 60);
+    addColumn (ctx->catalogCtl, COL_IMPL, "Type", 40);
+    addColumn (ctx->catalogCtl, COL_NORTH, "North", 100);
+    addColumn (ctx->catalogCtl, COL_SOUTH, "South", 100);
+    addColumn (ctx->catalogCtl, COL_WEST, "West", 100);
+    addColumn (ctx->catalogCtl, COL_EAST, "East", 100);
+    addColumn (ctx->catalogCtl, COL_CRC, "CRC", 100);
+
+    addColumn (ctx->propsList, COL_PROPNAME, "Name", 200);
+    addColumn (ctx->propsList, COL_PROPVALUE, "Value", 170);
 }
 
 void loadCatalog (Ctx *ctx) {
@@ -119,8 +129,6 @@ void loadCatalog (Ctx *ctx) {
             ctx->basePath = basePath;
             
             std::string msg (path);
-
-            MessageBox (ctx->mainWnd, msg.append (" has been parsed").c_str (), "Information", MB_ICONINFORMATION);
 
             for (size_t i = 0; i < ctx->catalog.size (); ++ i) {
                 LVITEMA item;
@@ -172,16 +180,78 @@ void loadCatalog (Ctx *ctx) {
     }
 }
 
+const char *coordUnitName (COUN unit) {
+    switch (unit) {
+        case COUN::EastingNorthing: return "Easting/Northing";
+        case COUN::LatLon: return "Lat/Lon";
+        case COUN::UnitsOnChart: return "Units on chart";
+        default: return "Unknown";
+    }
+}
+
+const char *depthMeasurementName (DUNI unit) {
+    switch (unit) {
+        case DUNI::DepthFathomsFeet: return "Fathoms/Feet";
+        case DUNI::DepthFathomsFractions: return "Fathoms/Fractions";
+        case DUNI::DepthFeet: return "Feet";
+        case DUNI::DepthMeters: return "Meters";
+        default: return "Unknown";
+    }
+}
+
+const char *posMeasurementName (PUNI unit) {
+    switch (unit) {
+        case PUNI::PosCables: return "Cables";
+        case PUNI::PosDegreesOfArc: return "Degrees of arc";
+        case PUNI::PosFeet: return "Feet";
+        case PUNI::PosMeters: return "Meters";
+        case PUNI::PosMillimeters: return "Millimeters";
+        default: return "Unknown";
+    }
+}
+
 void openFile (Ctx *ctx, CatalogItem *item) {
     char path [MAX_PATH];
 
     PathCombine (path, ctx->basePath.c_str (), item->fileName.c_str ());
 
     std::vector<std::vector<FieldInstance>> records;
+    DatasetParams datasetParams;
 
     loadParseS57File (path, records);
+    extractDatasetParameters (records, datasetParams);
     
     SendMessage (ctx->recordTree, TVM_DELETEITEM, (WPARAM) TVI_ROOT, 0);
+    SendMessage (ctx->propsList, LVM_DELETEALLITEMS, 0, 0);
+
+    auto addParam = [ctx] (int index, char *name, char *value) {
+        LVITEM item;
+
+        memset (& item, 0, sizeof (item));
+
+        item.pszText = name;
+        item.iItem = index;
+        item.mask = LVIF_TEXT;
+        
+        SendMessage (ctx->propsList, LVM_INSERTITEM, 0, (LPARAM) & item);
+
+        item.pszText = value;
+        item.iSubItem = 1;
+        item.mask = LVIF_TEXT;
+        
+        SendMessage (ctx->propsList, LVM_SETITEMTEXT, index, (LPARAM) & item);
+    };
+
+    addParam (0, "Comment", datasetParams.comment.has_value () ? datasetParams.comment.value ().c_str () : "N/A");
+    addParam (1, "Coord multiplier", datasetParams.coordMultiplier.has_value () ? std::to_string (datasetParams.coordMultiplier.value ()).c_str () : "N/A");
+    addParam (2, "Coord units", datasetParams.coordMultiplier.has_value () ? coordUnitName (datasetParams.coordUnit.value ()) : "N/A");
+    addParam (3, "Compilation scale", datasetParams.compilationScale.has_value () ? std::to_string (datasetParams.compilationScale.value ()).c_str () : "N/A");
+    addParam (4, "Depth measurement", datasetParams.depthMeasurement.has_value () ? depthMeasurementName (datasetParams.depthMeasurement.value ()) : "N/A");
+    addParam (5, "Pos measurement", datasetParams.posMeasurement.has_value () ? posMeasurementName (datasetParams.posMeasurement.value ()) : "N/A");
+    addParam (6, "Sounding datum", datasetParams.soundingDatum.has_value () ? std::to_string (datasetParams.soundingDatum.value ()).c_str () : "N/A");
+    addParam (7, "Sounding multiplier", datasetParams.soundingMultiplier.has_value () ? std::to_string (datasetParams.soundingMultiplier.value ()).c_str () : "N/A");
+    addParam (8, "Horizontal datum", datasetParams.horDatum.has_value () ? std::to_string (datasetParams.horDatum.value ()).c_str () : "N/A");
+    addParam (9, "Vertical datum", datasetParams.verDatum.has_value () ? std::to_string (datasetParams.verDatum.value ()).c_str () : "N/A");
 
     for (auto& rec: records) {
         TV_INSERTSTRUCT data;
@@ -204,16 +274,35 @@ void openFile (Ctx *ctx, CatalogItem *item) {
 
         HTREEITEM recItem = (HTREEITEM) SendMessage (ctx->recordTree, TVM_INSERTITEM, 0, (LPARAM) & data);
 
-        for (auto field: rec) {
+        for (auto& field: rec) {
             memset (& data, 0, sizeof (data));
+            char label [200];
+
+            sprintf (label, "[%s] %s", field.tag.c_str (), field.name.c_str ());
 
             data.hParent = recItem;
             data.hInsertAfter = TVI_LAST;
             data.item.mask = TVIF_TEXT;
-            data.item.pszText = (char *) field.name.c_str ();
+            data.item.pszText = label;
 
             HTREEITEM fieldItem = (HTREEITEM) SendMessage (ctx->recordTree, TVM_INSERTITEM, 0, (LPARAM) & data);
 
+            for (auto& subField: field.subFieldInstances) {
+                memset (& data, 0, sizeof (data));
+
+                switch (subField.second.type) {
+                    case 'A': sprintf (label, "%s: %s", subField.first.c_str (), subField.second.stringValue.has_value () ? subField.second.stringValue.value ().c_str () : "<no value>"); break;
+                    case 'b': case 'I': sprintf (label, "%s: %s", subField.first.c_str (), subField.second.intValue.has_value () ? std::to_string (subField.second.intValue.value ()).c_str () : "<no value>"); break;
+                    case 'R': sprintf (label, "%s: %s", subField.first.c_str (), subField.second.floatValue.has_value () ? std::to_string (subField.second.floatValue.value ()).c_str () : "<no value>"); break;
+                    default: sprintf (label, "%s: ?", subField.first.c_str ());
+                }
+                data.hParent = fieldItem;
+                data.hInsertAfter = TVI_LAST;
+                data.item.mask = TVIF_TEXT;
+                data.item.pszText = (char *) label;
+
+                HTREEITEM subFieldItem = (HTREEITEM) SendMessage (ctx->recordTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+            }
         }
     }
 }
@@ -255,10 +344,12 @@ void doCommand (HWND wnd, uint16_t command, uint16_t notification) {
 void onSize (HWND wnd, int width, int height) {
     Ctx *ctx = (Ctx *) GetWindowLongPtr (wnd, GWLP_USERDATA);
 
-    height /= 2;
+    int halfWidth = width / 2;
+    int halfHeight = height / 2;
 
-    MoveWindow (ctx->catalogCtl, 0, 0, width, height, true);
-    MoveWindow (ctx->recordTree, 0, height, width, height, true);
+    MoveWindow (ctx->catalogCtl, 0, 0, width, halfHeight, true);
+    MoveWindow (ctx->recordTree, 0, halfHeight, halfWidth, halfHeight, true);
+    MoveWindow (ctx->propsList, halfWidth, halfHeight, halfWidth, halfHeight, true);
 }
 
 void onNotify (HWND wnd, NMHDR *hdr) {
