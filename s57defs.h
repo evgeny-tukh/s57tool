@@ -260,7 +260,8 @@ struct SubFieldInstance {
 struct FieldInstance {
     std::string tag;
     std::string name;
-    std::map<std::string, SubFieldInstance> subFieldInstances;
+    // Field instance value might be single or repeating (for example for 2D and 3D points)
+    std::vector<std::map<std::string, SubFieldInstance>> instanceValues;
 };
 
 struct CatalogItem {

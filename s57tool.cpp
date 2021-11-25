@@ -257,7 +257,7 @@ void openFile (Ctx *ctx, CatalogItem *item) {
         TV_INSERTSTRUCT data;
         char rcidText [50];
 
-        auto rcidField = rec [0].subFieldInstances.begin ();
+        auto rcidField = rec [0].instanceValues.front ().begin ();
 
         if (rcidField->second.intValue.has_value ()) {
             sprintf (rcidText, "RCID %d", rcidField->second.intValue.value ());
@@ -287,21 +287,53 @@ void openFile (Ctx *ctx, CatalogItem *item) {
 
             HTREEITEM fieldItem = (HTREEITEM) SendMessage (ctx->recordTree, TVM_INSERTITEM, 0, (LPARAM) & data);
 
-            for (auto& subField: field.subFieldInstances) {
-                memset (& data, 0, sizeof (data));
+            if (field.instanceValues.size () == 1) {
+                for (auto& subField: field.instanceValues.front ()) {
+                    memset (& data, 0, sizeof (data));
 
-                switch (subField.second.type) {
-                    case 'A': sprintf (label, "%s: %s", subField.first.c_str (), subField.second.stringValue.has_value () ? subField.second.stringValue.value ().c_str () : "<no value>"); break;
-                    case 'b': case 'I': sprintf (label, "%s: %s", subField.first.c_str (), subField.second.intValue.has_value () ? std::to_string (subField.second.intValue.value ()).c_str () : "<no value>"); break;
-                    case 'R': sprintf (label, "%s: %s", subField.first.c_str (), subField.second.floatValue.has_value () ? std::to_string (subField.second.floatValue.value ()).c_str () : "<no value>"); break;
-                    default: sprintf (label, "%s: ?", subField.first.c_str ());
+                    switch (subField.second.type) {
+                        case 'A': sprintf (label, "%s: %s", subField.first.c_str (), subField.second.stringValue.has_value () ? subField.second.stringValue.value ().c_str () : "<no value>"); break;
+                        case 'b': case 'I': sprintf (label, "%s: %s", subField.first.c_str (), subField.second.intValue.has_value () ? std::to_string (subField.second.intValue.value ()).c_str () : "<no value>"); break;
+                        case 'R': sprintf (label, "%s: %s", subField.first.c_str (), subField.second.floatValue.has_value () ? std::to_string (subField.second.floatValue.value ()).c_str () : "<no value>"); break;
+                        default: sprintf (label, "%s: ?", subField.first.c_str ());
+                    }
+
+                    data.hParent = fieldItem;
+                    data.hInsertAfter = TVI_LAST;
+                    data.item.mask = TVIF_TEXT;
+                    data.item.pszText = label;
+
+                    HTREEITEM subFieldItem = (HTREEITEM) SendMessage (ctx->recordTree, TVM_INSERTITEM, 0, (LPARAM) & data);
                 }
-                data.hParent = fieldItem;
-                data.hInsertAfter = TVI_LAST;
-                data.item.mask = TVIF_TEXT;
-                data.item.pszText = (char *) label;
+            } else {
+                for (size_t valueIndex = 0; valueIndex < field.instanceValues.size (); ++ valueIndex) {
+                    data.hParent = fieldItem;
+                    data.hInsertAfter = TVI_LAST;
+                    data.item.mask = TVIF_TEXT;
+                    data.item.pszText = label;
+                    
+                    strcpy (label, std::to_string (valueIndex).c_str ());
 
-                HTREEITEM subFieldItem = (HTREEITEM) SendMessage (ctx->recordTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+                    HTREEITEM valueItem = (HTREEITEM) SendMessage (ctx->recordTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+
+                    for (auto& subField: field.instanceValues [valueIndex]) {
+                        memset (& data, 0, sizeof (data));
+
+                        switch (subField.second.type) {
+                            case 'A': sprintf (label, "%s: %s", subField.first.c_str (), subField.second.stringValue.has_value () ? subField.second.stringValue.value ().c_str () : "<no value>"); break;
+                            case 'b': case 'I': sprintf (label, "%s: %s", subField.first.c_str (), subField.second.intValue.has_value () ? std::to_string (subField.second.intValue.value ()).c_str () : "<no value>"); break;
+                            case 'R': sprintf (label, "%s: %s", subField.first.c_str (), subField.second.floatValue.has_value () ? std::to_string (subField.second.floatValue.value ()).c_str () : "<no value>"); break;
+                            default: sprintf (label, "%s: ?", subField.first.c_str ());
+                        }
+
+                        data.hParent = valueItem;
+                        data.hInsertAfter = TVI_LAST;
+                        data.item.mask = TVIF_TEXT;
+                        data.item.pszText = (char *) label;
+
+                        HTREEITEM subFieldItem = (HTREEITEM) SendMessage (ctx->recordTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+                    }
+                }
             }
         }
     }

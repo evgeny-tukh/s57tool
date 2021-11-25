@@ -288,37 +288,42 @@ size_t parseDataRecord (
         auto& dirEntry = directory [i];
         auto& ddf = dataDescriptiveFields [dirEntry.tag];
         const char *fieldPos = source + dirEntry.position;
+        const char *beginPos = fieldPos;
         auto& fieldInstance = fieldInstances.emplace_back ();
 
         fieldInstance.name = ddf.name;
         fieldInstance.tag = dirEntry.tag;
 
-        for (auto j = 0; j < ddf.fields.size (); ++ j) {
-            auto& fld = ddf.fields [j];
-            auto& subFieldInstance = fieldInstance.subFieldInstances.emplace (fld.tag, SubFieldInstance ()).first;
+        while ((fieldPos - beginPos + 1) < dirEntry.length) {
+            auto& fieldValueInstance = fieldInstance.instanceValues.emplace_back ();
 
-            subFieldInstance->second.type = fld.format;
+            for (auto j = 0; j < ddf.fields.size (); ++ j) {
+                auto& fld = ddf.fields [j];
+                auto& subFieldInstance = fieldValueInstance.emplace (fld.tag, SubFieldInstance ()).first;
 
-            switch (fld.format) {
-                case 'I': {
-                    auto [hasValue, intValue] = getIntValue (fld, fieldPos);
-                    if (hasValue) subFieldInstance->second.intValue = intValue;
-                    break;
-                }
-                case 'A': {
-                    auto [hasValue, stringValue] = getStrValue (fld, fieldPos);
-                    if (hasValue) subFieldInstance->second.stringValue = stringValue;
-                    break;
-                }
-                case 'R': {
-                    auto [hasValue, floatValue] = getFloatValue (fld, fieldPos);
-                    if (hasValue) subFieldInstance->second.floatValue = floatValue;
-                    break;
-                }
-                case 'b': {
-                    auto [hasValue, intValue] = getBinValue (fld, fieldPos);
-                    if (hasValue) subFieldInstance->second.intValue = intValue;
-                    break;
+                subFieldInstance->second.type = fld.format;
+
+                switch (fld.format) {
+                    case 'I': {
+                        auto [hasValue, intValue] = getIntValue (fld, fieldPos);
+                        if (hasValue) subFieldInstance->second.intValue = intValue;
+                        break;
+                    }
+                    case 'A': {
+                        auto [hasValue, stringValue] = getStrValue (fld, fieldPos);
+                        if (hasValue) subFieldInstance->second.stringValue = stringValue;
+                        break;
+                    }
+                    case 'R': {
+                        auto [hasValue, floatValue] = getFloatValue (fld, fieldPos);
+                        if (hasValue) subFieldInstance->second.floatValue = floatValue;
+                        break;
+                    }
+                    case 'b': {
+                        auto [hasValue, intValue] = getBinValue (fld, fieldPos);
+                        if (hasValue) subFieldInstance->second.intValue = intValue;
+                        break;
+                    }
                 }
             }
         }
@@ -393,8 +398,10 @@ void extractDatasetParameters (std::vector<std::vector<FieldInstance>>& records,
 
     for (auto& record: records) {
         for (auto& field: record) {
+            auto& firstFieldValue = field.instanceValues.front ();
+
             if (field.tag.compare ("DSPM") == 0) {
-                for (auto& subField: field.subFieldInstances) {
+                for (auto& subField: firstFieldValue) {
                     if (subField.first.compare ("COMF") == 0) {
                         if (subField.second.intValue.has_value ()) {
                             datasetParams.coordMultiplier = subField.second.intValue.value ();
@@ -507,41 +514,42 @@ bool parseCatalog (const char *catPath, std::vector<CatalogItem>& catalog) {
 
             auto& item = catalog.emplace_back ();
             auto& fields = fieldInstances [1];
+            auto& firstFieldValue = fields.instanceValues.front ();
 
-            auto& rcid = fields.subFieldInstances.find ("RCID");
-            if (rcid != fields.subFieldInstances.end () && rcid->second.intValue.has_value ()) {
+            auto& rcid = firstFieldValue.find ("RCID");
+            if (rcid != firstFieldValue.end () && rcid->second.intValue.has_value ()) {
                 item.rcid = rcid->second.intValue.value ();
             }
-            auto& file = fields.subFieldInstances.find ("FILE");
-            if (file != fields.subFieldInstances.end () && file->second.stringValue.has_value ()) {
+            auto& file = firstFieldValue.find ("FILE");
+            if (file != firstFieldValue.end () && file->second.stringValue.has_value ()) {
                 item.fileName = file->second.stringValue.value ();
             }
-            auto& volume = fields.subFieldInstances.find ("VOLM");
-            if (volume != fields.subFieldInstances.end () && volume->second.stringValue.has_value ()) {
+            auto& volume = firstFieldValue.find ("VOLM");
+            if (volume != firstFieldValue.end () && volume->second.stringValue.has_value ()) {
                 item.volume = volume->second.stringValue.value ();
             }
-            auto& impl = fields.subFieldInstances.find ("IMPL");
-            if (impl != fields.subFieldInstances.end () && impl->second.stringValue.has_value ()) {
+            auto& impl = firstFieldValue.find ("IMPL");
+            if (impl != firstFieldValue.end () && impl->second.stringValue.has_value ()) {
                 item.binary = impl->second.stringValue.value ().compare ("BIN") == 0;
             }
-            auto& southern = fields.subFieldInstances.find ("SLAT");
-            if (southern != fields.subFieldInstances.end () && southern->second.floatValue.has_value ()) {
+            auto& southern = firstFieldValue.find ("SLAT");
+            if (southern != firstFieldValue.end () && southern->second.floatValue.has_value ()) {
                 item.southern = southern->second.floatValue.value ();
             }
-            auto& northern = fields.subFieldInstances.find ("NLAT");
-            if (northern != fields.subFieldInstances.end () && northern->second.floatValue.has_value ()) {
+            auto& northern = firstFieldValue.find ("NLAT");
+            if (northern != firstFieldValue.end () && northern->second.floatValue.has_value ()) {
                 item.northern = northern->second.floatValue.value ();
             }
-            auto& western = fields.subFieldInstances.find ("WLON");
-            if (western != fields.subFieldInstances.end () && western->second.floatValue.has_value ()) {
+            auto& western = firstFieldValue.find ("WLON");
+            if (western != firstFieldValue.end () && western->second.floatValue.has_value ()) {
                 item.western = western->second.floatValue.value ();
             }
-            auto& eastern = fields.subFieldInstances.find ("ELON");
-            if (eastern != fields.subFieldInstances.end () && eastern->second.floatValue.has_value ()) {
+            auto& eastern = firstFieldValue.find ("ELON");
+            if (eastern != firstFieldValue.end () && eastern->second.floatValue.has_value ()) {
                 item.eastern = eastern->second.floatValue.value ();
             }
-            auto& crc = fields.subFieldInstances.find ("CRCS");
-            if (crc != fields.subFieldInstances.end () && crc->second.stringValue.has_value ()) {
+            auto& crc = firstFieldValue.find ("CRCS");
+            if (crc != firstFieldValue.end () && crc->second.stringValue.has_value ()) {
                 item.crc = crc->second.stringValue.value ();
             }
 
