@@ -1,5 +1,8 @@
 encs/
-bin/
 build/
 .vscode/
 *.pdb
+*.ilk
+*.exe
+*.pdb
+

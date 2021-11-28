@@ -25,6 +25,27 @@ size_t splitString (std::string source, std::vector<std::string>& parts, char se
     return parts.size ();
 }
 
+size_t splitText (std::string source, std::vector<std::string>& lines) {
+    lines.clear ();
+
+    if (source.empty ()) return 0;
+
+    lines.emplace_back ();
+
+    for (char chr: source) {
+        switch (chr) {
+            case 13:
+                lines.emplace_back ();
+            case 10:
+                break;
+            default:
+                lines.back () += chr;
+        }
+    }
+
+    return lines.size ();
+}
+
 size_t loadFile (const char *path, char *& content) {
     size_t size = 0;
     FILE *file = fopen (path, "rb+");
@@ -165,11 +186,7 @@ std::tuple<bool, std::string> getStrValue (RecordFieldDesc& fld, const char *& f
     }
 
     std::string value;
-if(fld.tag.compare("COMT")==0){
-    int iii=0;
-    ++iii;
-    --iii;
-}
+
     if (fld.modifier.has_value ()) {
         value.append (fieldPos, fld.modifier.value ());
         fieldPos += fld.modifier.value ();
@@ -393,6 +410,88 @@ size_t parseDataDescriptiveRecord (
     return parsedLeader.recLength;
 }
 
+void extractFeatureObjects (std::vector<std::vector<FieldInstance>>& records, std::map<uint32_t, FeatureDesc>& features) {
+    FeatureDesc featureDesc;
+
+    memset (& featureDesc, 0, sizeof (featureDesc));
+
+    features.clear ();
+
+    for (auto& record: records) {
+        bool newFeature = false;
+        for (auto& field: record) {
+            auto& firstFieldValue = field.instanceValues.front ();
+
+            if (field.tag.compare ("FRID") == 0) {
+                newFeature = true;
+                for (auto& subField: firstFieldValue) {
+                    if (subField.first.compare ("GRUP") == 0) {
+                        if (subField.second.intValue.has_value ()) {
+                            featureDesc.group = subField.second.intValue.value ();
+                        }
+                    } else if (subField.first.compare ("OBJL") == 0) {
+                        if (subField.second.intValue.has_value ()) {
+                            featureDesc.classCode = subField.second.intValue.value ();
+                        }
+                    } else if (subField.first.compare ("PRIM") == 0) {
+                        if (subField.second.intValue.has_value ()) {
+                            featureDesc.geometry = subField.second.intValue.value ();
+                        }
+                    } else if (subField.first.compare ("RCID") == 0) {
+                        if (subField.second.intValue.has_value ()) {
+                            featureDesc.id = subField.second.intValue.value ();
+                        }
+                    } else if (subField.first.compare ("RCNM") == 0) {
+                        if (subField.second.intValue.has_value ()) {
+                            featureDesc.recordName = subField.second.intValue.value ();
+                        }
+                    } else if (subField.first.compare ("RUIN") == 0) {
+                        if (subField.second.intValue.has_value ()) {
+                            featureDesc.updateInstruction = subField.second.intValue.value ();
+                        }
+                    } else if (subField.first.compare ("RVER") == 0) {
+                        if (subField.second.intValue.has_value ()) {
+                            featureDesc.version = subField.second.intValue.value ();
+                        }
+                    }
+                }
+            } else if (field.tag.compare ("FOID") == 0) {
+                newFeature = true;
+                for (auto& subField: firstFieldValue) {
+                    if (subField.first.compare ("AGEN") == 0) {
+                        if (subField.second.intValue.has_value ()) {
+                            featureDesc.agency = subField.second.intValue.value ();
+                        }
+                    } else if (subField.first.compare ("FIDN") == 0) {
+                        if (subField.second.intValue.has_value ()) {
+                            featureDesc.featureID = subField.second.intValue.value ();
+                        }
+                    } else if (subField.first.compare ("FIDS") == 0) {
+                        if (subField.second.intValue.has_value ()) {
+                            featureDesc.featureSubdiv = subField.second.intValue.value ();
+                        }
+                    }
+                }
+            }
+        }
+
+        if (newFeature) {
+            auto& feature = features.emplace (std::pair<uint32_t, FeatureDesc> (featureDesc.id.value (), FeatureDesc ())).first->second;
+
+            if (featureDesc.agency.has_value ()) feature.agency = featureDesc.agency.value ();
+            if (featureDesc.classCode.has_value ()) feature.classCode = featureDesc.classCode.value ();
+            if (featureDesc.featureID.has_value ()) feature.featureID = featureDesc.featureID.value ();
+            if (featureDesc.featureSubdiv.has_value ()) feature.featureSubdiv = featureDesc.featureSubdiv.value ();
+            if (featureDesc.geometry.has_value ()) feature.geometry = featureDesc.geometry.value ();
+            if (featureDesc.group.has_value ()) feature.group = featureDesc.group.value ();
+            if (featureDesc.id.has_value ()) feature.id = featureDesc.id.value ();
+            if (featureDesc.recordName.has_value ()) feature.recordName = featureDesc.recordName.value ();
+            if (featureDesc.updateInstruction.has_value ()) feature.updateInstruction = featureDesc.updateInstruction.value ();
+            if (featureDesc.version.has_value ()) feature.version = featureDesc.version.value ();
+        }
+    }
+}
+
 void extractDatasetParameters (std::vector<std::vector<FieldInstance>>& records, DatasetParams& datasetParams) {
     bool found = false;
 
@@ -582,4 +681,50 @@ std::string formatLon (double lon) {
     sprintf (buffer, "%03d %06.3f%C", deg, min, lon < 0.0 ? 'W' : 'E');
 
     return std::string (buffer);
+}
+
+void loadObjectDictionary (const char *path, ObjectDictionary& dictionary) {
+    dictionary.clear ();
+
+    char *content = 0;
+    size_t size = loadFile (path, content);
+
+    if (content [0] == -1 && content [1] == -2) {
+        std::string ansi;
+
+        for (wchar_t *chr = (wchar_t *) content + 2; *chr; ++ chr) {
+            ansi += (char) (*chr & 255);
+        }
+
+        strcpy (content, ansi.c_str ());
+    }
+
+    if (size && content) {
+        std::vector<std::string> lines;
+
+        splitText (content, lines);
+        free (content);
+
+        for (auto& line: lines) {
+            if (line [0] == '#') {
+                // New object
+                std::vector<std::string> parts;
+
+                splitString (line.substr (1), parts, ',');
+
+                if (parts.size () > 3) {
+                    std::string acronym = parts [0];
+                    uint16_t code = std::atoi (parts [1].c_str ());
+                    std::string name = parts [3];
+
+                    if (parts.size () > 4) {
+                        name += ',';
+                        name += parts [4];
+                    }
+
+                    dictionary.checkAddObject (code, acronym.c_str (), name.c_str ());
+                }
+            }
+        }
+    }
 }

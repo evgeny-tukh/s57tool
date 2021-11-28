@@ -277,17 +277,80 @@ struct CatalogItem {
 };
 
 struct DatasetParams {
-    std::optional<uint32_t> coordMultiplier;   // COMF
-    std::optional<uint32_t> soundingMultiplier;// SOMF
-    std::optional<std::string> comment;        // COMT
-    std::optional<COUN> coordUnit;             // COUN
-    std::optional<uint32_t> compilationScale;  // CSCL
-    std::optional<DUNI> depthMeasurement;      // DUNI
-    std::optional<HUNI> heightMeasurement;     // HUNI
-    std::optional<PUNI> posMeasurement;        // PUNI
-    std::optional<HDAT> horDatum;              // HDAT
-    std::optional<uint32_t> soundingDatum;     // VERDAT values
-    std::optional<uint32_t> verDatum;          // VERDAT values
+    std::optional<uint32_t> coordMultiplier;    // COMF
+    std::optional<uint32_t> soundingMultiplier; // SOMF
+    std::optional<std::string> comment;         // COMT
+    std::optional<COUN> coordUnit;              // COUN
+    std::optional<uint32_t> compilationScale;   // CSCL
+    std::optional<DUNI> depthMeasurement;       // DUNI
+    std::optional<HUNI> heightMeasurement;      // HUNI
+    std::optional<PUNI> posMeasurement;         // PUNI
+    std::optional<HDAT> horDatum;               // HDAT
+    std::optional<uint32_t> soundingDatum;      // VERDAT values
+    std::optional<uint32_t> verDatum;           // VERDAT values
+};
+
+struct FeatureDesc {
+    std::optional<uint8_t> group;               // GRUP
+    std::optional<uint8_t> geometry;            // PRIM
+    std::optional<uint16_t> classCode;          // OBJL
+    std::optional<uint32_t> id;                 // RCID
+    std::optional<uint16_t> recordName;         // RCNM
+    std::optional<uint8_t> updateInstruction;   // RUIN
+    std::optional<uint8_t> version;             // RVER
+    std::optional<uint32_t> featureID;          // FIDN
+    std::optional<uint16_t> featureSubdiv;     // FIDS
+    std::optional<uint16_t> agency;             // AGEN
+};
+
+struct ObjectDesc {
+    uint32_t code;
+    std::string acronym;
+    std::string name;
+};
+
+struct ObjectDictionary {
+    std::vector<ObjectDesc> items;
+    std::map<uint16_t, size_t> indexByCode;
+    std::map<std::string, size_t> indexByAcronym;
+
+    void clear () {
+        items.clear ();
+        indexByAcronym.clear ();
+        indexByCode.clear ();
+    }
+
+    ObjectDesc *findByCode (uint16_t code) {
+        auto item = indexByCode.find (code);
+
+        return (item == indexByCode.end ()) ? 0 : & items [item->second];
+    }
+
+    ObjectDesc *findByAcronym (const char *acronym) {
+        auto item = indexByAcronym.find (acronym);
+
+        return (item == indexByAcronym.end ()) ? 0 : & items [item->second];
+    }
+
+    void checkAddObject (uint16_t code, const char *acronym, const char *name) {
+        auto codePos = indexByCode.find (code);
+        auto acronymPos = indexByAcronym.find (acronym);
+        size_t entryIndex;
+
+        if (codePos == indexByCode.end () && acronymPos == indexByAcronym.end ()) {
+            entryIndex = items.size ();
+            auto& item = items.emplace_back ();
+            item.code = code;
+            item.acronym = acronym;
+            item.name = name;
+            indexByCode.emplace (code, entryIndex);
+            indexByAcronym.emplace (acronym, entryIndex);
+        } else if (codePos == indexByCode.end ()) {
+            indexByCode.emplace (code, acronymPos->second).first;
+        } else if (acronymPos == indexByAcronym.end ()) {
+            indexByAcronym.emplace (acronym, codePos->second).first;
+        }
+    }
 };
 
 #pragma pack()

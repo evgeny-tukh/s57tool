@@ -27,6 +27,7 @@ struct Ctx {
     bool keepRunning;
     std::vector<CatalogItem> catalog;
     std::string basePath;
+    ObjectDictionary objectDictionary;
 
     Ctx (HINSTANCE _instance, HMENU _menu): instance (_instance), mainMenu (_menu), keepRunning (true) {}
 
@@ -216,10 +217,12 @@ void openFile (Ctx *ctx, CatalogItem *item) {
     PathCombine (path, ctx->basePath.c_str (), item->fileName.c_str ());
 
     std::vector<std::vector<FieldInstance>> records;
+    std::map<uint32_t, FeatureDesc> featureObjects;
     DatasetParams datasetParams;
 
     loadParseS57File (path, records);
     extractDatasetParameters (records, datasetParams);
+    extractFeatureObjects (records, featureObjects);
     
     SendMessage (ctx->recordTree, TVM_DELETEITEM, (WPARAM) TVI_ROOT, 0);
     SendMessage (ctx->propsList, LVM_DELETEALLITEMS, 0, 0);
@@ -441,6 +444,12 @@ void registerClasses (Ctx& ctx) {
 
 int WINAPI WinMain (HINSTANCE instance, HINSTANCE prevInstance, char *cmd, int showCmd) {
     Ctx ctx (instance, LoadMenu (instance, MAKEINTRESOURCE (IDR_MAINMENU)));
+
+    char path [MAX_PATH];
+    GetModuleFileName (0, path, sizeof (path));
+    PathRemoveFileSpec (path);
+    PathAppend (path, "objclass.dic");
+    loadObjectDictionary (path, ctx.objectDictionary);
 
     registerClasses (ctx);
 
