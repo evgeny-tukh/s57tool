@@ -69,6 +69,24 @@ size_t loadFile (const char *path, char *& content) {
     return size;
 }
 
+size_t loadFileAndConvertToAnsi (const char *path, char *& content) {
+    size_t size = loadFile (path, content);
+
+    if (size && content) {
+        if (content [0] == -1 && content [1] == -2) {
+            std::string ansi;
+
+            for (wchar_t *chr = (wchar_t *) content + 2; *chr; ++ chr) {
+                ansi += (char) (*chr & 255);
+            }
+
+            strcpy (content, ansi.c_str ());
+        }
+    }
+
+    return size;
+}
+
 void processFieldControlField (
     std::string& fieldControls,
     std::string& fieldTreeText,
@@ -683,21 +701,51 @@ std::string formatLon (double lon) {
     return std::string (buffer);
 }
 
+void loadAttrDictionary (const char *path, AttrDictionary& dictionary) {
+    dictionary.clear ();
+
+    char *content = 0;
+    size_t size = loadFileAndConvertToAnsi (path, content);
+
+    if (size && content) {
+        std::vector<std::string> lines;
+
+        splitText (content, lines);
+        free (content);
+
+        for (auto& line: lines) {
+            if (line [0] == '#') {
+                // New attr
+                std::vector<std::string> parts;
+
+                splitString (line.substr (1), parts, ',');
+
+                if (parts.size () > 4) {
+                    std::string acronym = parts [0];
+                    uint16_t code = std::atoi (parts [1].c_str ());
+                    char domain = parts [3][0];
+                    std::string name = parts [4];
+
+                    dictionary.checkAddAttr (code, domain, acronym.c_str (), name.c_str ());
+                }
+            } else if (dictionary.items.size () > 0) {
+                if (dictionary.lastItem ().domain == 'E') {
+                    std::vector<std::string> fields;
+                    splitString (line, fields, ':');
+                    if (fields.size () > 1) {
+                        dictionary.lastItem ().list.emplace (std::atoi (fields [0].c_str ()), fields [1]);
+                    }
+                }
+            }
+        }
+    }
+}
+
 void loadObjectDictionary (const char *path, ObjectDictionary& dictionary) {
     dictionary.clear ();
 
     char *content = 0;
-    size_t size = loadFile (path, content);
-
-    if (content [0] == -1 && content [1] == -2) {
-        std::string ansi;
-
-        for (wchar_t *chr = (wchar_t *) content + 2; *chr; ++ chr) {
-            ansi += (char) (*chr & 255);
-        }
-
-        strcpy (content, ansi.c_str ());
-    }
+    size_t size = loadFileAndConvertToAnsi (path, content);
 
     if (size && content) {
         std::vector<std::string> lines;

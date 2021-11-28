@@ -309,6 +309,101 @@ struct ObjectDesc {
     std::string name;
 };
 
+struct AttrDesc: ObjectDesc {
+    char domain;
+    std::string format;
+    std::map<uint16_t, std::string> list;
+};
+
+struct GenericDictionary {
+    std::map<uint16_t, size_t> indexByCode;
+    std::map<std::string, size_t> indexByAcronym;
+
+    virtual void clearItems () {}
+
+    virtual ObjectDesc *itemAt (size_t index) { return 0; }
+
+    void clear () {
+        clearItems ();
+        indexByAcronym.clear ();
+        indexByCode.clear ();
+    }
+
+    ObjectDesc *findByCode (uint16_t code) {
+        auto item = indexByCode.find (code);
+
+        return (item == indexByCode.end ()) ? 0 : itemAt (item->second);
+    }
+
+    ObjectDesc *findByAcronym (const char *acronym) {
+        auto item = indexByAcronym.find (acronym);
+
+        return (item == indexByAcronym.end ()) ? 0 : itemAt (item->second);
+    }
+};
+
+struct ObjectDictionary: GenericDictionary {
+    std::vector<ObjectDesc> items;
+
+    virtual void clearItems () {
+        items.clear ();
+    }
+
+    void checkAddObject (uint16_t code, const char *acronym, const char *name) {
+        auto codePos = indexByCode.find (code);
+        auto acronymPos = indexByAcronym.find (acronym);
+        size_t entryIndex;
+
+        if (codePos == indexByCode.end () && acronymPos == indexByAcronym.end ()) {
+            entryIndex = items.size ();
+            auto& item = items.emplace_back ();
+            item.code = code;
+            item.acronym = acronym;
+            item.name = name;
+            indexByCode.emplace (code, entryIndex);
+            indexByAcronym.emplace (acronym, entryIndex);
+        } else if (codePos == indexByCode.end ()) {
+            indexByCode.emplace (code, acronymPos->second).first;
+        } else if (acronymPos == indexByAcronym.end ()) {
+            indexByAcronym.emplace (acronym, codePos->second).first;
+        }
+    }
+};
+
+struct AttrDictionary: GenericDictionary {
+    std::vector<AttrDesc> items;
+
+    AttrDesc& lastItem () {
+        return items.back ();
+    }
+
+    virtual void clearItems () {
+        items.clear ();
+    }
+
+    void checkAddAttr (uint16_t code, char domain, const char *acronym, const char *name) {
+        auto codePos = indexByCode.find (code);
+        auto acronymPos = indexByAcronym.find (acronym);
+        size_t entryIndex;
+
+        if (codePos == indexByCode.end () && acronymPos == indexByAcronym.end ()) {
+            entryIndex = items.size ();
+            auto& item = items.emplace_back ();
+            item.code = code;
+            item.acronym = acronym;
+            item.domain = domain;
+            item.name = name;
+            indexByCode.emplace (code, entryIndex);
+            indexByAcronym.emplace (acronym, entryIndex);
+        } else if (codePos == indexByCode.end ()) {
+            indexByCode.emplace (code, acronymPos->second).first;
+        } else if (acronymPos == indexByAcronym.end ()) {
+            indexByAcronym.emplace (acronym, codePos->second).first;
+        }
+    }
+};
+
+#if 0
 struct ObjectDictionary {
     std::vector<ObjectDesc> items;
     std::map<uint16_t, size_t> indexByCode;
@@ -352,5 +447,6 @@ struct ObjectDictionary {
         }
     }
 };
+#endif
 
 #pragma pack()
