@@ -776,3 +776,70 @@ void loadObjectDictionary (const char *path, ObjectDictionary& dictionary) {
         }
     }
 }
+
+std::string extractToUnitTerm (char *&source) {
+    std::string result;
+
+    while (*source && (*source != UT)) {
+        result += *(source++);
+    }
+
+    source++; return result;
+}
+
+std::string extractFixedSize (char *&source, size_t size) {
+    std::string result;
+
+    result.append (source, size);
+
+    source += size; return result;
+}
+
+void loadLibraryId (std::vector<std::string>& module, LibraryIdentification& libraryId) {
+    char *source = (char *) module [1].c_str () + 9;
+
+    libraryId.moduleName = extractFixedSize (source, 2);
+    libraryId.rcid = std::atol (extractFixedSize (source, 5).c_str ());
+    libraryId.exchangePurpose = extractFixedSize (source, 3);
+    libraryId.productType = extractToUnitTerm (source);
+    libraryId.exchangeSetSerialNo = extractToUnitTerm (source);
+    libraryId.editionNo = extractToUnitTerm (source);
+    libraryId.compilationDate = extractFixedSize (source, 8);
+    libraryId.compilationTime = extractFixedSize (source, 6);
+    libraryId.libraryProfileVersionsDate = extractFixedSize (source, 8);
+    libraryId.libaryAppProfile = extractFixedSize (source, 2);
+    libraryId.objectCatVersionDate = extractFixedSize (source, 8);
+    libraryId.comment = extractToUnitTerm (source);
+}
+
+void loadDai (const char *path, Dai& dai) {
+    char *content = 0;
+    size_t size = loadFileAndConvertToAnsi (path, content);
+
+    std::vector<std::vector<std::string>> modules;
+
+    modules.emplace_back ();
+
+    std::vector<std::string> lines;
+
+    splitText (content, lines);
+    free (content);
+
+    for (auto& line: lines) {
+        if (memcmp (line.c_str (), "****", 4) == 0) {
+            modules.emplace_back ();
+        } else {
+            modules.back ().emplace_back (line.c_str ());
+        }
+    }
+
+    for (auto& module: modules) {
+        if (module.size () > 1) {
+            const char *moduleName = module [1].c_str ();
+
+            if (memcmp (moduleName, "LBID", 4) == 0) {
+                loadLibraryId (module, dai.libraryId);
+            }
+        }
+    }
+}

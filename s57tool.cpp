@@ -29,6 +29,7 @@ struct Ctx {
     std::string basePath;
     ObjectDictionary objectDictionary;
     AttrDictionary attrDictionary;
+    Dai dai;
 
     Ctx (HINSTANCE _instance, HMENU _menu): instance (_instance), mainMenu (_menu), keepRunning (true) {}
 
@@ -454,6 +455,9 @@ int WINAPI WinMain (HINSTANCE instance, HINSTANCE prevInstance, char *cmd, int s
     PathRemoveFileSpec (path);
     PathAppend (path, "attributes.dic");
     loadAttrDictionary (path, ctx.attrDictionary);
+    PathRemoveFileSpec (path);
+    PathAppend (path, "PresLib_e4.0.3.dai");
+    loadDai (path, ctx.dai);
 
     registerClasses (ctx);
 

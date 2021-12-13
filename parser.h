@@ -9,6 +9,7 @@ void extractDatasetParameters (std::vector<std::vector<FieldInstance>>& records,
 void extractFeatureObjects (std::vector<std::vector<FieldInstance>>& records, std::map<uint32_t, FeatureDesc>& featureObjects);
 void loadObjectDictionary (const char *path, ObjectDictionary& dictionary);
 void loadAttrDictionary (const char *path, AttrDictionary& dictionary);
+void loadDai (const char *path, Dai& dai);
 size_t parseRecord (const char *start);
 std::string formatLat (double lat);
 std::string formatLon (double lon);

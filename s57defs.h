@@ -449,4 +449,24 @@ struct ObjectDictionary {
 };
 #endif
 
+// DAI defs
+struct LibraryIdentification {
+    std::string moduleName;
+    uint32_t rcid;
+    std::string exchangePurpose;
+    std::string productType;
+    std::string exchangeSetSerialNo;
+    std::string editionNo;
+    std::string compilationDate;
+    std::string compilationTime;
+    std::string libraryProfileVersionsDate;
+    std::string libaryAppProfile;
+    std::string objectCatVersionDate;
+    std::string comment;
+};
+
+struct Dai {
+    LibraryIdentification libraryId;
+};
+
 #pragma pack()
