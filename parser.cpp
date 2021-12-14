@@ -812,6 +812,109 @@ void loadLibraryId (std::vector<std::string>& module, LibraryIdentification& lib
     libraryId.comment = extractToUnitTerm (source);
 }
 
+void loadColorTable (std::vector<std::string>& module, std::map<std::string, ColorItem>& colorTable) {
+    colorTable.clear ();
+
+    for (auto& line: module) {
+        char *source = (char *) line.c_str ();
+
+        if (memcmp (source, "CCIE", 4) == 0) {
+            source += 9;
+            std::string colorCode = extractFixedSize (source, 5);
+            double x = std::atof (extractToUnitTerm (source).c_str ());
+            double y = std::atof (extractToUnitTerm (source).c_str ());
+            double z = std::atof (extractToUnitTerm (source).c_str ());
+            std::string colorName = extractToUnitTerm (source);
+
+            colorTable.emplace (colorCode, ColorItem (colorName.c_str (), x, y, z));
+        }
+    }
+}
+
+void loadLookupTableItem (std::vector<std::string>& module, std::map<std::string, std::vector<LookupTableItem>>& lookupTables) {
+    std::map<std::string, std::vector<LookupTableItem>>::iterator lookupTablePos = lookupTables.end ();
+
+    for (auto& line: module) {
+        char *source = (char *) line.c_str ();
+
+        if (memcmp (source, "LUPT", 4) == 0) {
+            source += 9;
+            std::string moduleName = extractFixedSize (source, 2);
+            uint32_t rcid = std::atoi (extractFixedSize (source, 5).c_str ());
+            std::string status = extractFixedSize (source, 3);
+            std::string acronym = extractFixedSize (source, 6);
+            std::string objType = extractFixedSize (source, 1);
+            uint32_t displayPriority = std::atoi (extractFixedSize (source, 5).c_str ());
+            std::string radarPriority = extractFixedSize (source, 1);
+            std::string tableSet = extractToUnitTerm (source);
+
+            lookupTablePos = lookupTables.find (acronym);
+
+            if (lookupTablePos == lookupTables.end ()) {
+                lookupTablePos = lookupTables.emplace (acronym, std::vector<LookupTableItem> ()).first;
+            }
+
+            auto& item = lookupTablePos->second.emplace_back ();
+
+            memcpy (item.acronym, acronym.c_str (), 6);
+            item.displayPriority = displayPriority;
+            item.radarPriority = radarPriority [0];
+            item.objectType = objType [0];
+            
+            if (tableSet.compare ("PLAIN_BOUNDARIES") == 0) {
+                item.tableSet = TableSet::PLAIN_BOUNDARIES;
+            } else if (tableSet.compare ("SYMBOLIZED_BOUNDARIES") == 0) {
+                item.tableSet = TableSet::SYMBOLIZED_BOUNDARIES;
+            } else if (tableSet.compare ("SIMPLIFIED") == 0) {
+                item.tableSet = TableSet::SIMPLIFIED;
+            } else if (tableSet.compare ("PAPER_CHART") == 0) {
+                item.tableSet = TableSet::PAPER_CHARTS;
+            } else if (tableSet.compare ("LINES") == 0) {
+                item.tableSet = TableSet::LINES;
+            }
+        } else if (memcmp (source, "ATTC", 4) == 0) {
+            if (lookupTablePos != lookupTables.end ()) {
+                source += 9;
+
+                std::string acronym;
+                std::string value;
+
+                if (*source == UT) {
+                    // add no-attribute instance
+                    auto& instance = lookupTablePos->second.back ().attrCombination.emplace_back ();
+                } else {
+                    while (*source != UT) {
+                        acronym = extractFixedSize (source, 6);
+                        value = extractToUnitTerm (source);
+
+                        if (!acronym.empty ()) {
+                            auto& instance = lookupTablePos->second.back ().attrCombination.emplace_back ();
+
+                            memcpy (instance.acronym, acronym.c_str (), 6);
+                            instance.strVal = value;
+                        }
+                    }
+                }
+            }
+        } else if (memcmp (source, "INST", 4) == 0) {
+            source += 9;
+            lookupTablePos->second.back ().instruction = extractToUnitTerm (source);
+        } else if (memcmp (source, "DISC", 4) == 0) {
+            source += 9;
+            std::string displayCat = extractToUnitTerm (source);
+            
+            if (displayCat.compare ("STANDARD") == 0) {
+                lookupTablePos->second.back ().displayCat = DisplayCat::STANDARD;
+            } else if (displayCat.compare ("DISPLAY_BASE") == 0) {
+                lookupTablePos->second.back ().displayCat = DisplayCat::DISPLAY_BASE;
+            }
+        } else if (memcmp (source, "LUCM", 4) == 0) {
+            source += 9;
+            lookupTablePos->second.back ().comment = extractToUnitTerm (source);
+        }
+    }
+}
+
 void loadDai (const char *path, Dai& dai) {
     char *content = 0;
     size_t size = loadFileAndConvertToAnsi (path, content);
@@ -839,6 +942,16 @@ void loadDai (const char *path, Dai& dai) {
 
             if (memcmp (moduleName, "LBID", 4) == 0) {
                 loadLibraryId (module, dai.libraryId);
+            } else if (memcmp (moduleName, "COLS", 4) == 0) {
+                if (memcmp (moduleName + 19, "DAY", 3) == 0) {
+                    loadColorTable (module, dai.dayColorTable);
+                } else if (memcmp (moduleName + 19, "DUSK", 4) == 0) {
+                    loadColorTable (module, dai.duskColorTable);
+                } else if (memcmp (moduleName + 19, "NIGHT", 5) == 0) {
+                    loadColorTable (module, dai.nightColorTable);
+                }
+            } else if (memcmp (moduleName, "LUPT", 4) == 0) {
+                loadLookupTableItem (module, dai.lookupTables);
             }
         }
     }

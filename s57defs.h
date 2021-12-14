@@ -465,8 +465,67 @@ struct LibraryIdentification {
     std::string comment;
 };
 
+struct ColorItem {
+    std::string name;
+    double x, y, luminance;
+    double red, green, blue;
+
+    ColorItem (): name (), red (0), green (0), blue (0) {}
+    ColorItem (const char *_name, double _x, double _y, double _luminance):
+        name (_name),
+        x (_x),
+        y (_y),
+        luminance (_luminance) {
+        double X = _x * _luminance / _y;
+        double Y = _luminance;
+        double Z = luminance * (1.0 - _x - _y) / _y;
+        //red = 0.41847 * X - 0.15866 * Y - 0.082835 * Z;
+        //green = - 0.091169 * X + 0.25243 * Y + 0.015708 * Z;
+        //blue = 0.00092090 * X  - 0.0025498 * Y  + 0.17860 * Z;
+        red =  3.2404542*X - 1.5371385*Y - 0.4985314*Z;
+        green = -0.9692660*X + 1.8760108*Y + 0.0415560*Z;
+        blue =  0.0556434*X - 0.2040259*Y + 1.0572252*Z;      
+    }
+};
+
+enum TableSet {
+    PLAIN_BOUNDARIES = 1,
+    SYMBOLIZED_BOUNDARIES,
+    SIMPLIFIED,
+    PAPER_CHARTS,
+    LINES,
+};
+
+struct AttrInstance {
+    char acronym [6];
+    uint16_t classCode;
+    double flatVal;
+    uint32_t intVal;
+    std::string strVal;
+};
+
+enum DisplayCat {
+    STANDARD = 1,
+    DISPLAY_BASE = 2,
+    CUSTOM = 3,
+};
+
+struct LookupTableItem {
+    char objectType, radarPriority;
+    char acronym [6];
+    uint16_t classCode;
+    uint32_t displayPriority;
+    TableSet tableSet;
+    std::vector<AttrInstance> attrCombination;
+    std::string instruction;
+    DisplayCat displayCat;
+    std::string comment;
+};
+
 struct Dai {
     LibraryIdentification libraryId;
+    std::map<std::string, ColorItem> dayColorTable, duskColorTable, nightColorTable;
+    std::map<std::string, std::vector<LookupTableItem>> lookupTables;
 };
 
 #pragma pack()
