@@ -915,8 +915,8 @@ void loadLookupTableItem (std::vector<std::string>& module, std::map<std::string
     }
 }
 
-void loadPattern (std::vector<std::string>& module, std::map<std::string, Pattern>& patterns) {
-    std::map<std::string, Pattern>::iterator pos = patterns.end ();
+void loadPattern (std::vector<std::string>& module, std::map<std::string, PatternDesc>& patterns) {
+    std::map<std::string, PatternDesc>::iterator pos = patterns.end ();
 
     for (auto& line: module) {
         char *source = (char *) line.c_str ();
@@ -937,7 +937,7 @@ void loadPattern (std::vector<std::string>& module, std::map<std::string, Patter
             uint32_t bBoxCol = std::atol (extractFixedSize (source, 5).c_str ());
             uint32_t bBoxRow = std::atol (extractFixedSize (source, 5).c_str ());
             
-            pos = patterns.emplace (name, Pattern ()).first;
+            pos = patterns.emplace (name, PatternDesc ()).first;
 
             memcpy (pos->second.name, name.c_str (), 8);
             pos->second.type = type [0];
@@ -973,7 +973,92 @@ void loadPattern (std::vector<std::string>& module, std::map<std::string, Patter
         } else if (memcmp (source, "PVCT", 4) == 0) {
             source += 9;
             auto& svg = pos->second.svgs.emplace_back ();
-            splitString (extractToUnitTerm (source), svg, ',');
+            splitString (extractToUnitTerm (source), svg, ';');
+        }
+    }
+}
+
+void loadSymbol (std::vector<std::string>& module, std::map<std::string, SymbolDesc>& symbols) {
+    std::map<std::string, SymbolDesc>::iterator pos = symbols.end ();
+
+    for (auto& line: module) {
+        char *source = (char *) line.c_str ();
+
+        if (memcmp (source, "SYMB", 4) == 0) {
+        } else if (memcmp (source, "SYMD", 4) == 0) {
+            source += 9;
+            std::string name = extractFixedSize (source, 8);
+            std::string type = extractFixedSize (source, 1);
+            uint32_t pivotPtCol = std::atol (extractFixedSize (source, 5).c_str ());
+            uint32_t pivotPtRow = std::atol (extractFixedSize (source, 5).c_str ());
+            uint32_t bBoxWidth = std::atol (extractFixedSize (source, 5).c_str ());
+            uint32_t bBoxHeight = std::atol (extractFixedSize (source, 5).c_str ());
+            uint32_t bBoxCol = std::atol (extractFixedSize (source, 5).c_str ());
+            uint32_t bBoxRow = std::atol (extractFixedSize (source, 5).c_str ());
+            
+            pos = symbols.emplace (name, SymbolDesc ()).first;
+
+            memcpy (pos->second.name, name.c_str (), 8);
+            pos->second.type = type [0];
+            pos->second.bBoxCol = bBoxCol;
+            pos->second.bBoxRow = bBoxRow;
+            pos->second.bBoxWidth = bBoxWidth;
+            pos->second.bBoxHeight = bBoxHeight;
+            pos->second.pivotPtCol = pivotPtCol;
+            pos->second.pivotPtRow = pivotPtRow;
+        } else if (memcmp (source, "SXPO", 4) == 0) {
+            source += 9;
+            pos->second.exposition = extractToUnitTerm (source);
+        } else if (memcmp (source, "SCRF", 4) == 0) {
+            source += 9;
+            pos->second.color = extractFixedSize (source, 5);
+        } else if (memcmp (source, "SBTM", 4) == 0) {
+            source += 9;
+            pos->second.bitmap = extractToUnitTerm (source);
+        } else if (memcmp (source, "SVCT", 4) == 0) {
+            source += 9;
+            auto& svg = pos->second.svgs.emplace_back ();
+            splitString (extractToUnitTerm (source), svg, ';');
+        }
+    }
+}
+
+void loadLine (std::vector<std::string>& module, std::map<std::string, LineDesc>& lines) {
+    std::map<std::string, LineDesc>::iterator pos = lines.end ();
+
+    for (auto& line: module) {
+        char *source = (char *) line.c_str ();
+
+        if (memcmp (source, "LNST", 4) == 0) {
+        } else if (memcmp (source, "LIND", 4) == 0) {
+            source += 9;
+            std::string name = extractFixedSize (source, 8);
+            uint32_t pivotPtCol = std::atol (extractFixedSize (source, 5).c_str ());
+            uint32_t pivotPtRow = std::atol (extractFixedSize (source, 5).c_str ());
+            uint32_t bBoxWidth = std::atol (extractFixedSize (source, 5).c_str ());
+            uint32_t bBoxHeight = std::atol (extractFixedSize (source, 5).c_str ());
+            uint32_t bBoxCol = std::atol (extractFixedSize (source, 5).c_str ());
+            uint32_t bBoxRow = std::atol (extractFixedSize (source, 5).c_str ());
+            
+            pos = lines.emplace (name, LineDesc ()).first;
+
+            memcpy (pos->second.name, name.c_str (), 8);
+            pos->second.bBoxCol = bBoxCol;
+            pos->second.bBoxRow = bBoxRow;
+            pos->second.bBoxWidth = bBoxWidth;
+            pos->second.bBoxHeight = bBoxHeight;
+            pos->second.pivotPtCol = pivotPtCol;
+            pos->second.pivotPtRow = pivotPtRow;
+        } else if (memcmp (source, "LXPO", 4) == 0) {
+            source += 9;
+            pos->second.exposition = extractToUnitTerm (source);
+        } else if (memcmp (source, "LCRF", 4) == 0) {
+            source += 9;
+            pos->second.color = extractFixedSize (source, 5);
+        } else if (memcmp (source, "LVCT", 4) == 0) {
+            source += 9;
+            auto& svg = pos->second.svgs.emplace_back ();
+            splitString (extractToUnitTerm (source), svg, ';');
         }
     }
 }
@@ -1017,6 +1102,10 @@ void loadDai (const char *path, Dai& dai) {
                 loadLookupTableItem (module, dai.lookupTables);
             } else if (memcmp (moduleName, "PATT", 4) == 0) {
                 loadPattern (module, dai.patterns);
+            } else if (memcmp (moduleName, "SYMB", 4) == 0) {
+                loadSymbol (module, dai.symbols);
+            } else if (memcmp (moduleName, "LNST", 4) == 0) {
+                loadLine (module, dai.lines);
             }
         }
     }
