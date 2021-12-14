@@ -522,10 +522,40 @@ struct LookupTableItem {
     std::string comment;
 };
 
+enum FillType {
+    STRAGGERED = 1,
+    LINEAR,
+};
+
+enum Spacing {
+    CONSTANT = 1,
+    SCALE_DEPENDENT,
+};
+
+struct Pattern {
+    char name [8];
+    char type;      // V/R
+    FillType fillType;
+    Spacing spacing;
+    uint32_t minDistance;
+    uint32_t maxDistance;
+    uint32_t pivotPtCol;
+    uint32_t pivotPtRow;
+    uint32_t bBoxWidth;
+    uint32_t bBoxHeight;
+    uint32_t bBoxCol;
+    uint32_t bBoxRow;
+    std::string exposition;
+    std::string color;
+    std::string bitmap;
+    std::vector<std::vector<std::string>> svgs;
+};
+
 struct Dai {
     LibraryIdentification libraryId;
     std::map<std::string, ColorItem> dayColorTable, duskColorTable, nightColorTable;
     std::map<std::string, std::vector<LookupTableItem>> lookupTables;
+    std::map<std::string, Pattern> patterns;
 };
 
 #pragma pack()

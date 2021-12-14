@@ -915,6 +915,69 @@ void loadLookupTableItem (std::vector<std::string>& module, std::map<std::string
     }
 }
 
+void loadPattern (std::vector<std::string>& module, std::map<std::string, Pattern>& patterns) {
+    std::map<std::string, Pattern>::iterator pos = patterns.end ();
+
+    for (auto& line: module) {
+        char *source = (char *) line.c_str ();
+
+        if (memcmp (source, "PATT", 4) == 0) {
+        } else if (memcmp (source, "PATD", 4) == 0) {
+            source += 9;
+            std::string name = extractFixedSize (source, 8);
+            std::string type = extractFixedSize (source, 1);
+            std::string fillType = extractFixedSize (source, 3);
+            std::string spacing = extractFixedSize (source, 3);
+            uint32_t minDistance = std::atol (extractFixedSize (source, 5).c_str ());
+            uint32_t maxDistance = std::atol (extractFixedSize (source, 5).c_str ());
+            uint32_t pivotPtCol = std::atol (extractFixedSize (source, 5).c_str ());
+            uint32_t pivotPtRow = std::atol (extractFixedSize (source, 5).c_str ());
+            uint32_t bBoxWidth = std::atol (extractFixedSize (source, 5).c_str ());
+            uint32_t bBoxHeight = std::atol (extractFixedSize (source, 5).c_str ());
+            uint32_t bBoxCol = std::atol (extractFixedSize (source, 5).c_str ());
+            uint32_t bBoxRow = std::atol (extractFixedSize (source, 5).c_str ());
+            
+            pos = patterns.emplace (name, Pattern ()).first;
+
+            memcpy (pos->second.name, name.c_str (), 8);
+            pos->second.type = type [0];
+            pos->second.bBoxCol = bBoxCol;
+            pos->second.bBoxRow = bBoxRow;
+            pos->second.bBoxWidth = bBoxWidth;
+            pos->second.bBoxHeight = bBoxHeight;
+            pos->second.maxDistance = maxDistance;
+            pos->second.minDistance = minDistance;
+            pos->second.pivotPtCol = pivotPtCol;
+            pos->second.pivotPtRow = pivotPtRow;
+
+            if (spacing.compare ("CON") == 0) {
+                pos->second.spacing = Spacing::CONSTANT;
+            } else if (spacing.compare ("SCL") == 0) {
+                pos->second.spacing = Spacing::SCALE_DEPENDENT;
+            }
+
+            if (fillType.compare ("STG")) {
+                pos->second.fillType = FillType::STRAGGERED;
+            } else if (fillType.compare ("LIN")) {
+                pos->second.fillType = FillType::LINEAR;
+            }
+        } else if (memcmp (source, "PXPO", 4) == 0) {
+            source += 9;
+            pos->second.exposition = extractToUnitTerm (source);
+        } else if (memcmp (source, "PCRF", 4) == 0) {
+            source += 9;
+            pos->second.color = extractFixedSize (source, 5);
+        } else if (memcmp (source, "PBTM", 4) == 0) {
+            source += 9;
+            pos->second.bitmap = extractToUnitTerm (source);
+        } else if (memcmp (source, "PVCT", 4) == 0) {
+            source += 9;
+            auto& svg = pos->second.svgs.emplace_back ();
+            splitString (extractToUnitTerm (source), svg, ',');
+        }
+    }
+}
+
 void loadDai (const char *path, Dai& dai) {
     char *content = 0;
     size_t size = loadFileAndConvertToAnsi (path, content);
@@ -952,6 +1015,8 @@ void loadDai (const char *path, Dai& dai) {
                 }
             } else if (memcmp (moduleName, "LUPT", 4) == 0) {
                 loadLookupTableItem (module, dai.lookupTables);
+            } else if (memcmp (moduleName, "PATT", 4) == 0) {
+                loadPattern (module, dai.patterns);
             }
         }
     }
