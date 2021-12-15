@@ -4,11 +4,13 @@
 #include <cstdint>
 #include <string>
 #include <vector>
+#include <thread>
 #include <map>
 #include "resource.h"
 #include "parser.h"
 
 const char *MAIN_CLASS = "S57ToolMainWnd";
+const char *SPLASH_CLASS = "S57ToolSplashScreen";
 const int COL_FILENAME = 0;
 const int COL_VOLUME = 1;
 const int COL_IMPL = 2;
@@ -22,16 +24,17 @@ const int COL_PROPVALUE = 1;
 
 struct Ctx {
     HINSTANCE instance;
-    HWND mainWnd, catalogCtl, recordTree, propsList;
+    HWND mainWnd, catalogCtl, recordTree, propsList, splashScreen;
     HMENU mainMenu;
-    bool keepRunning;
+    bool keepRunning, loaded;
     std::vector<CatalogItem> catalog;
     std::string basePath;
+    std::string splashText;
     ObjectDictionary objectDictionary;
     AttrDictionary attrDictionary;
     Dai dai;
 
-    Ctx (HINSTANCE _instance, HMENU _menu): instance (_instance), mainMenu (_menu), keepRunning (true) {}
+    Ctx (HINSTANCE _instance, HMENU _menu): instance (_instance), mainMenu (_menu), keepRunning (true), loaded (false) {}
 
     virtual ~Ctx () {
         DestroyMenu (mainMenu);
@@ -40,6 +43,17 @@ struct Ctx {
 
 bool queryExit (HWND wnd) {
     return MessageBox (wnd, "Do you want to quit the application?", "Confirmation", MB_YESNO | MB_ICONQUESTION) == IDYES;
+}
+
+void initSplashScreen (HWND wnd, void *data) {
+    Ctx *ctx = (Ctx *) data;
+    RECT client;
+
+    GetClientRect (wnd, & client);
+    SetWindowLongPtr (wnd, GWLP_USERDATA, (LONG_PTR) data);
+    SetTimer (wnd, 100, 100, 0);
+    CreateWindow ("STATIC", "", SS_ETCHEDFRAME | WS_VISIBLE | WS_CHILD, 0, 0, client.right - 1, client.bottom - 1, wnd, (HMENU) IDC_STATIC, ctx->instance, 0);
+    CreateWindow ("STATIC", "", SS_LEFT | WS_VISIBLE | WS_CHILD, 4, 4, client.right - 9, client.bottom - 9, wnd, (HMENU) IDC_LOADINFO, ctx->instance, 0);
 }
 
 void initWindow (HWND wnd, void *data) {
@@ -404,6 +418,28 @@ void onNotify (HWND wnd, NMHDR *hdr) {
     }
 }
 
+LRESULT wndSplashScreenProc (HWND wnd, UINT msg, WPARAM param1, LPARAM param2) {
+    LRESULT result = 0;
+    Ctx *ctx = (Ctx *) GetWindowLongPtr (wnd, GWLP_USERDATA);
+
+    switch (msg) {
+        case WM_TIMER:
+            if (ctx->loaded) {
+                DestroyWindow (wnd);
+            } else {
+                SetDlgItemText (wnd, IDC_LOADINFO, ctx->splashText.c_str ());
+            }
+            break;
+        case WM_CREATE:
+            initSplashScreen (wnd, ((CREATESTRUCT *) param2)->lpCreateParams); break;
+        default:
+            result = DefWindowProc (wnd, msg, param1, param2);
+    }
+    
+    return result;
+}
+
+
 LRESULT wndProc (HWND wnd, UINT msg, WPARAM param1, LPARAM param2) {
     LRESULT result = 0;
 
@@ -442,31 +478,60 @@ void registerClasses (Ctx& ctx) {
     classInfo.style = CS_HREDRAW | CS_VREDRAW;
 
     RegisterClass (& classInfo);
+
+    memset (& classInfo, 0, sizeof (classInfo));
+
+    classInfo.hbrBackground = (HBRUSH) GetStockObject (GRAY_BRUSH);
+    classInfo.hCursor = (HCURSOR) LoadCursor (0, IDC_ARROW);
+    classInfo.hIcon = (HICON) LoadIcon (0, IDI_APPLICATION);
+    classInfo.hInstance = ctx.instance;
+    classInfo.lpfnWndProc = wndSplashScreenProc;
+    classInfo.lpszClassName = SPLASH_CLASS;
+    classInfo.style = CS_HREDRAW | CS_VREDRAW;
+
+    RegisterClass (& classInfo);
+}
+
+void loadProc (Ctx *ctx) {
+    char path [MAX_PATH];
+
+    ctx->splashText += "\nLoading object classes...";
+    GetModuleFileName (0, path, sizeof (path));
+    PathRemoveFileSpec (path);
+    PathAppend (path, "objclass.dic");
+    loadObjectDictionary (path, ctx->objectDictionary);
+    ctx->splashText += "\nLoading object attributes...";
+    PathRemoveFileSpec (path);
+    PathAppend (path, "attributes.dic");
+    loadAttrDictionary (path, ctx->attrDictionary);
+    ctx->splashText += "\nLoading DAI...";
+    PathRemoveFileSpec (path);
+    PathAppend (path, "PresLib_e4.0.3.dai");
+    loadDai (path, ctx->dai);
+    ctx->splashText += "\nDone.";
+    ctx->loaded = true;
+
+    ShowWindow (ctx->mainWnd, SW_SHOW);
+    UpdateWindow (ctx->mainWnd);
+    BringWindowToTop (ctx->mainWnd);
 }
 
 int WINAPI WinMain (HINSTANCE instance, HINSTANCE prevInstance, char *cmd, int showCmd) {
     Ctx ctx (instance, LoadMenu (instance, MAKEINTRESOURCE (IDR_MAINMENU)));
 
-    char path [MAX_PATH];
-    GetModuleFileName (0, path, sizeof (path));
-    PathRemoveFileSpec (path);
-    PathAppend (path, "objclass.dic");
-    loadObjectDictionary (path, ctx.objectDictionary);
-    PathRemoveFileSpec (path);
-    PathAppend (path, "attributes.dic");
-    loadAttrDictionary (path, ctx.attrDictionary);
-    PathRemoveFileSpec (path);
-    PathAppend (path, "PresLib_e4.0.3.dai");
-    loadDai (path, ctx.dai);
-
     registerClasses (ctx);
 
-    ctx.mainWnd = CreateWindow (MAIN_CLASS, "S57 Tool", WS_OVERLAPPEDWINDOW | WS_VISIBLE, CW_USEDEFAULT, CW_USEDEFAULT, 800, 500, 0, ctx.mainMenu, instance, & ctx);
-
-    ShowWindow (ctx.mainWnd, SW_SHOW);
-    UpdateWindow (ctx.mainWnd);
-
+    ctx.splashScreen = CreateWindow (SPLASH_CLASS, "", WS_POPUP | WS_VISIBLE, 200, 200, 500, 200, 0, 0, instance, & ctx);
+    ctx.mainWnd = CreateWindow (MAIN_CLASS, "S57 Tool", WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, 800, 500, 0, ctx.mainMenu, instance, & ctx);
     ctx.keepRunning = true;
+    ctx.splashText = "Initializing...";
+
+    ShowWindow (ctx.splashScreen, SW_SHOW);
+    UpdateWindow (ctx.splashScreen);
+
+    std::thread loader (loadProc, & ctx);
+
+    loader.detach ();
 
     MSG msg;
 
