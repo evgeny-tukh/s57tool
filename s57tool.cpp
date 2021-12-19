@@ -309,8 +309,13 @@ void openFile (Ctx *ctx, CatalogItem *item) {
             if (field.instanceValues.size () == 1) {
                 for (auto& subField: field.instanceValues.front ()) {
                     memset (& data, 0, sizeof (data));
-
+if(subField.first.compare("*NAME")==0){
+int iii=0;
+++iii;
+--iii;
+}
                     switch (subField.second.type) {
+                        case 'B': sprintf (label, "%s: %s", subField.first.c_str (), subField.second.binaryValue.size () > 0 ? subField.second.getBinaryValueString ().c_str () : "<no value>"); break;
                         case 'A': sprintf (label, "%s: %s", subField.first.c_str (), subField.second.stringValue.has_value () ? subField.second.stringValue.value ().c_str () : "<no value>"); break;
                         case 'b': case 'I': sprintf (label, "%s: %s", subField.first.c_str (), subField.second.intValue.has_value () ? std::to_string (subField.second.intValue.value ()).c_str () : "<no value>"); break;
                         case 'R': sprintf (label, "%s: %s", subField.first.c_str (), subField.second.floatValue.has_value () ? std::to_string (subField.second.floatValue.value ()).c_str () : "<no value>"); break;
@@ -339,6 +344,7 @@ void openFile (Ctx *ctx, CatalogItem *item) {
                         memset (& data, 0, sizeof (data));
 
                         switch (subField.second.type) {
+                            case 'B': sprintf (label, "%s: %s", subField.first.c_str (), subField.second.binaryValue.size () > 0 ? subField.second.getBinaryValueString ().c_str () : "<no value>"); break;
                             case 'A': sprintf (label, "%s: %s", subField.first.c_str (), subField.second.stringValue.has_value () ? subField.second.stringValue.value ().c_str () : "<no value>"); break;
                             case 'b': case 'I': sprintf (label, "%s: %s", subField.first.c_str (), subField.second.intValue.has_value () ? std::to_string (subField.second.intValue.value ()).c_str () : "<no value>"); break;
                             case 'R': sprintf (label, "%s: %s", subField.first.c_str (), subField.second.floatValue.has_value () ? std::to_string (subField.second.floatValue.value ()).c_str () : "<no value>"); break;

@@ -219,6 +219,26 @@ std::tuple<bool, std::string> getStrValue (RecordFieldDesc& fld, const char *& f
     return std::tuple (true, value);
 }
 
+bool getBinaryValue (RecordFieldDesc& fld, const char *& fieldPos, std::vector<uint8_t>& binary) {
+    if (*fieldPos == FT || *fieldPos == UT) {
+        fieldPos ++; return false;
+    }
+
+    binary.clear ();
+
+    if (fld.modifier.has_value ()) {
+        binary.insert (binary.end (), fieldPos, fieldPos + (fld.modifier.value () / 8));
+    } else {
+        size_t k;
+        for (k = 0; isdigit (fieldPos [k]); ++ k) {
+            binary.insert (binary.end (), fieldPos [k]);
+        }
+        fieldPos += k + 1;
+    }
+    
+    return true;
+}
+
 std::tuple<bool, uint32_t> getIntValue (RecordFieldDesc& fld, const char *& fieldPos) {
     if (*fieldPos == FT || *fieldPos == UT) {
         fieldPos ++; return std::tuple (false, 0);
@@ -357,6 +377,15 @@ size_t parseDataRecord (
                     case 'b': {
                         auto [hasValue, intValue] = getBinValue (fld, fieldPos);
                         if (hasValue) subFieldInstance->second.intValue = intValue;
+                        break;
+                    }
+                    case 'B': {
+if(subFieldInstance->first.compare("*LNAM")==0){
+int iii=0;
+++iii;
+--iii;
+}
+                        bool hasValue = getBinaryValue (fld, fieldPos, subFieldInstance->second.binaryValue);
                         break;
                     }
                 }

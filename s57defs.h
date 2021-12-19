@@ -255,6 +255,18 @@ struct SubFieldInstance {
     std::optional<uint32_t> intValue;
     std::optional<double> floatValue;
     std::optional<std::string> stringValue;
+    std::vector<uint8_t> binaryValue;
+    
+    std::string getBinaryValueString () {
+        std::string result;
+        for (uint8_t chr: binaryValue) {
+            uint8_t low = chr & 15;
+            uint8_t high = chr >> 4;
+            result += high < 10 ? (high + '0') : (high - 10 + 'A');
+            result += low < 10 ? (low + '0') : (low - 10 + 'A');
+        }
+        return result;
+    }
 };
 
 struct FieldInstance {
