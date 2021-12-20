@@ -302,17 +302,28 @@ struct DatasetParams {
     std::optional<uint32_t> verDatum;           // VERDAT values
 };
 
+struct AttrInstance {
+    uint16_t classCode;
+    std::string acronym;
+    bool noValue;
+    uint32_t intValue;
+    double floatValue;
+    std::string strValue;
+    std::vector<uint8_t> listValue;
+};
+
 struct FeatureDesc {
-    std::optional<uint8_t> group;               // GRUP
-    std::optional<uint8_t> geometry;            // PRIM
-    std::optional<uint16_t> classCode;          // OBJL
-    std::optional<uint32_t> id;                 // RCID
-    std::optional<uint16_t> recordName;         // RCNM
+    uint8_t group;                              // GRUP
+    uint8_t geometry;                           // PRIM
+    uint16_t classCode;                         // OBJL
+    uint32_t id;                                // RCID
+    uint16_t recordName;                        // RCNM
     std::optional<uint8_t> updateInstruction;   // RUIN
     std::optional<uint8_t> version;             // RVER
-    std::optional<uint32_t> featureID;          // FIDN
-    std::optional<uint16_t> featureSubdiv;     // FIDS
+    uint32_t featureID;                         // FIDN
+    std::optional<uint16_t> featureSubdiv;      // FIDS
     std::optional<uint16_t> agency;             // AGEN
+    std::vector<AttrInstance> attributes;       // *ATTА
 };
 
 struct ObjectDesc {
@@ -506,14 +517,6 @@ enum TableSet {
     SIMPLIFIED,
     PAPER_CHARTS,
     LINES,
-};
-
-struct AttrInstance {
-    char acronym [6];
-    uint16_t classCode;
-    double flatVal;
-    uint32_t intVal;
-    std::string strVal;
 };
 
 enum DisplayCat {

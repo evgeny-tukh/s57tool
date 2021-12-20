@@ -6,7 +6,7 @@
 bool parseCatalog (const char *catPath, std::vector<CatalogItem>& catalog);
 bool loadParseS57File (char *path, std::vector<std::vector<FieldInstance>>& records);
 void extractDatasetParameters (std::vector<std::vector<FieldInstance>>& records, DatasetParams& datasetParams);
-void extractFeatureObjects (std::vector<std::vector<FieldInstance>>& records, std::map<uint32_t, FeatureDesc>& featureObjects);
+void extractFeatureObjects (std::vector<std::vector<FieldInstance>>& records, std::vector<FeatureDesc>& objects);
 void loadObjectDictionary (const char *path, ObjectDictionary& dictionary);
 void loadAttrDictionary (const char *path, AttrDictionary& dictionary);
 void loadDai (const char *path, Dai& dai);

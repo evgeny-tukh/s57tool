@@ -457,84 +457,91 @@ size_t parseDataDescriptiveRecord (
     return parsedLeader.recLength;
 }
 
-void extractFeatureObjects (std::vector<std::vector<FieldInstance>>& records, std::map<uint32_t, FeatureDesc>& features) {
-    FeatureDesc featureDesc;
+void extractFeatureObjects (std::vector<std::vector<FieldInstance>>& records, std::vector<FeatureDesc>& objects) {
+    FeatureDesc *curFeature = 0;
 
-    memset (& featureDesc, 0, sizeof (featureDesc));
-
-    features.clear ();
+    objects.clear ();
 
     for (auto& record: records) {
-        bool newFeature = false;
         for (auto& field: record) {
             auto& firstFieldValue = field.instanceValues.front ();
 
             if (field.tag.compare ("FRID") == 0) {
-                newFeature = true;
+                curFeature = & objects.emplace_back ();
                 for (auto& subField: firstFieldValue) {
                     if (subField.first.compare ("GRUP") == 0) {
                         if (subField.second.intValue.has_value ()) {
-                            featureDesc.group = subField.second.intValue.value ();
+                            curFeature->group = subField.second.intValue.value ();
                         }
                     } else if (subField.first.compare ("OBJL") == 0) {
                         if (subField.second.intValue.has_value ()) {
-                            featureDesc.classCode = subField.second.intValue.value ();
+                            curFeature->classCode = subField.second.intValue.value ();
                         }
                     } else if (subField.first.compare ("PRIM") == 0) {
                         if (subField.second.intValue.has_value ()) {
-                            featureDesc.geometry = subField.second.intValue.value ();
+                            curFeature->geometry = subField.second.intValue.value ();
                         }
                     } else if (subField.first.compare ("RCID") == 0) {
                         if (subField.second.intValue.has_value ()) {
-                            featureDesc.id = subField.second.intValue.value ();
+                            curFeature->id = subField.second.intValue.value ();
                         }
                     } else if (subField.first.compare ("RCNM") == 0) {
                         if (subField.second.intValue.has_value ()) {
-                            featureDesc.recordName = subField.second.intValue.value ();
+                            curFeature->recordName = subField.second.intValue.value ();
                         }
                     } else if (subField.first.compare ("RUIN") == 0) {
                         if (subField.second.intValue.has_value ()) {
-                            featureDesc.updateInstruction = subField.second.intValue.value ();
+                            curFeature->updateInstruction = subField.second.intValue.value ();
                         }
                     } else if (subField.first.compare ("RVER") == 0) {
                         if (subField.second.intValue.has_value ()) {
-                            featureDesc.version = subField.second.intValue.value ();
+                            curFeature->version = subField.second.intValue.value ();
                         }
                     }
                 }
             } else if (field.tag.compare ("FOID") == 0) {
-                newFeature = true;
                 for (auto& subField: firstFieldValue) {
                     if (subField.first.compare ("AGEN") == 0) {
                         if (subField.second.intValue.has_value ()) {
-                            featureDesc.agency = subField.second.intValue.value ();
+                            curFeature->agency = subField.second.intValue.value ();
                         }
                     } else if (subField.first.compare ("FIDN") == 0) {
                         if (subField.second.intValue.has_value ()) {
-                            featureDesc.featureID = subField.second.intValue.value ();
+                            curFeature->featureID = subField.second.intValue.value ();
                         }
                     } else if (subField.first.compare ("FIDS") == 0) {
                         if (subField.second.intValue.has_value ()) {
-                            featureDesc.featureSubdiv = subField.second.intValue.value ();
+                            curFeature->featureSubdiv = subField.second.intValue.value ();
+                        }
+                    }
+                }
+            } else if (field.tag.compare ("ATTF") == 0) {
+                for (auto& subField: firstFieldValue) {
+                    if (subField.first.compare ("*ATTL") == 0) {
+                        if (subField.second.intValue.has_value ()) {
+                            curFeature->attributes.emplace_back ();
+                            curFeature->attributes.back ().classCode = subField.second.intValue.value ();
+                        }
+                    } else if (subField.first.compare ("ATVL") == 0) {
+                        curFeature->attributes.back ().noValue = false;
+                        if (subField.second.intValue.has_value ()) {
+                            curFeature->attributes.back ().intValue = subField.second.intValue.value ();
+                        } else if (subField.second.floatValue.has_value ()) {
+                            curFeature->attributes.back ().floatValue = subField.second.floatValue.value ();
+                        } else if (subField.second.stringValue.has_value ()) {
+                            curFeature->attributes.back ().strValue = subField.second.stringValue.value ();
+                        } else if (subField.second.binaryValue.size () > 0) {
+                            curFeature->attributes.back ().listValue.insert (
+                                curFeature->attributes.back ().listValue.end (),
+                                subField.second.binaryValue.begin (),
+                                subField.second.binaryValue.end ()
+                            );
+                        } else {
+                            curFeature->attributes.back ().noValue = true;
                         }
                     }
                 }
             }
-        }
-
-        if (newFeature) {
-            auto& feature = features.emplace (std::pair<uint32_t, FeatureDesc> (featureDesc.id.value (), FeatureDesc ())).first->second;
-
-            if (featureDesc.agency.has_value ()) feature.agency = featureDesc.agency.value ();
-            if (featureDesc.classCode.has_value ()) feature.classCode = featureDesc.classCode.value ();
-            if (featureDesc.featureID.has_value ()) feature.featureID = featureDesc.featureID.value ();
-            if (featureDesc.featureSubdiv.has_value ()) feature.featureSubdiv = featureDesc.featureSubdiv.value ();
-            if (featureDesc.geometry.has_value ()) feature.geometry = featureDesc.geometry.value ();
-            if (featureDesc.group.has_value ()) feature.group = featureDesc.group.value ();
-            if (featureDesc.id.has_value ()) feature.id = featureDesc.id.value ();
-            if (featureDesc.recordName.has_value ()) feature.recordName = featureDesc.recordName.value ();
-            if (featureDesc.updateInstruction.has_value ()) feature.updateInstruction = featureDesc.updateInstruction.value ();
-            if (featureDesc.version.has_value ()) feature.version = featureDesc.version.value ();
         }
     }
 }
@@ -919,8 +926,8 @@ void loadLookupTableItem (std::vector<std::string>& module, std::map<std::string
                         if (!acronym.empty ()) {
                             auto& instance = lookupTablePos->second.back ().attrCombination.emplace_back ();
 
-                            memcpy (instance.acronym, acronym.c_str (), 6);
-                            instance.strVal = value;
+                            instance.acronym = acronym;
+                            instance.strValue = value;
                         }
                     }
                 }

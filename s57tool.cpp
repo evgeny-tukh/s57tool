@@ -233,12 +233,12 @@ void openFile (Ctx *ctx, CatalogItem *item) {
     PathCombine (path, ctx->basePath.c_str (), item->fileName.c_str ());
 
     std::vector<std::vector<FieldInstance>> records;
-    std::map<uint32_t, FeatureDesc> featureObjects;
+    std::vector<FeatureDesc> objects;
     DatasetParams datasetParams;
 
     loadParseS57File (path, records);
     extractDatasetParameters (records, datasetParams);
-    extractFeatureObjects (records, featureObjects);
+    extractFeatureObjects (records, objects);
     
     SendMessage (ctx->recordTree, TVM_DELETEITEM, (WPARAM) TVI_ROOT, 0);
     SendMessage (ctx->propsList, LVM_DELETEALLITEMS, 0, 0);
