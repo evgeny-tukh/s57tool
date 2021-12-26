@@ -22,9 +22,15 @@ const int COL_CRC = 7;
 const int COL_PROPNAME = 0;
 const int COL_PROPVALUE = 1;
 
+enum TABS {
+    RECORDS = 0,
+    PROPERTIES,
+    CATALOG,
+};
+
 struct Ctx {
     HINSTANCE instance;
-    HWND mainWnd, catalogCtl, recordTree, propsList, splashScreen;
+    HWND mainWnd, catalogCtl, recordTree, propsList, splashScreen, tabCtl;
     HMENU mainMenu;
     bool keepRunning, loaded;
     std::vector<CatalogItem> catalog;
@@ -62,12 +68,27 @@ void initWindow (HWND wnd, void *data) {
 
     GetClientRect (wnd, & client);
 
-    auto createControl = [&wnd, &ctx] (const char *className, const char *text, uint32_t style, bool visible, int x, int y, int width, int height, uint64_t id) {
+    auto createControl = [&ctx] (
+        HWND parent,
+        const char *className,
+        const char *text,
+        uint32_t style,
+        bool visible,
+        uint64_t id,
+        int x,
+        int y,
+        int width,
+        int height
+    ) {
+        RECT client;
+
+        GetClientRect (parent, & client);
+
         style |= WS_CHILD;
 
         if (visible) style |= WS_VISIBLE;
         
-        return CreateWindow (className, text, style, x, y, width, height, wnd, (HMENU) id, ctx->instance, 0);
+        return CreateWindow (className, text, style, x, y, width, height, parent, (HMENU) id, ctx->instance, 0);
     };
     auto createPopup = [&wnd, &ctx] (const char *className, const char *text, uint32_t style, bool visible, int x, int y, int width, int height) {
         style |= WS_POPUP;
@@ -82,12 +103,19 @@ void initWindow (HWND wnd, void *data) {
     int halfWidth = client.right / 2;
     int halfHeight = client.bottom / 2;
 
-    ctx->catalogCtl = createControl (WC_LISTVIEW, "", LVS_REPORT | WS_VSCROLL | WS_HSCROLL, true, 0, 0, client.right, halfHeight, IDC_CATALOG);
-    ctx->recordTree = createControl (WC_TREEVIEW, "", TVS_HASBUTTONS | TVS_HASLINES | TVS_LINESATROOT | WS_VSCROLL, true, 0, halfHeight, halfWidth, halfHeight, IDC_RECORDS);
-    ctx->propsList = createControl (WC_LISTVIEW, "", LVS_REPORT | WS_VSCROLL | WS_HSCROLL, true, halfWidth, halfHeight, halfWidth, halfHeight, IDC_CATALOG);
+    ctx->catalogCtl = createControl (wnd, WC_LISTVIEW, "", LVS_REPORT | WS_VSCROLL | WS_HSCROLL, true, IDC_CATALOG, 0, 0, client.right + 1, halfHeight);
+    ctx->tabCtl = createControl (wnd, WC_TABCONTROL, "", TCS_TABS | TCS_MULTILINE, true, IDC_TAB, 0, halfHeight, client.right + 1, halfHeight);
 
-    SendMessage (ctx->catalogCtl, LVM_SETEXTENDEDLISTVIEWSTYLE, LVS_EX_FULLROWSELECT, LVS_EX_FULLROWSELECT);
-    SendMessage (ctx->propsList, LVM_SETEXTENDEDLISTVIEWSTYLE, LVS_EX_FULLROWSELECT, LVS_EX_FULLROWSELECT);
+    auto addTab = [ctx] (int index, char *text) {
+        TCITEM item;
+
+        memset (& item, 0, sizeof (item));
+
+        item.mask = TCIF_TEXT;
+        item.pszText = text;
+
+        SendMessage (ctx->tabCtl, TCM_INSERTITEM, index, (LPARAM) & item);
+    };
 
     auto addColumn = [ctx] (HWND ctl, int columnIndex, char *caption, int width) {
         LVCOLUMN column;
@@ -101,6 +129,39 @@ void initWindow (HWND wnd, void *data) {
 
         SendMessage (ctl, LVM_INSERTCOLUMN, columnIndex, (LPARAM) & column);
     };
+
+    addTab (TABS::RECORDS, "Records");
+    addTab (TABS::PROPERTIES, "Properties");
+    addTab (TABS::CATALOG, "Catalog");
+
+    GetClientRect (ctx->tabCtl, & client);
+    ctx->recordTree = createControl (
+        ctx->tabCtl,
+        WC_TREEVIEW,
+        "",
+        TVS_HASBUTTONS | TVS_HASLINES | TVS_LINESATROOT | WS_VSCROLL,
+        true,
+        IDC_RECORDS,
+        3,
+        30,
+        client.right - 6,
+        client.bottom - 33
+    );
+    ctx->propsList = createControl (
+        ctx->tabCtl,
+        WC_LISTVIEW,
+        "",
+        LVS_REPORT | WS_VSCROLL | WS_HSCROLL,
+        false,
+        IDC_CATALOG,
+        3,
+        30,
+        client.right - 6,
+        client.bottom - 33
+    );
+
+    SendMessage (ctx->catalogCtl, LVM_SETEXTENDEDLISTVIEWSTYLE, LVS_EX_FULLROWSELECT, LVS_EX_FULLROWSELECT);
+    SendMessage (ctx->propsList, LVM_SETEXTENDEDLISTVIEWSTYLE, LVS_EX_FULLROWSELECT, LVS_EX_FULLROWSELECT);
 
     addColumn (ctx->catalogCtl, COL_FILENAME, "Filename", 170);
     addColumn (ctx->catalogCtl, COL_VOLUME, "Volume", 60);
@@ -403,16 +464,37 @@ void onSize (HWND wnd, int width, int height) {
 
     int halfWidth = width / 2;
     int halfHeight = height / 2;
-
+    RECT client;
+    
     MoveWindow (ctx->catalogCtl, 0, 0, width, halfHeight, true);
-    MoveWindow (ctx->recordTree, 0, halfHeight, halfWidth, halfHeight, true);
-    MoveWindow (ctx->propsList, halfWidth, halfHeight, halfWidth, halfHeight, true);
+    MoveWindow (ctx->tabCtl, 0, halfHeight, width, halfHeight, true);
+    GetClientRect (ctx->tabCtl, & client);
+
+    //MoveWindow (ctx->recordTree, 0, 0, client.right + 1, client.bottom + 1, true);
+    //MoveWindow (ctx->propsList, 0, 0, client.right + 1, client.bottom + 1, true);
 }
 
 void onNotify (HWND wnd, NMHDR *hdr) {
     Ctx *ctx = (Ctx *) GetWindowLongPtr (wnd, GWLP_USERDATA);
 
     switch (hdr->code) {
+        case TCN_SELCHANGE: {
+            switch (SendMessage (ctx->tabCtl, TCM_GETCURSEL, 0, 0)) {
+                case TABS::PROPERTIES: {
+                    ShowWindow (ctx->propsList, SW_SHOW);
+                    ShowWindow (ctx->recordTree, SW_HIDE);
+                    break;
+                }
+                case TABS::RECORDS: {
+                    ShowWindow (ctx->propsList, SW_HIDE);
+                    ShowWindow (ctx->recordTree, SW_SHOW);
+                    break;
+                }
+                case TABS::CATALOG: {
+                    break;
+                }
+            }
+        }
         case NM_DBLCLK: {
             NMITEMACTIVATE *item = (NMITEMACTIVATE *) hdr;
             
@@ -524,7 +606,14 @@ void loadProc (Ctx *ctx) {
 
 int WINAPI WinMain (HINSTANCE instance, HINSTANCE prevInstance, char *cmd, int showCmd) {
     Ctx ctx (instance, LoadMenu (instance, MAKEINTRESOURCE (IDR_MAINMENU)));
+    INITCOMMONCONTROLSEX comCtlData;
+    
+    memset (& comCtlData, 0, sizeof (comCtlData));
 
+    comCtlData.dwSize = sizeof (comCtlData);
+    comCtlData.dwICC = ICC_LISTVIEW_CLASSES | ICC_STANDARD_CLASSES | ICC_TAB_CLASSES | ICC_TREEVIEW_CLASSES;
+    
+    InitCommonControlsEx (& comCtlData);
     registerClasses (ctx);
 
     ctx.splashScreen = CreateWindow (SPLASH_CLASS, "", WS_POPUP | WS_VISIBLE, 200, 200, 500, 200, 0, 0, instance, & ctx);

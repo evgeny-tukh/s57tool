@@ -12,6 +12,7 @@
 
 #define IDC_CATALOG     300
 #define IDC_RECORDS     301
+#define IDC_TAB         302
 
 #define IDC_LOADINFO    400
 
