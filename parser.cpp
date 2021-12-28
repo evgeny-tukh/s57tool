@@ -377,7 +377,11 @@ size_t parseDataRecord (
                     case 'b': {
                         auto [hasValue, intValue] = getBinValue (fld, fieldPos);
                         if (hasValue) subFieldInstance->second.intValue = intValue;
-                        break;
+if(subFieldInstance->first.compare("*ATTL")==0&&intValue==37){
+int iii=0;
+++iii;
+--iii;
+}                        break;
                     }
                     case 'B': {
 if(subFieldInstance->first.compare("*LNAM")==0){
@@ -457,6 +461,58 @@ size_t parseDataDescriptiveRecord (
     return parsedLeader.recLength;
 }
 
+void deformatAttrValues (AttrDictionary& attrDictionary, std::vector<FeatureDesc>& objects) {
+    //for (auto& object: objects) {
+    for (size_t i = 0; i < objects.size (); ++ i) {
+if(i==28){
+int iii=0;
+++iii;
+--iii;
+}
+        auto& object = objects [i];
+        for (auto& attr: object.attributes) {
+            if (!attr.noValue && !attr.strValue.empty ()) {
+                AttrDesc *attrDesc = (AttrDesc *) attrDictionary.findByCode (attr.classCode);
+if (attr.classCode==37){
+    int iii=0;
+    ++iii;
+    --iii;
+}
+                switch (attrDesc->domain) {
+                    case 'L': {
+                        std::vector<std::string> parts;
+
+                        attr.listValue.clear ();
+
+                        splitString (attr.strValue, parts, ',');
+if(attr.strValue.length()>0)                        {
+    int iii=0;
+    ++iii;
+    --iii;
+}
+                        for (std::string& part: parts) {
+                            attr.listValue.push_back (std::atoi (part.c_str ()));
+                        }
+                        break;
+                    }
+                    case 'E':
+                    case 'I': {
+                        if (!attr.intValue) attr.intValue = std::atoi (attr.strValue.c_str ());
+                        break;
+                    }
+                    case 'F': {
+                        attr.floatValue = std::atof (attr.strValue.c_str ()); break;
+                    }
+                }
+            }
+        }
+    }
+}
+
+void extractPoints (std::vector<std::vector<FieldInstance>>& records, std::vector<GeoPoint>& points) {
+
+}
+
 void extractFeatureObjects (std::vector<std::vector<FieldInstance>>& records, std::vector<FeatureDesc>& objects) {
     FeatureDesc *curFeature = 0;
 
@@ -523,6 +579,11 @@ void extractFeatureObjects (std::vector<std::vector<FieldInstance>>& records, st
                             curFeature->attributes.back ().classCode = subField.second.intValue.value ();
                         }
                     } else if (subField.first.compare ("ATVL") == 0) {
+if(curFeature->attributes.back ().classCode==37){
+int iii=0;
+++iii;
+--iii;
+}
                         curFeature->attributes.back ().noValue = false;
                         if (subField.second.intValue.has_value ()) {
                             curFeature->attributes.back ().intValue = subField.second.intValue.value ();
@@ -765,7 +826,7 @@ void loadAttrDictionary (const char *path, AttrDictionary& dictionary) {
                     dictionary.checkAddAttr (code, domain, acronym.c_str (), name.c_str ());
                 }
             } else if (dictionary.items.size () > 0) {
-                if (dictionary.lastItem ().domain == 'E') {
+                if (dictionary.lastItem ().domain == 'E' || dictionary.lastItem ().domain == 'L') {
                     std::vector<std::string> fields;
                     splitString (line, fields, ':');
                     if (fields.size () > 1) {

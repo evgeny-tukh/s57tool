@@ -22,15 +22,19 @@ const int COL_CRC = 7;
 const int COL_PROPNAME = 0;
 const int COL_PROPVALUE = 1;
 
+const int COL_RCID = 0;
+const int COL_CLASS = 1;
+const int COL_GEOMETRY = 2;
+
 enum TABS {
     RECORDS = 0,
     PROPERTIES,
-    CATALOG,
+    OBJECTS,
 };
 
 struct Ctx {
     HINSTANCE instance;
-    HWND mainWnd, catalogCtl, recordTree, propsList, splashScreen, tabCtl;
+    HWND mainWnd, catalogCtl, recordTree, propsList, splashScreen, tabCtl, objectTree;
     HMENU mainMenu;
     bool keepRunning, loaded;
     std::vector<CatalogItem> catalog;
@@ -132,33 +136,17 @@ void initWindow (HWND wnd, void *data) {
 
     addTab (TABS::RECORDS, "Records");
     addTab (TABS::PROPERTIES, "Properties");
-    addTab (TABS::CATALOG, "Catalog");
+    addTab (TABS::OBJECTS, "Objects");
 
     GetClientRect (ctx->tabCtl, & client);
-    ctx->recordTree = createControl (
-        ctx->tabCtl,
-        WC_TREEVIEW,
-        "",
-        TVS_HASBUTTONS | TVS_HASLINES | TVS_LINESATROOT | WS_VSCROLL,
-        true,
-        IDC_RECORDS,
-        3,
-        30,
-        client.right - 6,
-        client.bottom - 33
-    );
-    ctx->propsList = createControl (
-        ctx->tabCtl,
-        WC_LISTVIEW,
-        "",
-        LVS_REPORT | WS_VSCROLL | WS_HSCROLL,
-        false,
-        IDC_CATALOG,
-        3,
-        30,
-        client.right - 6,
-        client.bottom - 33
-    );
+    
+    auto createTabChildControl = [&ctx, &client, &createControl] (const char *wndClass, uint32_t style, uint32_t id, bool visible) {
+        return createControl (ctx->tabCtl, wndClass, "", style, visible, id, 3, 30, client.right - 6, client.bottom - 33);
+    };
+
+    ctx->recordTree = createTabChildControl (WC_TREEVIEW, TVS_HASBUTTONS | TVS_HASLINES | TVS_LINESATROOT | WS_VSCROLL, IDC_RECORDS, true);
+    ctx->propsList = createTabChildControl (WC_LISTVIEW, LVS_REPORT | WS_VSCROLL | WS_HSCROLL, IDC_CATALOG, false);
+    ctx->objectTree = createTabChildControl (WC_TREEVIEW, TVS_HASBUTTONS | TVS_HASLINES | TVS_LINESATROOT | WS_VSCROLL, IDC_OBJECTS, false);
 
     SendMessage (ctx->catalogCtl, LVM_SETEXTENDEDLISTVIEWSTYLE, LVS_EX_FULLROWSELECT, LVS_EX_FULLROWSELECT);
     SendMessage (ctx->propsList, LVM_SETEXTENDEDLISTVIEWSTYLE, LVS_EX_FULLROWSELECT, LVS_EX_FULLROWSELECT);
@@ -300,6 +288,7 @@ void openFile (Ctx *ctx, CatalogItem *item) {
     loadParseS57File (path, records);
     extractDatasetParameters (records, datasetParams);
     extractFeatureObjects (records, objects);
+    deformatAttrValues (ctx->attrDictionary, objects);
     
     SendMessage (ctx->recordTree, TVM_DELETEITEM, (WPARAM) TVI_ROOT, 0);
     SendMessage (ctx->propsList, LVM_DELETEALLITEMS, 0, 0);
@@ -333,6 +322,140 @@ void openFile (Ctx *ctx, CatalogItem *item) {
     addParam (8, "Horizontal datum", datasetParams.horDatum.has_value () ? std::to_string (datasetParams.horDatum.value ()).c_str () : "N/A");
     addParam (9, "Vertical datum", datasetParams.verDatum.has_value () ? std::to_string (datasetParams.verDatum.value ()).c_str () : "N/A");
 
+    TV_INSERTSTRUCTA data;
+
+    memset (& data, 0, sizeof (data));
+
+    data.hParent = TVI_ROOT;
+    data.hInsertAfter = TVI_LAST;
+    data.item.mask = TVIF_TEXT;
+    data.item.pszText = "Points";
+
+    HTREEITEM objectGroupItem [5];
+
+    objectGroupItem [0] = (HTREEITEM) SendMessage (ctx->objectTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+
+    data.item.pszText = "Lines";
+
+    objectGroupItem [1] = (HTREEITEM) SendMessage (ctx->objectTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+
+    data.item.pszText = "Areas";
+
+    objectGroupItem [2] = (HTREEITEM) SendMessage (ctx->objectTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+
+    data.item.pszText = "3D Points";
+
+    objectGroupItem [3] = (HTREEITEM) SendMessage (ctx->objectTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+
+    data.item.pszText = "Non-spatial objects";
+
+    objectGroupItem [4] = (HTREEITEM) SendMessage (ctx->objectTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+
+    for (auto& object: objects) {
+        std::string featureID ("Feature id: " + std::to_string (object.featureID));
+        std::string id ("ID: " + std::to_string (object.id));
+        std::string classInfo (std::to_string (object.classCode));
+        static char *geometries [] { "Point", "Line", "Area", "3D points" };
+
+        auto objectDesc = ctx->objectDictionary.findByCode (object.classCode);
+
+        classInfo +=  " [";
+        classInfo += objectDesc ? objectDesc->name : "N/A";
+        classInfo += "]";
+
+        data.hParent = (object.geometry > 0 && object.geometry < 5) ? objectGroupItem [object.geometry-1] : objectGroupItem [4];
+        data.hInsertAfter = TVI_LAST;
+        data.item.mask = TVIF_TEXT;
+        data.item.pszText = (char *) featureID.c_str ();
+
+        HTREEITEM objectItem = (HTREEITEM) SendMessage (ctx->objectTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+
+        data.hParent = objectItem;
+        data.hInsertAfter = TVI_LAST;
+        data.item.mask = TVIF_TEXT;
+        data.item.pszText = (char *) id.c_str ();
+
+        SendMessage (ctx->objectTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+
+        data.item.pszText = (char *) classInfo.c_str ();
+
+        SendMessage (ctx->objectTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+
+        data.item.pszText = "Attributes";
+
+        HTREEITEM attrsItem = (HTREEITEM) SendMessage (ctx->objectTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+
+        for (auto& attr: object.attributes) {
+            std::string attrInfo (std::to_string (attr.classCode));
+
+            AttrDesc *attrDesc = (AttrDesc *) ctx->attrDictionary.findByCode (attr.classCode);
+
+            attrInfo +=  " [";
+            attrInfo += attrDesc ? attrDesc->name : "N/A";
+            attrInfo += "]";
+
+            data.hParent = attrsItem;
+            data.item.pszText = (char *) attrInfo.c_str ();
+
+            HTREEITEM attrItem = (HTREEITEM) SendMessage (ctx->objectTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+
+            std::string attrType { "Type: " };
+
+            switch (attrDesc->domain) {
+                case 'E': attrType += "Enumeration"; break;
+                case 'I': attrType += "Integer"; break;
+                case 'F': attrType += "Float"; break;
+                case 'L': attrType += "List"; break;
+                case 'A': attrType += "ANSI string"; break;
+                case 'S': attrType += "String"; break;
+                default: attrType += "Unknown";
+            }
+
+            data.hParent = attrItem;
+            data.item.pszText = (char *) attrType.c_str ();
+
+            SendMessage (ctx->objectTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+
+            std::string attrValue { "Value: " };
+
+            if (attr.noValue) {
+                attrValue += "<No value>";
+            } else {
+                switch (attrDesc->domain) {
+                    case 'E': {
+                        attrValue += attrDesc->listValue (attr.intValue); break;
+                    }
+                    case 'I': {
+                        attrValue += std::to_string (attr.intValue); break;
+                    }
+                    case 'F': {
+                        attrValue += std::to_string (attr.floatValue); break;
+                    }
+                    case 'L': {
+                        for (uint8_t value: attr.listValue) {
+                            attrValue += attrDesc->listValue (value);
+                            attrValue += ";";
+                        }
+                        break;
+                    }
+                    case 'A': {
+                        attrValue += attr.strValue; break;
+                    }
+                    case 'S': {
+                        attrValue += attr.strValue; break;
+                    }
+                    default: {
+                        attrType += "Unknown";
+                    }
+                }
+            }
+
+            data.item.pszText = (char *) attrValue.c_str ();
+
+            SendMessage (ctx->objectTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+        }
+    }
+        
     for (auto& rec: records) {
         TV_INSERTSTRUCT data;
         char rcidText [50];
@@ -470,8 +593,8 @@ void onSize (HWND wnd, int width, int height) {
     MoveWindow (ctx->tabCtl, 0, halfHeight, width, halfHeight, true);
     GetClientRect (ctx->tabCtl, & client);
 
-    //MoveWindow (ctx->recordTree, 0, 0, client.right + 1, client.bottom + 1, true);
-    //MoveWindow (ctx->propsList, 0, 0, client.right + 1, client.bottom + 1, true);
+    MoveWindow (ctx->recordTree, 3, 30, client.right - 6, client.bottom - 33 , true);
+    MoveWindow (ctx->propsList, 3, 30, client.right - 6, client.bottom - 33 , true);
 }
 
 void onNotify (HWND wnd, NMHDR *hdr) {
@@ -483,23 +606,31 @@ void onNotify (HWND wnd, NMHDR *hdr) {
                 case TABS::PROPERTIES: {
                     ShowWindow (ctx->propsList, SW_SHOW);
                     ShowWindow (ctx->recordTree, SW_HIDE);
+                    ShowWindow (ctx->objectTree, SW_HIDE);
                     break;
                 }
                 case TABS::RECORDS: {
                     ShowWindow (ctx->propsList, SW_HIDE);
                     ShowWindow (ctx->recordTree, SW_SHOW);
+                    ShowWindow (ctx->objectTree, SW_HIDE);
                     break;
                 }
-                case TABS::CATALOG: {
+                case TABS::OBJECTS: {
+                    ShowWindow (ctx->propsList, SW_HIDE);
+                    ShowWindow (ctx->recordTree, SW_HIDE);
+                    ShowWindow (ctx->objectTree, SW_SHOW);
                     break;
                 }
             }
+            break;
         }
         case NM_DBLCLK: {
-            NMITEMACTIVATE *item = (NMITEMACTIVATE *) hdr;
-            
-            if (item->iItem >= 0) {
-                openFileByIndex (ctx, item->iItem);
+            if (hdr->idFrom == IDC_CATALOG) {
+                NMITEMACTIVATE *item = (NMITEMACTIVATE *) hdr;
+                
+                if (item->iItem >= 0) {
+                    openFileByIndex (ctx, item->iItem);
+                }
             }
             break;
         }

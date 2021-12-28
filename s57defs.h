@@ -312,6 +312,27 @@ struct AttrInstance {
     std::vector<uint8_t> listValue;
 };
 
+struct Position {
+    double lat;
+    double lon;
+    float depth;
+};
+
+struct GeoPoint: Position {
+    uint32_t id;
+};
+
+struct GeoLine {
+    uint32_t id;
+    std::vector<Position> vertices;
+};
+
+struct GeoArea {
+    uint32_t id;
+    std::vector<Position> extContour;
+    std::vector<std::vector<Position>> intContours;
+};
+
 struct FeatureDesc {
     uint8_t group;                              // GRUP
     uint8_t geometry;                           // PRIM
@@ -336,6 +357,14 @@ struct AttrDesc: ObjectDesc {
     char domain;
     std::string format;
     std::map<uint16_t, std::string> list;
+
+    std::string listValue (uint16_t code) {
+        if (domain != 'L' && domain != 'E') return std::string ("N/A");
+
+        auto pos = list.find (code);
+
+        return pos == list.end () ? std::string ("Unknown") : pos->second;
+    }
 };
 
 struct GenericDictionary {
@@ -368,6 +397,10 @@ struct GenericDictionary {
 struct ObjectDictionary: GenericDictionary {
     std::vector<ObjectDesc> items;
 
+    virtual ObjectDesc *itemAt (size_t index) {
+        return (index >= 0 && index < items.size ()) ? & items [index] : 0;
+    }
+
     virtual void clearItems () {
         items.clear ();
     }
@@ -398,6 +431,10 @@ struct AttrDictionary: GenericDictionary {
 
     AttrDesc& lastItem () {
         return items.back ();
+    }
+
+    virtual ObjectDesc *itemAt (size_t index) {
+        return (index >= 0 && index < items.size ()) ? & items [index] : 0;
     }
 
     virtual void clearItems () {
