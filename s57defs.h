@@ -315,22 +315,38 @@ struct AttrInstance {
 struct Position {
     double lat;
     double lon;
-    float depth;
+    double depth;
 };
 
-struct GeoPoint: Position {
+enum NodeFlags {
+    CONNECTED = 1,
+    SOUNDING_ARRAY = 2,
+};
+
+struct Node {
     uint32_t id;
+    uint32_t recordName;
+    uint32_t updateInstruction;
+    uint32_t version;
+    uint8_t flags;
+    std::vector<Position> points;
+
+    Node (): id (0), recordName (0), updateInstruction (0), version (0), flags (0) {}
 };
 
 struct GeoLine {
     uint32_t id;
     std::vector<Position> vertices;
+
+    GeoLine (): id (0) {}
 };
 
 struct GeoArea {
     uint32_t id;
-    std::vector<Position> extContour;
-    std::vector<std::vector<Position>> intContours;
+    std::vector<Node> extContour;
+    std::vector<std::vector<Node>> intContours;
+
+    GeoArea (): id (0) {}
 };
 
 struct FeatureDesc {
@@ -345,12 +361,16 @@ struct FeatureDesc {
     std::optional<uint16_t> featureSubdiv;      // FIDS
     std::optional<uint16_t> agency;             // AGEN
     std::vector<AttrInstance> attributes;       // *ATTА
+
+    FeatureDesc (): group (0), geometry (0), classCode (0), id (0), recordName (0), updateInstruction (0), version (0), featureID (0), featureSubdiv (0), agency (0) {}
 };
 
 struct ObjectDesc {
     uint32_t code;
     std::string acronym;
     std::string name;
+
+    ObjectDesc (): code (0) {}
 };
 
 struct AttrDesc: ObjectDesc {
@@ -365,6 +385,8 @@ struct AttrDesc: ObjectDesc {
 
         return pos == list.end () ? std::string ("Unknown") : pos->second;
     }
+
+    AttrDesc (): ObjectDesc (), domain ('\0') {}
 };
 
 struct GenericDictionary {

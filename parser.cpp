@@ -199,7 +199,7 @@ size_t parseRecordLeaderAndDirectory (const char *start, std::vector<DirEntry>& 
 }
 
 std::tuple<bool, std::string> getStrValue (RecordFieldDesc& fld, const char *& fieldPos) {
-    if (*fieldPos == FT || *fieldPos == UT) {
+    if (!fld.modifier.has_value () && (*fieldPos == FT || *fieldPos == UT)) {
         fieldPos ++; return std::tuple (false, std::string ());
     }
 
@@ -220,7 +220,7 @@ std::tuple<bool, std::string> getStrValue (RecordFieldDesc& fld, const char *& f
 }
 
 bool getBinaryValue (RecordFieldDesc& fld, const char *& fieldPos, std::vector<uint8_t>& binary) {
-    if (*fieldPos == FT || *fieldPos == UT) {
+    if (!fld.modifier.has_value () && (*fieldPos == FT || *fieldPos == UT)) {
         fieldPos ++; return false;
     }
 
@@ -240,7 +240,7 @@ bool getBinaryValue (RecordFieldDesc& fld, const char *& fieldPos, std::vector<u
 }
 
 std::tuple<bool, uint32_t> getIntValue (RecordFieldDesc& fld, const char *& fieldPos) {
-    if (*fieldPos == FT || *fieldPos == UT) {
+    if (!fld.modifier.has_value () && (*fieldPos == FT || *fieldPos == UT)) {
         fieldPos ++; return std::tuple (false, 0);
     }
 
@@ -263,7 +263,7 @@ std::tuple<bool, uint32_t> getIntValue (RecordFieldDesc& fld, const char *& fiel
 }
 
 std::tuple<bool, uint32_t> getBinValue (RecordFieldDesc& fld, const char *& fieldPos) {
-    if (*fieldPos == FT || *fieldPos == UT) {
+    if (!fld.modifier.has_value () && (*fieldPos == FT || *fieldPos == UT)) {
         fieldPos ++; return std::tuple (false, 0);
     }
 
@@ -281,12 +281,12 @@ std::tuple<bool, uint32_t> getBinValue (RecordFieldDesc& fld, const char *& fiel
         }
         fieldPos += k + 1;
     }
-    
+
     return std::tuple (true, value);
 }
 
 std::tuple<bool, double> getFloatValue (RecordFieldDesc& fld, const char *& fieldPos) {
-    if (*fieldPos == FT || *fieldPos == UT) {
+    if (!fld.modifier.has_value () && (*fieldPos == FT || *fieldPos == UT)) {
         fieldPos ++; return std::tuple (false, 0.0);
     }
 
@@ -464,20 +464,11 @@ size_t parseDataDescriptiveRecord (
 void deformatAttrValues (AttrDictionary& attrDictionary, std::vector<FeatureDesc>& objects) {
     //for (auto& object: objects) {
     for (size_t i = 0; i < objects.size (); ++ i) {
-if(i==28){
-int iii=0;
-++iii;
---iii;
-}
         auto& object = objects [i];
         for (auto& attr: object.attributes) {
             if (!attr.noValue && !attr.strValue.empty ()) {
                 AttrDesc *attrDesc = (AttrDesc *) attrDictionary.findByCode (attr.classCode);
-if (attr.classCode==37){
-    int iii=0;
-    ++iii;
-    --iii;
-}
+
                 switch (attrDesc->domain) {
                     case 'L': {
                         std::vector<std::string> parts;
@@ -485,11 +476,7 @@ if (attr.classCode==37){
                         attr.listValue.clear ();
 
                         splitString (attr.strValue, parts, ',');
-if(attr.strValue.length()>0)                        {
-    int iii=0;
-    ++iii;
-    --iii;
-}
+
                         for (std::string& part: parts) {
                             attr.listValue.push_back (std::atoi (part.c_str ()));
                         }
@@ -509,8 +496,143 @@ if(attr.strValue.length()>0)                        {
     }
 }
 
-void extractPoints (std::vector<std::vector<FieldInstance>>& records, std::vector<GeoPoint>& points) {
+void extractPoints (std::vector<std::vector<FieldInstance>>& records, std::vector<Node>& points, DatasetParams datasetParams) {
+    points.clear ();
 
+    for (auto& record: records) {
+        for (auto& field: record) {
+            auto& firstFieldValue = field.instanceValues.front ();
+            uint32_t curRecID = 0;
+            uint8_t curRecName = 0;
+            uint8_t curUpdateInstr = 0;
+            uint8_t curVersion = 0;
+
+            if (field.tag.compare ("VRID") == 0) {
+                Node& curPoint = points.emplace_back ();
+                for (auto& subField: firstFieldValue) {
+                    if (subField.first.compare ("RCID") == 0) {
+                        if (subField.second.intValue.has_value ()) {
+                            curPoint.id = subField.second.intValue.value ();
+                        }
+                    } else if (subField.first.compare ("RCNM") == 0) {
+                        if (subField.second.intValue.has_value ()) {
+                            curPoint.recordName = subField.second.intValue.value ();
+                            if (curPoint.recordName == 120) curPoint.flags |= NodeFlags::CONNECTED;
+                        }
+                    } else if (subField.first.compare ("RUIN") == 0) {
+                        if (subField.second.intValue.has_value ()) {
+                            curPoint.updateInstruction = subField.second.intValue.value ();
+                        }
+                    } else if (subField.first.compare ("RVER") == 0) {
+                        if (subField.second.intValue.has_value ()) {
+                            curPoint.version = subField.second.intValue.value ();
+                        }
+                    }
+                }
+            } else if (field.tag.compare ("SG2D") == 0) {
+                Node& curPoint = points.back ();
+                for (auto& subField: firstFieldValue) {
+                    if (subField.first.compare ("*YCOO") == 0) {
+                        auto& point = curPoint.points.emplace_back ();
+                        if (subField.second.intValue.has_value () && datasetParams.coordMultiplier) {
+                            point.lat = (double) subField.second.intValue.value () / (double) datasetParams.coordMultiplier.value ();
+                        }
+                    } else if (subField.first.compare ("XCOO") == 0) {
+                        auto& point = curPoint.points.back ();
+                        if (subField.second.intValue.has_value ()) {
+                            point.lon = (double) subField.second.intValue.value () / (double) datasetParams.coordMultiplier.value ();
+                        }
+                    }
+                }
+            } else if (field.tag.compare ("SG3D") == 0) {
+                Node& curPoint = points.back ();
+                std::vector<Position> soundings;
+                curPoint.flags |= NodeFlags::SOUNDING_ARRAY;
+                for (auto& instanceValue: field.instanceValues) {
+                    for (auto& subField: instanceValue) {
+                        if (subField.first.compare ("*YCOO") == 0) {
+                            auto& point = soundings.emplace_back ();
+                            if (subField.second.intValue.has_value () && datasetParams.coordMultiplier) {
+                                point.lat = (double) subField.second.intValue.value () / (double) datasetParams.coordMultiplier.value ();
+                            }
+                        } else if (subField.first.compare ("VE3D") == 0 && datasetParams.soundingMultiplier) {
+                            auto& point = soundings.back ();
+                            if (subField.second.intValue.has_value ()) {
+                                point.depth = (double) subField.second.intValue.value () / (double) datasetParams.soundingMultiplier.value ();
+
+                                if (datasetParams.depthMeasurement.has_value ()) {
+                                    switch (datasetParams.depthMeasurement.value ()) {
+                                        case DUNI::DepthFeet: {
+                                            point.depth *= 0.3048; break;
+                                        }
+                                        case DUNI::DepthFathomsFractions: {
+                                            point.depth *= 6.0 * 0.3048; break;
+                                        }
+                                        case DUNI::DepthFathomsFeet:
+                                        {
+                                            double roundedDepth = round (point.depth);
+                                            double fractionalDepth = point.depth - roundedDepth;
+                                            point.depth = roundedDepth * 6.0 * 0.3048 + fractionalDepth * 0.3048;
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        } else if (subField.first.compare ("XCOO") == 0 && datasetParams.coordMultiplier) {
+                            auto& point = soundings.back ();
+                            if (subField.second.intValue.has_value ()) {
+                                point.lon = (double) subField.second.intValue.value () / (double) datasetParams.coordMultiplier.value ();
+                            }
+                        }
+                    }
+                }
+                if (soundings.size () > 0) {
+                    curPoint.points.insert (curPoint.points.begin (), soundings.begin (), soundings.end ());
+                }
+                /*for (auto& subField: firstFieldValue) {
+                    if (subField.first.compare ("AGEN") == 0) {
+                        if (subField.second.intValue.has_value ()) {
+                            curFeature->agency = subField.second.intValue.value ();
+                        }
+                    } else if (subField.first.compare ("FIDN") == 0) {
+                        if (subField.second.intValue.has_value ()) {
+                            curFeature->featureID = subField.second.intValue.value ();
+                        }
+                    } else if (subField.first.compare ("FIDS") == 0) {
+                        if (subField.second.intValue.has_value ()) {
+                            curFeature->featureSubdiv = subField.second.intValue.value ();
+                        }
+                    }
+                }*/
+            } /*else if (field.tag.compare ("ATTF") == 0) {
+                for (auto& subField: firstFieldValue) {
+                    if (subField.first.compare ("*ATTL") == 0) {
+                        if (subField.second.intValue.has_value ()) {
+                            curFeature->attributes.emplace_back ();
+                            curFeature->attributes.back ().classCode = subField.second.intValue.value ();
+                        }
+                    } else if (subField.first.compare ("ATVL") == 0) {
+                        curFeature->attributes.back ().noValue = false;
+                        if (subField.second.intValue.has_value ()) {
+                            curFeature->attributes.back ().intValue = subField.second.intValue.value ();
+                        } else if (subField.second.floatValue.has_value ()) {
+                            curFeature->attributes.back ().floatValue = subField.second.floatValue.value ();
+                        } else if (subField.second.stringValue.has_value ()) {
+                            curFeature->attributes.back ().strValue = subField.second.stringValue.value ();
+                        } else if (subField.second.binaryValue.size () > 0) {
+                            curFeature->attributes.back ().listValue.insert (
+                                curFeature->attributes.back ().listValue.end (),
+                                subField.second.binaryValue.begin (),
+                                subField.second.binaryValue.end ()
+                            );
+                        } else {
+                            curFeature->attributes.back ().noValue = true;
+                        }
+                    }
+                }
+            }*/
+        }
+    }
 }
 
 void extractFeatureObjects (std::vector<std::vector<FieldInstance>>& records, std::vector<FeatureDesc>& objects) {
@@ -579,11 +701,6 @@ void extractFeatureObjects (std::vector<std::vector<FieldInstance>>& records, st
                             curFeature->attributes.back ().classCode = subField.second.intValue.value ();
                         }
                     } else if (subField.first.compare ("ATVL") == 0) {
-if(curFeature->attributes.back ().classCode==37){
-int iii=0;
-++iii;
---iii;
-}
                         curFeature->attributes.back ().noValue = false;
                         if (subField.second.intValue.has_value ()) {
                             curFeature->attributes.back ().intValue = subField.second.intValue.value ();
