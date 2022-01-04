@@ -14,6 +14,7 @@
 #define IDC_RECORDS     301
 #define IDC_TAB         302
 #define IDC_OBJECTS     303
+#define IDC_NODES       304
 
 #define IDC_LOADINFO    400
 

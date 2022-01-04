@@ -26,15 +26,23 @@ const int COL_RCID = 0;
 const int COL_CLASS = 1;
 const int COL_GEOMETRY = 2;
 
+const int COL_NODE_ID = 0;
+const int COL_NODE_TYPE = 1;
+const int COL_NODE_LAT = 2;
+const int COL_NODE_LON = 3;
+const int COL_NODE_DEPTH = 4;
+
+
 enum TABS {
     RECORDS = 0,
     PROPERTIES,
     OBJECTS,
+    NODES,
 };
 
 struct Ctx {
     HINSTANCE instance;
-    HWND mainWnd, catalogCtl, recordTree, propsList, splashScreen, tabCtl, objectTree;
+    HWND mainWnd, catalogCtl, recordTree, propsList, splashScreen, tabCtl, objectTree, nodeList;
     HMENU mainMenu;
     bool keepRunning, loaded;
     std::vector<CatalogItem> catalog;
@@ -137,6 +145,7 @@ void initWindow (HWND wnd, void *data) {
     addTab (TABS::RECORDS, "Records");
     addTab (TABS::PROPERTIES, "Properties");
     addTab (TABS::OBJECTS, "Objects");
+    addTab (TABS::NODES, "Nodes");
 
     GetClientRect (ctx->tabCtl, & client);
     
@@ -147,9 +156,11 @@ void initWindow (HWND wnd, void *data) {
     ctx->recordTree = createTabChildControl (WC_TREEVIEW, TVS_HASBUTTONS | TVS_HASLINES | TVS_LINESATROOT | WS_VSCROLL, IDC_RECORDS, true);
     ctx->propsList = createTabChildControl (WC_LISTVIEW, LVS_REPORT | WS_VSCROLL | WS_HSCROLL, IDC_CATALOG, false);
     ctx->objectTree = createTabChildControl (WC_TREEVIEW, TVS_HASBUTTONS | TVS_HASLINES | TVS_LINESATROOT | WS_VSCROLL, IDC_OBJECTS, false);
+    ctx->nodeList = createTabChildControl (WC_LISTVIEW, LVS_REPORT | WS_VSCROLL | WS_HSCROLL, IDC_NODES, false);
 
     SendMessage (ctx->catalogCtl, LVM_SETEXTENDEDLISTVIEWSTYLE, LVS_EX_FULLROWSELECT, LVS_EX_FULLROWSELECT);
     SendMessage (ctx->propsList, LVM_SETEXTENDEDLISTVIEWSTYLE, LVS_EX_FULLROWSELECT, LVS_EX_FULLROWSELECT);
+    SendMessage (ctx->nodeList, LVM_SETEXTENDEDLISTVIEWSTYLE, LVS_EX_FULLROWSELECT, LVS_EX_FULLROWSELECT);
 
     addColumn (ctx->catalogCtl, COL_FILENAME, "Filename", 170);
     addColumn (ctx->catalogCtl, COL_VOLUME, "Volume", 60);
@@ -162,6 +173,12 @@ void initWindow (HWND wnd, void *data) {
 
     addColumn (ctx->propsList, COL_PROPNAME, "Name", 200);
     addColumn (ctx->propsList, COL_PROPVALUE, "Value", 170);
+
+    addColumn (ctx->nodeList, COL_NODE_ID, "ID", 60);
+    addColumn (ctx->nodeList, COL_NODE_TYPE, "Type", 150);
+    addColumn (ctx->nodeList, COL_NODE_LAT, "Latitude", 100);
+    addColumn (ctx->nodeList, COL_NODE_LON, "Longitude", 100);
+    addColumn (ctx->nodeList, COL_NODE_DEPTH, "Depth", 100);
 }
 
 void loadCatalog (Ctx *ctx) {
@@ -294,35 +311,87 @@ void openFile (Ctx *ctx, CatalogItem *item) {
     
     SendMessage (ctx->recordTree, TVM_DELETEITEM, (WPARAM) TVI_ROOT, 0);
     SendMessage (ctx->propsList, LVM_DELETEALLITEMS, 0, 0);
+    SendMessage (ctx->nodeList, LVM_DELETEALLITEMS, 0, 0);
 
-    auto addParam = [ctx] (int index, char *name, char *value) {
-        LVITEM item;
-
+    auto addListItem = [] (HWND list, char *text, LVITEM& item) {
         memset (& item, 0, sizeof (item));
 
-        item.pszText = name;
-        item.iItem = index;
+        item.pszText = text;
+        item.iItem = 0x7FFFFFFF;
         item.mask = LVIF_TEXT;
         
-        SendMessage (ctx->propsList, LVM_INSERTITEM, 0, (LPARAM) & item);
-
-        item.pszText = value;
-        item.iSubItem = 1;
-        item.mask = LVIF_TEXT;
-        
-        SendMessage (ctx->propsList, LVM_SETITEMTEXT, index, (LPARAM) & item);
+        return (int) SendMessage (list, LVM_INSERTITEM, 0, (LPARAM) & item);
     };
 
-    addParam (0, "Comment", datasetParams.comment.has_value () ? datasetParams.comment.value ().c_str () : "N/A");
-    addParam (1, "Coord multiplier", datasetParams.coordMultiplier.has_value () ? std::to_string (datasetParams.coordMultiplier.value ()).c_str () : "N/A");
-    addParam (2, "Coord units", datasetParams.coordMultiplier.has_value () ? coordUnitName (datasetParams.coordUnit.value ()) : "N/A");
-    addParam (3, "Compilation scale", datasetParams.compilationScale.has_value () ? std::to_string (datasetParams.compilationScale.value ()).c_str () : "N/A");
-    addParam (4, "Depth measurement", datasetParams.depthMeasurement.has_value () ? depthMeasurementName (datasetParams.depthMeasurement.value ()) : "N/A");
-    addParam (5, "Pos measurement", datasetParams.posMeasurement.has_value () ? posMeasurementName (datasetParams.posMeasurement.value ()) : "N/A");
-    addParam (6, "Sounding datum", datasetParams.soundingDatum.has_value () ? std::to_string (datasetParams.soundingDatum.value ()).c_str () : "N/A");
-    addParam (7, "Sounding multiplier", datasetParams.soundingMultiplier.has_value () ? std::to_string (datasetParams.soundingMultiplier.value ()).c_str () : "N/A");
-    addParam (8, "Horizontal datum", datasetParams.horDatum.has_value () ? std::to_string (datasetParams.horDatum.value ()).c_str () : "N/A");
-    addParam (9, "Vertical datum", datasetParams.verDatum.has_value () ? std::to_string (datasetParams.verDatum.value ()).c_str () : "N/A");
+    auto setListItemText = [] (HWND list, int index, int column, char *text, LVITEM& item) {
+        item.pszText = text;
+        item.iItem = index;
+        item.iSubItem = column;
+        item.mask = LVIF_TEXT;
+        
+        SendMessage (list, LVM_SETITEMTEXT, index, (LPARAM) & item);
+    };
+
+    auto addParam = [ctx, addListItem, setListItemText] (char *name, char *value) {
+        LVITEM item;
+
+        int itemIndex = addListItem (ctx->propsList, name, item);
+        setListItemText (ctx->propsList, itemIndex, 1, value, item);
+    };
+
+    auto getNodeType = [] (uint8_t nodeFlags) {
+        std::string result { (nodeFlags & NodeFlags::CONNECTED) ? "Connected" : "Isolated" };
+
+        if (nodeFlags & NodeFlags::SOUNDING_ARRAY) result += "; Soundings";
+
+        return result;
+    };
+
+    auto addNode = [ctx, getNodeType, addListItem, setListItemText] (size_t index, std::vector<Node>& nodes) {
+        if (nodes [index].points.size () == 0) return;
+
+        LVITEM item;
+        auto& node = nodes [index];
+
+        std::string id { std::to_string (node.id) };
+        std::string lat { formatLat (node.points.front ().lat) };
+        std::string lon { formatLon (node.points.front ().lon) };
+        std::string type { getNodeType (node.flags) };
+        std::string depth { (node.flags & NodeFlags::SOUNDING_ARRAY) ? std::to_string (node.points.front ().depth) : "" };
+
+        int itemIndex = addListItem (ctx->nodeList, id.data (), item);
+        setListItemText (ctx->nodeList, itemIndex, COL_NODE_TYPE, type.data (), item);
+        setListItemText (ctx->nodeList, itemIndex, COL_NODE_LAT, lat.data (), item);
+        setListItemText (ctx->nodeList, itemIndex, COL_NODE_LON, lon.data (), item);
+        setListItemText (ctx->nodeList, itemIndex, COL_NODE_DEPTH, depth.data (), item);
+
+        for (size_t i = 1; i < node.points.size (); ++ i) {
+            std::string lat { formatLat (node.points [i].lat) };
+            std::string lon { formatLon (node.points [i].lon) };
+            std::string depth { (node.flags & NodeFlags::SOUNDING_ARRAY) ? std::to_string (node.points [i].depth) : "" };
+
+            itemIndex = addListItem (ctx->nodeList, "", item);
+            setListItemText (ctx->nodeList, itemIndex, COL_NODE_TYPE, "", item);
+            setListItemText (ctx->nodeList, itemIndex, COL_NODE_LAT, lat.data (), item);
+            setListItemText (ctx->nodeList, itemIndex, COL_NODE_LON, lon.data (), item);
+            setListItemText (ctx->nodeList, itemIndex, COL_NODE_DEPTH, depth.data (), item);
+        }
+    };
+
+    addParam ("Comment", datasetParams.comment.has_value () ? datasetParams.comment.value ().c_str () : "N/A");
+    addParam ("Coord multiplier", datasetParams.coordMultiplier.has_value () ? std::to_string (datasetParams.coordMultiplier.value ()).c_str () : "N/A");
+    addParam ("Coord units", datasetParams.coordMultiplier.has_value () ? coordUnitName (datasetParams.coordUnit.value ()) : "N/A");
+    addParam ("Compilation scale", datasetParams.compilationScale.has_value () ? std::to_string (datasetParams.compilationScale.value ()).c_str () : "N/A");
+    addParam ("Depth measurement", datasetParams.depthMeasurement.has_value () ? depthMeasurementName (datasetParams.depthMeasurement.value ()) : "N/A");
+    addParam ("Pos measurement", datasetParams.posMeasurement.has_value () ? posMeasurementName (datasetParams.posMeasurement.value ()) : "N/A");
+    addParam ("Sounding datum", datasetParams.soundingDatum.has_value () ? std::to_string (datasetParams.soundingDatum.value ()).c_str () : "N/A");
+    addParam ("Sounding multiplier", datasetParams.soundingMultiplier.has_value () ? std::to_string (datasetParams.soundingMultiplier.value ()).c_str () : "N/A");
+    addParam ("Horizontal datum", datasetParams.horDatum.has_value () ? std::to_string (datasetParams.horDatum.value ()).c_str () : "N/A");
+    addParam ("Vertical datum", datasetParams.verDatum.has_value () ? std::to_string (datasetParams.verDatum.value ()).c_str () : "N/A");
+
+    for (size_t i = 0; i < points.size (); ++ i) {
+        addNode (i, points);
+    }
 
     TV_INSERTSTRUCTA data;
 
@@ -495,11 +564,7 @@ void openFile (Ctx *ctx, CatalogItem *item) {
             if (field.instanceValues.size () == 1) {
                 for (auto& subField: field.instanceValues.front ()) {
                     memset (& data, 0, sizeof (data));
-if(subField.first.compare("*NAME")==0){
-int iii=0;
-++iii;
---iii;
-}
+
                     switch (subField.second.type) {
                         case 'B': sprintf (label, "%s: %s", subField.first.c_str (), subField.second.binaryValue.size () > 0 ? subField.second.getBinaryValueString ().c_str () : "<no value>"); break;
                         case 'A': sprintf (label, "%s: %s", subField.first.c_str (), subField.second.stringValue.has_value () ? subField.second.stringValue.value ().c_str () : "<no value>"); break;
@@ -597,6 +662,7 @@ void onSize (HWND wnd, int width, int height) {
 
     MoveWindow (ctx->recordTree, 3, 30, client.right - 6, client.bottom - 33 , true);
     MoveWindow (ctx->propsList, 3, 30, client.right - 6, client.bottom - 33 , true);
+    MoveWindow (ctx->nodeList, 3, 30, client.right - 6, client.bottom - 33 , true);
 }
 
 void onNotify (HWND wnd, NMHDR *hdr) {
@@ -609,18 +675,28 @@ void onNotify (HWND wnd, NMHDR *hdr) {
                     ShowWindow (ctx->propsList, SW_SHOW);
                     ShowWindow (ctx->recordTree, SW_HIDE);
                     ShowWindow (ctx->objectTree, SW_HIDE);
+                    ShowWindow (ctx->nodeList, SW_HIDE);
                     break;
                 }
                 case TABS::RECORDS: {
                     ShowWindow (ctx->propsList, SW_HIDE);
                     ShowWindow (ctx->recordTree, SW_SHOW);
                     ShowWindow (ctx->objectTree, SW_HIDE);
+                    ShowWindow (ctx->nodeList, SW_HIDE);
                     break;
                 }
                 case TABS::OBJECTS: {
                     ShowWindow (ctx->propsList, SW_HIDE);
                     ShowWindow (ctx->recordTree, SW_HIDE);
                     ShowWindow (ctx->objectTree, SW_SHOW);
+                    ShowWindow (ctx->nodeList, SW_HIDE);
+                    break;
+                }
+                case TABS::NODES: {
+                    ShowWindow (ctx->propsList, SW_HIDE);
+                    ShowWindow (ctx->recordTree, SW_HIDE);
+                    ShowWindow (ctx->objectTree, SW_HIDE);
+                    ShowWindow (ctx->nodeList, SW_SHOW);
                     break;
                 }
             }
