@@ -7,6 +7,32 @@
 #include <tuple>
 #include "s57defs.h"
 
+struct Nodes {
+    std::vector<Node> container;
+    std::map<uint64_t, size_t> index;
+
+    void buildIndex () {
+        for (size_t i = 0; i < container.size (); ++ i) {
+            auto& node = container [i];
+            uint64_t key = ((uint64_t) node.recordName << 32) + node.id;
+            index.emplace (std::pair<uint64_t, size_t> (key, i));
+        }
+    }
+
+    Node& emplace_back () { return container.emplace_back (); }
+    Node& back () { return container.back (); }
+    Node& front () { return container.front (); }
+    auto begin () { return container.begin (); }
+    auto end () { return container.end (); }
+    Node& operator[] (const size_t index) { return container [index]; }
+
+    Node *getByForgeignKey (uint64_t key) {
+        auto pos = index.find (key);
+
+        return (pos == index.end ()) ? 0 : & container [pos->second];
+    }
+};
+
 size_t splitString (std::string source, std::vector<std::string>& parts, char separator) {
     parts.clear ();
 
@@ -227,7 +253,9 @@ bool getBinaryValue (RecordFieldDesc& fld, const char *& fieldPos, std::vector<u
     binary.clear ();
 
     if (fld.modifier.has_value ()) {
-        binary.insert (binary.end (), fieldPos, fieldPos + (fld.modifier.value () / 8));
+        size_t size = fld.modifier.value () / 8;
+        binary.insert (binary.end (), fieldPos, fieldPos + size);
+        fieldPos += size;
     } else {
         size_t k;
         for (k = 0; isdigit (fieldPos [k]); ++ k) {
@@ -345,7 +373,11 @@ size_t parseDataRecord (
         const char *fieldPos = source + dirEntry.position;
         const char *beginPos = fieldPos;
         auto& fieldInstance = fieldInstances.emplace_back ();
-
+if(dirEntry.tag.compare("VRPT")==0){
+int iii=0;
+++iii;
+--iii;
+}
         fieldInstance.name = ddf.name;
         fieldInstance.tag = dirEntry.tag;
 
@@ -535,12 +567,12 @@ void extractPoints (std::vector<std::vector<FieldInstance>>& records, std::vecto
                     if (subField.first.compare ("*YCOO") == 0) {
                         auto& point = curPoint.points.emplace_back ();
                         if (subField.second.intValue.has_value () && datasetParams.coordMultiplier) {
-                            point.lat = (double) subField.second.intValue.value () / (double) datasetParams.coordMultiplier.value ();
+                            point.lat = (double) (int32_t) subField.second.intValue.value () / (double) datasetParams.coordMultiplier.value ();
                         }
                     } else if (subField.first.compare ("XCOO") == 0) {
                         auto& point = curPoint.points.back ();
                         if (subField.second.intValue.has_value ()) {
-                            point.lon = (double) subField.second.intValue.value () / (double) datasetParams.coordMultiplier.value ();
+                            point.lon = (double) (int32_t) subField.second.intValue.value () / (double) datasetParams.coordMultiplier.value ();
                         }
                     }
                 }
@@ -553,12 +585,12 @@ void extractPoints (std::vector<std::vector<FieldInstance>>& records, std::vecto
                         if (subField.first.compare ("*YCOO") == 0) {
                             auto& point = soundings.emplace_back ();
                             if (subField.second.intValue.has_value () && datasetParams.coordMultiplier) {
-                                point.lat = (double) subField.second.intValue.value () / (double) datasetParams.coordMultiplier.value ();
+                                point.lat = (double) (int32_t) subField.second.intValue.value () / (double) datasetParams.coordMultiplier.value ();
                             }
                         } else if (subField.first.compare ("VE3D") == 0 && datasetParams.soundingMultiplier) {
                             auto& point = soundings.back ();
                             if (subField.second.intValue.has_value ()) {
-                                point.depth = (double) subField.second.intValue.value () / (double) datasetParams.soundingMultiplier.value ();
+                                point.depth = (double) (int32_t) subField.second.intValue.value () / (double) datasetParams.soundingMultiplier.value ();
 
                                 if (datasetParams.depthMeasurement.has_value ()) {
                                     switch (datasetParams.depthMeasurement.value ()) {
@@ -581,7 +613,7 @@ void extractPoints (std::vector<std::vector<FieldInstance>>& records, std::vecto
                         } else if (subField.first.compare ("XCOO") == 0 && datasetParams.coordMultiplier) {
                             auto& point = soundings.back ();
                             if (subField.second.intValue.has_value ()) {
-                                point.lon = (double) subField.second.intValue.value () / (double) datasetParams.coordMultiplier.value ();
+                                point.lon = (double) (int32_t) subField.second.intValue.value () / (double) datasetParams.coordMultiplier.value ();
                             }
                         }
                     }
