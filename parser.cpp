@@ -6,32 +6,7 @@
 #include <string>
 #include <tuple>
 #include "s57defs.h"
-
-struct Nodes {
-    std::vector<Node> container;
-    std::map<uint64_t, size_t> index;
-
-    void buildIndex () {
-        for (size_t i = 0; i < container.size (); ++ i) {
-            auto& node = container [i];
-            uint64_t key = ((uint64_t) node.recordName << 32) + node.id;
-            index.emplace (std::pair<uint64_t, size_t> (key, i));
-        }
-    }
-
-    Node& emplace_back () { return container.emplace_back (); }
-    Node& back () { return container.back (); }
-    Node& front () { return container.front (); }
-    auto begin () { return container.begin (); }
-    auto end () { return container.end (); }
-    Node& operator[] (const size_t index) { return container [index]; }
-
-    Node *getByForgeignKey (uint64_t key) {
-        auto pos = index.find (key);
-
-        return (pos == index.end ()) ? 0 : & container [pos->second];
-    }
-};
+#include "data.h"
 
 size_t splitString (std::string source, std::vector<std::string>& parts, char separator) {
     parts.clear ();
@@ -528,7 +503,171 @@ void deformatAttrValues (AttrDictionary& attrDictionary, std::vector<FeatureDesc
     }
 }
 
-void extractPoints (std::vector<std::vector<FieldInstance>>& records, std::vector<Node>& points, DatasetParams datasetParams) {
+void extractEdges (std::vector<std::vector<FieldInstance>>& records, Edges& edges, Nodes& points, DatasetParams datasetParams) {
+    edges.clear ();
+
+    for (auto& record: records) {
+        bool goToNextRec = false;
+        
+        for (auto& field: record) {
+            if (goToNextRec) break;
+
+            auto& firstFieldValue = field.instanceValues.front ();
+            uint32_t rcid = 0;
+            uint8_t recName = 0;
+            uint8_t updateInstr = 0;
+            uint8_t version = 0;
+
+            if (field.tag.compare ("VRID") == 0) {
+                // possible new edge
+                rcid = 0;
+                recName = 0;
+                updateInstr = 0;
+                version = 0;
+
+                for (auto& subField: firstFieldValue) {
+                    if (subField.first.compare ("RCID") == 0) {
+                        if (subField.second.intValue.has_value ()) {
+                            rcid = subField.second.intValue.value ();
+                        }
+                    } else if (subField.first.compare ("RCNM") == 0) {
+                        if (subField.second.intValue.has_value ()) {
+                            recName = subField.second.intValue.value ();
+                            // skip record if not an edge
+                            if (recName != 130) {
+                                goToNextRec = true; break;
+                            }
+                        }
+                    } else if (subField.first.compare ("RUIN") == 0) {
+                        if (subField.second.intValue.has_value ()) {
+                            updateInstr = subField.second.intValue.value ();
+                        }
+                    } else if (subField.first.compare ("RVER") == 0) {
+                        if (subField.second.intValue.has_value ()) {
+                            version = subField.second.intValue.value ();
+                        }
+                    }
+                }
+
+                if (goToNextRec) break;
+                if (rcid && recName) {
+                    GeoEdge& edge = edges.emplace_back ();
+                    edge.id = rcid;
+                    edge.recordName = recName;
+                    edge.updateInstruction = updateInstr;
+                    edge.version = version;
+                }
+            } else if (field.tag.compare ("SG2D") == 0) {
+                // New internal node
+                GeoEdge& edge = edges.back ();
+                for (auto& subField: firstFieldValue) {
+                    if (subField.first.compare ("*YCOO") == 0) {
+                        auto& point = edge.internalNodes.emplace_back ();
+                        if (subField.second.intValue.has_value () && datasetParams.coordMultiplier) {
+                            point.lat = (double) (int32_t) subField.second.intValue.value () / (double) datasetParams.coordMultiplier.value ();
+                        }
+                    } else if (subField.first.compare ("XCOO") == 0) {
+                        auto& point = edge.internalNodes.back ();
+                        if (subField.second.intValue.has_value ()) {
+                            point.lon = (double) (int32_t) subField.second.intValue.value () / (double) datasetParams.coordMultiplier.value ();
+                        }
+                    }
+                }
+            } else if (field.tag.compare ("VRPT") == 0) {
+                for (auto& instanceValue: field.instanceValues) {
+                    std::optional<uint8_t> mask;
+                    std::optional<uint8_t> orient;
+                    std::optional<uint8_t> topology;
+                    std::optional<uint8_t> usage;
+                    std::optional<uint64_t> foreignIndex;
+
+                    for (auto& subField: instanceValue) {
+                        // New begin/end node
+                        if (subField.first.compare ("*NAME") == 0) {
+                            if (subField.second.binaryValue.size () > 0) {
+                                foreignIndex = 0;
+                                for (auto byte = subField.second.binaryValue.begin (); byte != subField.second.binaryValue.end (); ++ byte) {
+                                    foreignIndex = foreignIndex.value () << 8;
+                                    foreignIndex = foreignIndex.value () + *byte;
+                                }
+                            }
+                        } else if (subField.first.compare ("MASK") == 0) {
+                            if (subField.second.intValue.has_value ()) {
+                                mask = (uint8_t) subField.second.intValue.value ();
+                            }
+                        } else if (subField.first.compare ("ORNT") == 0) {
+                            if (subField.second.intValue.has_value ()) {
+                                orient = (uint8_t) subField.second.intValue.value ();
+                            }
+                        } else if (subField.first.compare ("TOPI") == 0) {
+                            if (subField.second.intValue.has_value ()) {
+                                topology = (uint8_t) subField.second.intValue.value ();
+                            }
+                        } else if (subField.first.compare ("USAG") == 0) {
+                            if (subField.second.intValue.has_value ()) {
+                                usage = (uint8_t) subField.second.intValue.value ();
+                            }
+                        }
+                    }
+                    if (foreignIndex.has_value ()) {
+                        auto node = points.getByForgeignKey (foreignIndex.value ());
+
+                        if (node && topology.has_value ()) {
+                            GeoEdge edge = edges.back ();
+                            switch (topology.value ()) {
+                                case TOPI::BeginningNode:
+                                    edge.begin.lat = node->points [0].lat;
+                                    edge.begin.lon = node->points [0].lon;
+                                    edge.begin.depth = node->points [0].depth;
+                                    edge.begin.hidden = mask == 1;
+                                    edge.begin.hole = usage == USAG::Interior;
+                                    break;
+                                case TOPI::EndNode:
+                                    edge.end.lat = node->points [0].lat;
+                                    edge.end.lon = node->points [0].lon;
+                                    edge.end.depth = node->points [0].depth;
+                                    edge.end.hidden = mask == 1;
+                                    edge.end.hole = usage == USAG::Interior;
+                                    break;
+                                default:
+                                    continue; // unknown edge type
+                            }
+                        }
+                    }
+                }
+            } /*else if (field.tag.compare ("ATTF") == 0) {
+                for (auto& subField: firstFieldValue) {
+                    if (subField.first.compare ("*ATTL") == 0) {
+                        if (subField.second.intValue.has_value ()) {
+                            curFeature->attributes.emplace_back ();
+                            curFeature->attributes.back ().classCode = subField.second.intValue.value ();
+                        }
+                    } else if (subField.first.compare ("ATVL") == 0) {
+                        curFeature->attributes.back ().noValue = false;
+                        if (subField.second.intValue.has_value ()) {
+                            curFeature->attributes.back ().intValue = subField.second.intValue.value ();
+                        } else if (subField.second.floatValue.has_value ()) {
+                            curFeature->attributes.back ().floatValue = subField.second.floatValue.value ();
+                        } else if (subField.second.stringValue.has_value ()) {
+                            curFeature->attributes.back ().strValue = subField.second.stringValue.value ();
+                        } else if (subField.second.binaryValue.size () > 0) {
+                            curFeature->attributes.back ().listValue.insert (
+                                curFeature->attributes.back ().listValue.end (),
+                                subField.second.binaryValue.begin (),
+                                subField.second.binaryValue.end ()
+                            );
+                        } else {
+                            curFeature->attributes.back ().noValue = true;
+                        }
+                    }
+                }
+            }*/
+        }
+    }
+    edges.buildIndex ();
+}
+
+void extractPoints (std::vector<std::vector<FieldInstance>>& records, Nodes& points, DatasetParams datasetParams) {
     points.clear ();
 
     for (auto& record: records) {
@@ -540,7 +679,7 @@ void extractPoints (std::vector<std::vector<FieldInstance>>& records, std::vecto
             uint8_t curVersion = 0;
 
             if (field.tag.compare ("VRID") == 0) {
-                Node& curPoint = points.emplace_back ();
+                GeoNode& curPoint = points.emplace_back ();
                 for (auto& subField: firstFieldValue) {
                     if (subField.first.compare ("RCID") == 0) {
                         if (subField.second.intValue.has_value ()) {
@@ -562,7 +701,7 @@ void extractPoints (std::vector<std::vector<FieldInstance>>& records, std::vecto
                     }
                 }
             } else if (field.tag.compare ("SG2D") == 0) {
-                Node& curPoint = points.back ();
+                GeoNode& curPoint = points.back ();
                 for (auto& subField: firstFieldValue) {
                     if (subField.first.compare ("*YCOO") == 0) {
                         auto& point = curPoint.points.emplace_back ();
@@ -577,7 +716,7 @@ void extractPoints (std::vector<std::vector<FieldInstance>>& records, std::vecto
                     }
                 }
             } else if (field.tag.compare ("SG3D") == 0) {
-                Node& curPoint = points.back ();
+                GeoNode& curPoint = points.back ();
                 std::vector<Position> soundings;
                 curPoint.flags |= NodeFlags::SOUNDING_ARRAY;
                 for (auto& instanceValue: field.instanceValues) {
@@ -665,6 +804,7 @@ void extractPoints (std::vector<std::vector<FieldInstance>>& records, std::vecto
             }*/
         }
     }
+    points.buildIndex ();
 }
 
 void extractFeatureObjects (std::vector<std::vector<FieldInstance>>& records, std::vector<FeatureDesc>& objects) {

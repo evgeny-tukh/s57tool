@@ -318,23 +318,7 @@ struct Position {
     double depth;
 };
 
-enum NodeFlags {
-    CONNECTED = 1,
-    SOUNDING_ARRAY = 2,
-};
-
-struct Node {
-    uint32_t id;
-    uint32_t recordName;
-    uint32_t updateInstruction;
-    uint32_t version;
-    uint8_t flags;
-    std::vector<Position> points;
-
-    Node (): id (0), recordName (0), updateInstruction (0), version (0), flags (0) {}
-};
-
-struct GeoLine {
+/*struct GeoLine {
     uint32_t id;
     std::vector<Position> vertices;
 
@@ -347,7 +331,7 @@ struct GeoArea {
     std::vector<std::vector<Node>> intContours;
 
     GeoArea (): id (0) {}
-};
+};*/
 
 struct FeatureDesc {
     uint8_t group;                              // GRUP

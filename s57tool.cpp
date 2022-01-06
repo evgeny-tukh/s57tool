@@ -38,11 +38,12 @@ enum TABS {
     PROPERTIES,
     OBJECTS,
     NODES,
+    EDGES,
 };
 
 struct Ctx {
     HINSTANCE instance;
-    HWND mainWnd, catalogCtl, recordTree, propsList, splashScreen, tabCtl, objectTree, nodeList;
+    HWND mainWnd, catalogCtl, recordTree, propsList, splashScreen, tabCtl, objectTree, nodeList, edgeTree;
     HMENU mainMenu;
     bool keepRunning, loaded;
     std::vector<CatalogItem> catalog;
@@ -146,6 +147,7 @@ void initWindow (HWND wnd, void *data) {
     addTab (TABS::PROPERTIES, "Properties");
     addTab (TABS::OBJECTS, "Objects");
     addTab (TABS::NODES, "Nodes");
+    addTab (TABS::EDGES, "Edges");
 
     GetClientRect (ctx->tabCtl, & client);
     
@@ -157,6 +159,7 @@ void initWindow (HWND wnd, void *data) {
     ctx->propsList = createTabChildControl (WC_LISTVIEW, LVS_REPORT | WS_VSCROLL | WS_HSCROLL, IDC_CATALOG, false);
     ctx->objectTree = createTabChildControl (WC_TREEVIEW, TVS_HASBUTTONS | TVS_HASLINES | TVS_LINESATROOT | WS_VSCROLL, IDC_OBJECTS, false);
     ctx->nodeList = createTabChildControl (WC_LISTVIEW, LVS_REPORT | WS_VSCROLL | WS_HSCROLL, IDC_NODES, false);
+    ctx->edgeTree = createTabChildControl (WC_TREEVIEW, TVS_HASBUTTONS | TVS_HASLINES | TVS_LINESATROOT | WS_VSCROLL, IDC_EDGES, false);
 
     SendMessage (ctx->catalogCtl, LVM_SETEXTENDEDLISTVIEWSTYLE, LVS_EX_FULLROWSELECT, LVS_EX_FULLROWSELECT);
     SendMessage (ctx->propsList, LVM_SETEXTENDEDLISTVIEWSTYLE, LVS_EX_FULLROWSELECT, LVS_EX_FULLROWSELECT);
@@ -300,13 +303,15 @@ void openFile (Ctx *ctx, CatalogItem *item) {
 
     std::vector<std::vector<FieldInstance>> records;
     std::vector<FeatureDesc> objects;
-    std::vector<Node> points;
+    Nodes points;
+    Edges edges;
     DatasetParams datasetParams;
 
     loadParseS57File (path, records);
     extractDatasetParameters (records, datasetParams);
     extractFeatureObjects (records, objects);
     extractPoints (records, points, datasetParams);
+    extractEdges (records, edges, points, datasetParams);
     deformatAttrValues (ctx->attrDictionary, objects);
     
     SendMessage (ctx->recordTree, TVM_DELETEITEM, (WPARAM) TVI_ROOT, 0);
@@ -347,7 +352,7 @@ void openFile (Ctx *ctx, CatalogItem *item) {
         return result;
     };
 
-    auto addNode = [ctx, getNodeType, addListItem, setListItemText] (size_t index, std::vector<Node>& nodes) {
+    auto addNode = [ctx, getNodeType, addListItem, setListItemText] (size_t index, struct Nodes& nodes) {
         if (nodes [index].points.size () == 0) return;
 
         LVITEM item;
@@ -676,6 +681,7 @@ void onNotify (HWND wnd, NMHDR *hdr) {
                     ShowWindow (ctx->recordTree, SW_HIDE);
                     ShowWindow (ctx->objectTree, SW_HIDE);
                     ShowWindow (ctx->nodeList, SW_HIDE);
+                    ShowWindow (ctx->edgeTree, SW_HIDE);
                     break;
                 }
                 case TABS::RECORDS: {
@@ -683,6 +689,7 @@ void onNotify (HWND wnd, NMHDR *hdr) {
                     ShowWindow (ctx->recordTree, SW_SHOW);
                     ShowWindow (ctx->objectTree, SW_HIDE);
                     ShowWindow (ctx->nodeList, SW_HIDE);
+                    ShowWindow (ctx->edgeTree, SW_HIDE);
                     break;
                 }
                 case TABS::OBJECTS: {
@@ -690,6 +697,7 @@ void onNotify (HWND wnd, NMHDR *hdr) {
                     ShowWindow (ctx->recordTree, SW_HIDE);
                     ShowWindow (ctx->objectTree, SW_SHOW);
                     ShowWindow (ctx->nodeList, SW_HIDE);
+                    ShowWindow (ctx->edgeTree, SW_HIDE);
                     break;
                 }
                 case TABS::NODES: {
@@ -697,6 +705,15 @@ void onNotify (HWND wnd, NMHDR *hdr) {
                     ShowWindow (ctx->recordTree, SW_HIDE);
                     ShowWindow (ctx->objectTree, SW_HIDE);
                     ShowWindow (ctx->nodeList, SW_SHOW);
+                    ShowWindow (ctx->edgeTree, SW_HIDE);
+                    break;
+                }
+                case TABS::EDGES: {
+                    ShowWindow (ctx->propsList, SW_HIDE);
+                    ShowWindow (ctx->recordTree, SW_HIDE);
+                    ShowWindow (ctx->objectTree, SW_HIDE);
+                    ShowWindow (ctx->nodeList, SW_HIDE);
+                    ShowWindow (ctx->edgeTree, SW_SHOW);
                     break;
                 }
             }

@@ -15,6 +15,11 @@
 #define IDC_TAB         302
 #define IDC_OBJECTS     303
 #define IDC_NODES       304
+#define IDC_EDGES       305
+#define IDC_FACES       306
+#define IDC_AREAS       307
+#define IDC_LINES       308
+#define IDC_POINTOBJ    309
 
 #define IDC_LOADINFO    400
 
