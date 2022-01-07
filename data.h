@@ -53,7 +53,18 @@ struct GeoEdge: TopologyObject {
 };
 
 inline uint64_t constructForeignKey (uint8_t recName, uint32_t rcid) {
-    return ((uint64_t) recName << 32) + (uint64_t) rcid;
+    return (((uint64_t) recName) << 32) + rcid;
+}
+
+inline uint64_t constructForeignKey (uint8_t *byteArray) {
+    uint64_t key = ((uint64_t) byteArray [0]) << 32;
+
+    key += byteArray [1];
+    key += byteArray [2] << 8;
+    key += byteArray [3] << 16;
+    key += byteArray [4] << 24;
+
+    return key;
 }
 
 struct TopologyCollection {

@@ -560,16 +560,18 @@ void extractEdges (std::vector<std::vector<FieldInstance>>& records, Edges& edge
             } else if (field.tag.compare ("SG2D") == 0) {
                 // New internal node
                 GeoEdge& edge = edges.back ();
-                for (auto& subField: firstFieldValue) {
-                    if (subField.first.compare ("*YCOO") == 0) {
-                        auto& point = edge.internalNodes.emplace_back ();
-                        if (subField.second.intValue.has_value () && datasetParams.coordMultiplier) {
-                            point.lat = (double) (int32_t) subField.second.intValue.value () / (double) datasetParams.coordMultiplier.value ();
-                        }
-                    } else if (subField.first.compare ("XCOO") == 0) {
-                        auto& point = edge.internalNodes.back ();
-                        if (subField.second.intValue.has_value ()) {
-                            point.lon = (double) (int32_t) subField.second.intValue.value () / (double) datasetParams.coordMultiplier.value ();
+                for (auto& instanceValue: field.instanceValues) {
+                    for (auto& subField: instanceValue) {
+                        if (subField.first.compare ("*YCOO") == 0) {
+                            auto& point = edge.internalNodes.emplace_back ();
+                            if (subField.second.intValue.has_value () && datasetParams.coordMultiplier) {
+                                point.lat = (double) (int32_t) subField.second.intValue.value () / (double) datasetParams.coordMultiplier.value ();
+                            }
+                        } else if (subField.first.compare ("XCOO") == 0) {
+                            auto& point = edge.internalNodes.back ();
+                            if (subField.second.intValue.has_value ()) {
+                                point.lon = (double) (int32_t) subField.second.intValue.value () / (double) datasetParams.coordMultiplier.value ();
+                            }
                         }
                     }
                 }
@@ -585,11 +587,12 @@ void extractEdges (std::vector<std::vector<FieldInstance>>& records, Edges& edge
                         // New begin/end node
                         if (subField.first.compare ("*NAME") == 0) {
                             if (subField.second.binaryValue.size () > 0) {
-                                foreignIndex = 0;
+                                foreignIndex = constructForeignKey (subField.second.binaryValue.data ());
+                                /*foreignIndex = 0;
                                 for (auto byte = subField.second.binaryValue.begin (); byte != subField.second.binaryValue.end (); ++ byte) {
                                     foreignIndex = foreignIndex.value () << 8;
                                     foreignIndex = foreignIndex.value () + *byte;
-                                }
+                                }*/
                             }
                         } else if (subField.first.compare ("MASK") == 0) {
                             if (subField.second.intValue.has_value ()) {
@@ -613,7 +616,7 @@ void extractEdges (std::vector<std::vector<FieldInstance>>& records, Edges& edge
                         auto node = points.getByForgeignKey (foreignIndex.value ());
 
                         if (node && topology.has_value ()) {
-                            GeoEdge edge = edges.back ();
+                            GeoEdge& edge = edges.back ();
                             switch (topology.value ()) {
                                 case TOPI::BeginningNode:
                                     edge.begin.lat = node->points [0].lat;
@@ -635,33 +638,7 @@ void extractEdges (std::vector<std::vector<FieldInstance>>& records, Edges& edge
                         }
                     }
                 }
-            } /*else if (field.tag.compare ("ATTF") == 0) {
-                for (auto& subField: firstFieldValue) {
-                    if (subField.first.compare ("*ATTL") == 0) {
-                        if (subField.second.intValue.has_value ()) {
-                            curFeature->attributes.emplace_back ();
-                            curFeature->attributes.back ().classCode = subField.second.intValue.value ();
-                        }
-                    } else if (subField.first.compare ("ATVL") == 0) {
-                        curFeature->attributes.back ().noValue = false;
-                        if (subField.second.intValue.has_value ()) {
-                            curFeature->attributes.back ().intValue = subField.second.intValue.value ();
-                        } else if (subField.second.floatValue.has_value ()) {
-                            curFeature->attributes.back ().floatValue = subField.second.floatValue.value ();
-                        } else if (subField.second.stringValue.has_value ()) {
-                            curFeature->attributes.back ().strValue = subField.second.stringValue.value ();
-                        } else if (subField.second.binaryValue.size () > 0) {
-                            curFeature->attributes.back ().listValue.insert (
-                                curFeature->attributes.back ().listValue.end (),
-                                subField.second.binaryValue.begin (),
-                                subField.second.binaryValue.end ()
-                            );
-                        } else {
-                            curFeature->attributes.back ().noValue = true;
-                        }
-                    }
-                }
-            }*/
+            }
         }
     }
     edges.buildIndex ();

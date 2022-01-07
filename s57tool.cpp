@@ -531,7 +531,85 @@ void openFile (Ctx *ctx, CatalogItem *item) {
             SendMessage (ctx->objectTree, TVM_INSERTITEM, 0, (LPARAM) & data);
         }
     }
-        
+
+    for (auto& edge: edges) {
+        TV_INSERTSTRUCT data;
+        char buffer [200];
+
+        memset (& data, 0, sizeof (data));
+
+        std::string edgeID = "ID " + std::to_string (edge.id);
+
+        data.hParent = TVI_ROOT;
+        data.hInsertAfter = TVI_LAST;
+        data.item.mask = TVIF_TEXT;
+        data.item.pszText = edgeID.data ();
+
+        HTREEITEM edgeItem = (HTREEITEM) SendMessage (ctx->edgeTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+
+        auto addEdgeNodeItem = [&data, ctx, edgeItem] (EdgeNode& node, char *label) {
+            data.hParent = edgeItem;
+            data.item.pszText = label;
+
+            HTREEITEM nodeItem = (HTREEITEM) SendMessage (ctx->edgeTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+
+            std::string lat = "Lat " + formatLat (node.lat);
+            std::string lon = "Lon " + formatLon (node.lon);
+            std::string mode { "Mode: "};
+
+            if (node.hidden) mode += "<Masked>";
+            if (node.hole) mode += "<Hole>";
+
+            data.hParent = nodeItem;
+            data.item.pszText = lat.data ();
+
+            SendMessage (ctx->edgeTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+
+            data.item.pszText = lon.data ();
+
+            SendMessage (ctx->edgeTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+
+            data.item.pszText = mode.data ();
+
+            SendMessage (ctx->edgeTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+        };
+
+        addEdgeNodeItem (edge.begin, "Begin");
+
+        if (edge.internalNodes.size () > 0) {
+            size_t count = 0;
+
+            std::string label = std::to_string (edge.internalNodes.size ()) + " internal";
+            data.hParent = edgeItem;
+            data.item.pszText = label.data ();
+
+            HTREEITEM internalNodesItem = (HTREEITEM) SendMessage (ctx->edgeTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+
+            for (auto& node: edge.internalNodes) {
+                label = std::to_string (count++);
+                
+                data.hParent = internalNodesItem;
+                data.item.pszText = label.data ();
+
+                HTREEITEM nodeItem = (HTREEITEM) SendMessage (ctx->edgeTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+
+                std::string lat = "Lat " + formatLat (node.lat);
+                std::string lon = "Lon " + formatLon (node.lon);
+
+                data.hParent = nodeItem;
+                data.item.pszText = lat.data ();
+
+                SendMessage (ctx->edgeTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+
+                data.item.pszText = lon.data ();
+
+                SendMessage (ctx->edgeTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+            }
+        }
+
+        addEdgeNodeItem (edge.end, "End");
+    }
+
     for (auto& rec: records) {
         TV_INSERTSTRUCT data;
         char rcidText [50];
