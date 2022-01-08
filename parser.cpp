@@ -598,25 +598,15 @@ void extractEdges (std::vector<std::vector<FieldInstance>>& records, Edges& edge
                         }
                     }
                     if (foreignIndex.has_value ()) {
-                        auto node = points.getByForgeignKey (foreignIndex.value ());
+                        size_t nodeIndex = points.getIndexByForgeignKey (foreignIndex.value ());
 
-                        if (node && topology.has_value ()) {
+                        if (nodeIndex >= 0 && topology.has_value ()) {
                             GeoEdge& edge = edges.back ();
                             switch (topology.value ()) {
                                 case TOPI::BeginningNode:
-                                    edge.begin.lat = node->points [0].lat;
-                                    edge.begin.lon = node->points [0].lon;
-                                    edge.begin.depth = node->points [0].depth;
-                                    edge.begin.hidden = mask == 1;
-                                    edge.begin.hole = usage == USAG::Interior;
-                                    break;
+                                    edge.beginIndex = nodeIndex; break;
                                 case TOPI::EndNode:
-                                    edge.end.lat = node->points [0].lat;
-                                    edge.end.lon = node->points [0].lon;
-                                    edge.end.depth = node->points [0].depth;
-                                    edge.end.hidden = mask == 1;
-                                    edge.end.hole = usage == USAG::Interior;
-                                    break;
+                                    edge.endIndex = nodeIndex; break;
                                 default:
                                     continue; // unknown edge type
                             }

@@ -44,12 +44,13 @@ struct EdgeNode: Position {
 
 struct GeoEdge: TopologyObject {
     Orient orientation;
-    EdgeNode begin;
-    EdgeNode end;
+    size_t beginIndex;
+    size_t endIndex;
     std::vector<Position> internalNodes;
     bool hidden;
+    bool hole;
 
-    GeoEdge (): TopologyObject (), orientation (Orient::UNKNOWN), begin (), end () {}
+    GeoEdge (): TopologyObject (), orientation (Orient::UNKNOWN), beginIndex (-1), endIndex (-1), hidden (false), hole (false) {}
 };
 
 struct Attr {
@@ -72,6 +73,7 @@ struct FeatureObject: TopologyObject {
     uint32_t fidn;
     uint16_t subDiv;
     std::vector<Attr> attributes;
+    std::vector<size_t> edgeIndexes;
 
     FeatureObject (): TopologyObject (), primitive (PRIM::None), group (1), classCode (0), agency (0), fidn (0), subDiv (0) {}
 };
@@ -126,6 +128,11 @@ struct GeoCollection: TopologyCollection {
         auto pos = index.find (key);
 
         return (pos == index.end ()) ? 0 : & container [pos->second];
+    }
+    size_t getIndexByForgeignKey (uint64_t key) {
+        auto pos = index.find (key);
+
+        return (pos == index.end ()) ? -1 : pos->second;
     }
 };
 

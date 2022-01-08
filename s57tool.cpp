@@ -569,18 +569,14 @@ void openFile (Ctx *ctx, CatalogItem *item) {
 
         HTREEITEM edgeItem = (HTREEITEM) SendMessage (ctx->edgeTree, TVM_INSERTITEM, 0, (LPARAM) & data);
 
-        auto addEdgeNodeItem = [&data, ctx, edgeItem] (EdgeNode& node, char *label) {
+        auto addEdgeNodeItem = [&data, ctx, edgeItem] (GeoNode& node, char *label) {
             data.hParent = edgeItem;
             data.item.pszText = label;
 
             HTREEITEM nodeItem = (HTREEITEM) SendMessage (ctx->edgeTree, TVM_INSERTITEM, 0, (LPARAM) & data);
 
-            std::string lat = "Lat " + formatLat (node.lat);
-            std::string lon = "Lon " + formatLon (node.lon);
-            std::string mode { "Mode: "};
-
-            if (node.hidden) mode += "<Masked>";
-            if (node.hole) mode += "<Hole>";
+            std::string lat = "Lat " + formatLat (node.points [0].lat);
+            std::string lon = "Lon " + formatLon (node.points [0].lon);
 
             data.hParent = nodeItem;
             data.item.pszText = lat.data ();
@@ -590,13 +586,9 @@ void openFile (Ctx *ctx, CatalogItem *item) {
             data.item.pszText = lon.data ();
 
             SendMessage (ctx->edgeTree, TVM_INSERTITEM, 0, (LPARAM) & data);
-
-            data.item.pszText = mode.data ();
-
-            SendMessage (ctx->edgeTree, TVM_INSERTITEM, 0, (LPARAM) & data);
         };
 
-        addEdgeNodeItem (edge.begin, "Begin");
+        addEdgeNodeItem (points [edge.beginIndex], "Begin");
 
         if (edge.internalNodes.size () > 0) {
             size_t count = 0;
@@ -629,7 +621,7 @@ void openFile (Ctx *ctx, CatalogItem *item) {
             }
         }
 
-        addEdgeNodeItem (edge.end, "End");
+        addEdgeNodeItem (points [edge.endIndex], "End");
     }
 
     for (auto& rec: records) {
