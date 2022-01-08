@@ -305,13 +305,15 @@ void openFile (Ctx *ctx, CatalogItem *item) {
     std::vector<FeatureDesc> objects;
     Nodes points;
     Edges edges;
+    Features features;
     DatasetParams datasetParams;
 
     loadParseS57File (path, records);
     extractDatasetParameters (records, datasetParams);
-    extractFeatureObjects (records, objects);
-    extractPoints (records, points, datasetParams);
+    //extractFeatureObjects (records, objects);
+    extractNodes (records, points, datasetParams);
     extractEdges (records, edges, points, datasetParams);
+    extractFeatureObjects (records, features);
     deformatAttrValues (ctx->attrDictionary, objects);
     
     SendMessage (ctx->recordTree, TVM_DELETEITEM, (WPARAM) TVI_ROOT, 0);

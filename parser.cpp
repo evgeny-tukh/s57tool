@@ -534,7 +534,7 @@ void extractEdges (std::vector<std::vector<FieldInstance>>& records, Edges& edge
                         if (subField.second.intValue.has_value ()) {
                             recName = subField.second.intValue.value ();
                             // skip record if not an edge
-                            if (recName != 130) {
+                            if (recName != RCNM::Edge) {
                                 goToNextRec = true; break;
                             }
                         }
@@ -548,7 +548,6 @@ void extractEdges (std::vector<std::vector<FieldInstance>>& records, Edges& edge
                         }
                     }
                 }
-
                 if (goToNextRec) break;
                 if (rcid && recName) {
                     GeoEdge& edge = edges.emplace_back ();
@@ -644,38 +643,57 @@ void extractEdges (std::vector<std::vector<FieldInstance>>& records, Edges& edge
     edges.buildIndex ();
 }
 
-void extractPoints (std::vector<std::vector<FieldInstance>>& records, Nodes& points, DatasetParams datasetParams) {
+void extractNodes (std::vector<std::vector<FieldInstance>>& records, Nodes& points, DatasetParams datasetParams) {
     points.clear ();
 
     for (auto& record: records) {
+        bool goToNextRec = false;
+        
         for (auto& field: record) {
+            if (goToNextRec) break;
+
             auto& firstFieldValue = field.instanceValues.front ();
-            uint32_t curRecID = 0;
-            uint8_t curRecName = 0;
-            uint8_t curUpdateInstr = 0;
-            uint8_t curVersion = 0;
+            uint32_t rcid = 0;
+            uint8_t recName = 0;
+            uint8_t updateInstr = 0;
+            uint8_t version = 0;
 
             if (field.tag.compare ("VRID") == 0) {
-                GeoNode& curPoint = points.emplace_back ();
+                // possible new node
+                rcid = 0;
+                recName = 0;
+                updateInstr = 0;
+                version = 0;
                 for (auto& subField: firstFieldValue) {
                     if (subField.first.compare ("RCID") == 0) {
                         if (subField.second.intValue.has_value ()) {
-                            curPoint.id = subField.second.intValue.value ();
+                            rcid = subField.second.intValue.value ();
                         }
                     } else if (subField.first.compare ("RCNM") == 0) {
                         if (subField.second.intValue.has_value ()) {
-                            curPoint.recordName = subField.second.intValue.value ();
-                            if (curPoint.recordName == 120) curPoint.flags |= NodeFlags::CONNECTED;
+                            recName = subField.second.intValue.value ();
+                            // skip record if not an edge
+                            if (recName != RCNM::ConnectedNode && recName != RCNM::IsolatedNode) {
+                                goToNextRec = true; break;
+                            }
                         }
                     } else if (subField.first.compare ("RUIN") == 0) {
                         if (subField.second.intValue.has_value ()) {
-                            curPoint.updateInstruction = subField.second.intValue.value ();
+                            updateInstr = subField.second.intValue.value ();
                         }
                     } else if (subField.first.compare ("RVER") == 0) {
                         if (subField.second.intValue.has_value ()) {
-                            curPoint.version = subField.second.intValue.value ();
+                            version = subField.second.intValue.value ();
                         }
                     }
+                }
+                if (goToNextRec) break;
+                if (rcid && recName) {
+                    GeoNode& point = points.emplace_back ();
+                    point.id = rcid;
+                    point.recordName = recName;
+                    point.updateInstruction = updateInstr;
+                    point.version = version;
                 }
             } else if (field.tag.compare ("SG2D") == 0) {
                 GeoNode& curPoint = points.back ();
@@ -782,6 +800,128 @@ void extractPoints (std::vector<std::vector<FieldInstance>>& records, Nodes& poi
         }
     }
     points.buildIndex ();
+}
+
+void extractFeatureObjects (std::vector<std::vector<FieldInstance>>& records, Features& features) {
+    features.clear ();
+
+    for (auto& record: records) {
+        bool goToNextRec = false;
+        
+        for (auto& field: record) {
+            if (goToNextRec) break;
+
+            auto& firstFieldValue = field.instanceValues.front ();
+
+            uint32_t rcid = 0;
+            uint8_t recName = 0;
+            uint8_t updateInstr = 0;
+            uint8_t version = 0;
+            uint16_t classCode = 0;
+            uint8_t group = 0;
+            uint8_t primitive = 0;
+
+            if (field.tag.compare ("FRID") == 0) {
+                rcid = 0;
+                recName = 0;
+                updateInstr = 0;
+                version = 0;
+                classCode = 0;
+                group = 0;
+                primitive = 0;
+
+                //curFeature = & objects.emplace_back ();
+                for (auto& subField: firstFieldValue) {
+                    if (subField.first.compare ("GRUP") == 0) {
+                        if (subField.second.intValue.has_value ()) {
+                            group = subField.second.intValue.value ();
+                        }
+                    } else if (subField.first.compare ("OBJL") == 0) {
+                        if (subField.second.intValue.has_value ()) {
+                            classCode = subField.second.intValue.value ();
+                        }
+                    } else if (subField.first.compare ("PRIM") == 0) {
+                        if (subField.second.intValue.has_value ()) {
+                            primitive = subField.second.intValue.value ();
+                        }
+                    } else if (subField.first.compare ("RCID") == 0) {
+                        if (subField.second.intValue.has_value ()) {
+                            rcid = subField.second.intValue.value ();
+                        }
+                    } else if (subField.first.compare ("RCNM") == 0) {
+                        if (subField.second.intValue.has_value ()) {
+                            recName = subField.second.intValue.value ();
+                            if (recName != RCNM::Feature) {
+                                goToNextRec = true; break;
+                            }
+                        }
+                    } else if (subField.first.compare ("RUIN") == 0) {
+                        if (subField.second.intValue.has_value ()) {
+                            updateInstr = subField.second.intValue.value ();
+                        }
+                    } else if (subField.first.compare ("RVER") == 0) {
+                        if (subField.second.intValue.has_value ()) {
+                            version = subField.second.intValue.value ();
+                        }
+                    }
+                }
+                if (goToNextRec) break;
+                if (rcid && recName) {
+                    FeatureObject& feature = features.emplace_back ();
+                    feature.id = rcid;
+                    feature.recordName = recName;
+                    feature.updateInstruction = updateInstr;
+                    feature.version = version;
+                    feature.group = group;
+                    feature.classCode = classCode;
+                    feature.primitive = primitive;
+                }
+            } else if (field.tag.compare ("FOID") == 0) {
+                for (auto& subField: firstFieldValue) {
+                    if (subField.first.compare ("AGEN") == 0) {
+                        if (subField.second.intValue.has_value ()) {
+                            features.back ().agency = subField.second.intValue.value ();
+                        }
+                    } else if (subField.first.compare ("FIDN") == 0) {
+                        if (subField.second.intValue.has_value ()) {
+                            features.back ().fidn = subField.second.intValue.value ();
+                        }
+                    } else if (subField.first.compare ("FIDS") == 0) {
+                        if (subField.second.intValue.has_value ()) {
+                            features.back ().subDiv = subField.second.intValue.value ();
+                        }
+                    }
+                }
+            } else if (field.tag.compare ("ATTF") == 0) {
+                for (auto& subField: firstFieldValue) {
+                    /*if (subField.first.compare ("*ATTL") == 0) {
+                        if (subField.second.intValue.has_value ()) {
+                            curFeature->attributes.emplace_back ();
+                            curFeature->attributes.back ().classCode = subField.second.intValue.value ();
+                        }
+                    } else if (subField.first.compare ("ATVL") == 0) {
+                        curFeature->attributes.back ().noValue = false;
+                        if (subField.second.intValue.has_value ()) {
+                            curFeature->attributes.back ().intValue = subField.second.intValue.value ();
+                        } else if (subField.second.floatValue.has_value ()) {
+                            curFeature->attributes.back ().floatValue = subField.second.floatValue.value ();
+                        } else if (subField.second.stringValue.has_value ()) {
+                            curFeature->attributes.back ().strValue = subField.second.stringValue.value ();
+                        } else if (subField.second.binaryValue.size () > 0) {
+                            curFeature->attributes.back ().listValue.insert (
+                                curFeature->attributes.back ().listValue.end (),
+                                subField.second.binaryValue.begin (),
+                                subField.second.binaryValue.end ()
+                            );
+                        } else {
+                            curFeature->attributes.back ().noValue = true;
+                        }
+                    }*/
+                }
+            }
+        }
+    }
+    features.buildIndex ();
 }
 
 void extractFeatureObjects (std::vector<std::vector<FieldInstance>>& records, std::vector<FeatureDesc>& objects) {

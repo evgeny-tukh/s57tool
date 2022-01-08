@@ -15,7 +15,7 @@ enum NodeFlags {
 
 struct TopologyObject {
     uint32_t id;
-    uint32_t recordName;
+    uint8_t recordName;
     uint8_t flags;
     uint32_t updateInstruction;
     uint32_t version;
@@ -52,6 +52,17 @@ struct GeoEdge: TopologyObject {
     GeoEdge (): TopologyObject (), orientation (Orient::UNKNOWN), begin (), end () {}
 };
 
+struct FeatureObject: TopologyObject {
+    uint8_t primitive;
+    uint8_t group;
+    uint16_t classCode;
+    uint16_t agency;
+    uint32_t fidn;
+    uint16_t subDiv;
+
+    FeatureObject (): TopologyObject (), primitive (PRIM::None), group (1), classCode (0), agency (0), fidn (0), subDiv (0) {}
+};
+
 inline uint64_t constructForeignKey (uint8_t recName, uint32_t rcid) {
     return (((uint64_t) recName) << 32) + rcid;
 }
@@ -71,6 +82,45 @@ struct TopologyCollection {
     std::map<uint64_t, size_t> index;
 };
 
+template<typename ObjType>
+struct GeoCollection: TopologyCollection {
+    std::vector<ObjType> container;
+
+    void buildIndex () {
+        for (size_t i = 0; i < container.size (); ++ i) {
+            auto& node = container [i];
+            uint64_t key = constructForeignKey (node.recordName, node.id);
+            index.emplace (std::pair<uint64_t, size_t> (key, i));
+        }
+    }
+
+    size_t size () { return container.size (); }
+    void clear () {
+        container.clear ();
+        index.clear ();
+    }
+    ObjType& emplace_back () { return container.emplace_back (); }
+    ObjType& back () { return container.back (); }
+    ObjType& front () { return container.front (); }
+    auto begin () { return container.begin (); }
+    auto end () { return container.end (); }
+    ObjType& operator[] (const size_t index) { return container [index]; }
+
+    ObjType *getByForgeignKey (uint8_t recName, uint32_t rcid) {
+        return getByForgeignKey (constructForeignKey (recName, rcid));
+    }
+    ObjType *getByForgeignKey (uint64_t key) {
+        auto pos = index.find (key);
+
+        return (pos == index.end ()) ? 0 : & container [pos->second];
+    }
+};
+
+#if 1
+struct Nodes: GeoCollection<GeoNode> {};
+struct Edges: GeoCollection<GeoEdge> {};
+struct Features: GeoCollection<FeatureObject> {};
+#else
 struct Nodes: TopologyCollection {
     std::vector<GeoNode> container;
 
@@ -136,3 +186,37 @@ struct Edges: TopologyCollection {
         return (pos == index.end ()) ? 0 : & container [pos->second];
     }
 };
+
+struct Features: TopologyCollection {
+    std::vector<FeatureObject> container;
+
+    void buildIndex () {
+        for (size_t i = 0; i < container.size (); ++ i) {
+            auto& feature = container [i];
+            uint64_t key = constructForeignKey (feature.recordName, edge.id);
+            index.emplace (std::pair<uint64_t, size_t> (key, i));
+        }
+    }
+
+    size_t size () { return container.size (); }
+    void clear () {
+        container.clear ();
+        index.clear ();
+    }
+    FeatureObject& emplace_back () { return container.emplace_back (); }
+    FeatureObject& back () { return container.back (); }
+    FeatureObject& front () { return container.front (); }
+    auto begin () { return container.begin (); }
+    auto end () { return container.end (); }
+    FeatureObject& operator[] (const size_t index) { return container [index]; }
+
+    FeatureObject *getByForgeignKey (uint8_t recName, uint32_t rcid) {
+        return getByForgeignKey (constructForeignKey (recName, rcid));
+    }
+    FeatureObject *getByForgeignKey (uint64_t key) {
+        auto pos = index.find (key);
+
+        return (pos == index.end ()) ? 0 : & container [pos->second];
+    }
+};
+#endif
