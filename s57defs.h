@@ -302,16 +302,6 @@ struct DatasetParams {
     std::optional<uint32_t> verDatum;           // VERDAT values
 };
 
-struct AttrInstance {
-    uint16_t classCode;
-    std::string acronym;
-    bool noValue;
-    uint32_t intValue;
-    double floatValue;
-    std::string strValue;
-    std::vector<uint8_t> listValue;
-};
-
 struct Position {
     double lat;
     double lon;

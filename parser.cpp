@@ -348,11 +348,7 @@ size_t parseDataRecord (
         const char *fieldPos = source + dirEntry.position;
         const char *beginPos = fieldPos;
         auto& fieldInstance = fieldInstances.emplace_back ();
-if(dirEntry.tag.compare("VRPT")==0){
-int iii=0;
-++iii;
---iii;
-}
+
         fieldInstance.name = ddf.name;
         fieldInstance.tag = dirEntry.tag;
 
@@ -384,18 +380,9 @@ int iii=0;
                     case 'b': {
                         auto [hasValue, intValue] = getBinValue (fld, fieldPos);
                         if (hasValue) subFieldInstance->second.intValue = intValue;
-if(subFieldInstance->first.compare("*ATTL")==0&&intValue==37){
-int iii=0;
-++iii;
---iii;
-}                        break;
+                        break;
                     }
                     case 'B': {
-if(subFieldInstance->first.compare("*LNAM")==0){
-int iii=0;
-++iii;
---iii;
-}
                         bool hasValue = getBinaryValue (fld, fieldPos, subFieldInstance->second.binaryValue);
                         break;
                     }
@@ -894,29 +881,29 @@ void extractFeatureObjects (std::vector<std::vector<FieldInstance>>& records, Fe
                 }
             } else if (field.tag.compare ("ATTF") == 0) {
                 for (auto& subField: firstFieldValue) {
-                    /*if (subField.first.compare ("*ATTL") == 0) {
+                    if (subField.first.compare ("*ATTL") == 0) {
                         if (subField.second.intValue.has_value ()) {
-                            curFeature->attributes.emplace_back ();
-                            curFeature->attributes.back ().classCode = subField.second.intValue.value ();
+                            features.back ().attributes.emplace_back ().classCode = subField.second.intValue.value ();
                         }
                     } else if (subField.first.compare ("ATVL") == 0) {
-                        curFeature->attributes.back ().noValue = false;
+                        auto& attr = features.back ().attributes.back ();
+                        attr.noValue = false;
                         if (subField.second.intValue.has_value ()) {
-                            curFeature->attributes.back ().intValue = subField.second.intValue.value ();
+                            attr.intValue = subField.second.intValue.value ();
                         } else if (subField.second.floatValue.has_value ()) {
-                            curFeature->attributes.back ().floatValue = subField.second.floatValue.value ();
+                            attr.floatValue = subField.second.floatValue.value ();
                         } else if (subField.second.stringValue.has_value ()) {
-                            curFeature->attributes.back ().strValue = subField.second.stringValue.value ();
+                            attr.strValue = subField.second.stringValue.value ();
                         } else if (subField.second.binaryValue.size () > 0) {
-                            curFeature->attributes.back ().listValue.insert (
-                                curFeature->attributes.back ().listValue.end (),
+                            attr.listValue.insert (
+                                attr.listValue.end (),
                                 subField.second.binaryValue.begin (),
                                 subField.second.binaryValue.end ()
                             );
                         } else {
-                            curFeature->attributes.back ().noValue = true;
+                            attr.noValue = true;
                         }
-                    }*/
+                    }
                 }
             }
         }
