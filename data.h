@@ -52,7 +52,7 @@ struct GeoEdge: TopologyObject {
     GeoEdge (): TopologyObject (), orientation (Orient::UNKNOWN), begin (), end () {}
 };
 
-struct AttrInstance {
+struct Attr {
     uint16_t classCode;
     std::string acronym;
     bool noValue;
@@ -61,7 +61,7 @@ struct AttrInstance {
     std::string strValue;
     std::vector<uint8_t> listValue;
 
-    AttrInstance (): classCode (0), noValue (true), intValue (0), floatValue (0.0f) {}
+    Attr (): classCode (0), noValue (true), intValue (0), floatValue (0.0f) {}
 };
 
 struct FeatureObject: TopologyObject {
@@ -71,7 +71,7 @@ struct FeatureObject: TopologyObject {
     uint16_t agency;
     uint32_t fidn;
     uint16_t subDiv;
-    std::vector<AttrInstance> attributes;
+    std::vector<Attr> attributes;
 
     FeatureObject (): TopologyObject (), primitive (PRIM::None), group (1), classCode (0), agency (0), fidn (0), subDiv (0) {}
 };

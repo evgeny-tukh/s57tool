@@ -455,11 +455,10 @@ size_t parseDataDescriptiveRecord (
     return parsedLeader.recLength;
 }
 
-void deformatAttrValues (AttrDictionary& attrDictionary, std::vector<FeatureDesc>& objects) {
-    //for (auto& object: objects) {
-    for (size_t i = 0; i < objects.size (); ++ i) {
-        auto& object = objects [i];
-        for (auto& attr: object.attributes) {
+void deformatAttrValues (AttrDictionary& attrDictionary, Features& features) {
+    for (size_t i = 0; i < features.size (); ++ i) {
+        auto& feature = features [i];
+        for (auto& attr: feature.attributes) {
             if (!attr.noValue && !attr.strValue.empty ()) {
                 AttrDesc *attrDesc = (AttrDesc *) attrDictionary.findByCode (attr.classCode);
 
@@ -880,28 +879,30 @@ void extractFeatureObjects (std::vector<std::vector<FieldInstance>>& records, Fe
                     }
                 }
             } else if (field.tag.compare ("ATTF") == 0) {
-                for (auto& subField: firstFieldValue) {
-                    if (subField.first.compare ("*ATTL") == 0) {
-                        if (subField.second.intValue.has_value ()) {
-                            features.back ().attributes.emplace_back ().classCode = subField.second.intValue.value ();
-                        }
-                    } else if (subField.first.compare ("ATVL") == 0) {
-                        auto& attr = features.back ().attributes.back ();
-                        attr.noValue = false;
-                        if (subField.second.intValue.has_value ()) {
-                            attr.intValue = subField.second.intValue.value ();
-                        } else if (subField.second.floatValue.has_value ()) {
-                            attr.floatValue = subField.second.floatValue.value ();
-                        } else if (subField.second.stringValue.has_value ()) {
-                            attr.strValue = subField.second.stringValue.value ();
-                        } else if (subField.second.binaryValue.size () > 0) {
-                            attr.listValue.insert (
-                                attr.listValue.end (),
-                                subField.second.binaryValue.begin (),
-                                subField.second.binaryValue.end ()
-                            );
-                        } else {
-                            attr.noValue = true;
+                for (auto& instanceValue: field.instanceValues) {
+                    for (auto& subField: instanceValue) {
+                        if (subField.first.compare ("*ATTL") == 0) {
+                            if (subField.second.intValue.has_value ()) {
+                                features.back ().attributes.emplace_back ().classCode = subField.second.intValue.value ();
+                            }
+                        } else if (subField.first.compare ("ATVL") == 0) {
+                            auto& attr = features.back ().attributes.back ();
+                            attr.noValue = false;
+                            if (subField.second.intValue.has_value ()) {
+                                attr.intValue = subField.second.intValue.value ();
+                            } else if (subField.second.floatValue.has_value ()) {
+                                attr.floatValue = subField.second.floatValue.value ();
+                            } else if (subField.second.stringValue.has_value ()) {
+                                attr.strValue = subField.second.stringValue.value ();
+                            } else if (subField.second.binaryValue.size () > 0) {
+                                attr.listValue.insert (
+                                    attr.listValue.end (),
+                                    subField.second.binaryValue.begin (),
+                                    subField.second.binaryValue.end ()
+                                );
+                            } else {
+                                attr.noValue = true;
+                            }
                         }
                     }
                 }

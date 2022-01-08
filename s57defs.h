@@ -323,6 +323,18 @@ struct GeoArea {
     GeoArea (): id (0) {}
 };*/
 
+struct AttrInstance {
+    uint16_t classCode;
+    std::string acronym;
+    bool noValue;
+    uint32_t intValue;
+    double floatValue;
+    std::string strValue;
+    std::vector<uint8_t> listValue;
+
+    AttrInstance (): classCode (0), noValue (true), intValue (0), floatValue (0.0f) {}
+};
+
 struct FeatureDesc {
     uint8_t group;                              // GRUP
     uint8_t geometry;                           // PRIM

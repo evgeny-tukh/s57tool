@@ -20,6 +20,7 @@
 #define IDC_AREAS       307
 #define IDC_LINES       308
 #define IDC_POINTOBJ    309
+#define IDC_FEATURES    310
 
 #define IDC_LOADINFO    400
 

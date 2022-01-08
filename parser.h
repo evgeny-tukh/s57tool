@@ -11,7 +11,7 @@ void extractFeatureObjects (std::vector<std::vector<FieldInstance>>& records, st
 void extractFeatureObjects (std::vector<std::vector<FieldInstance>>& records, Features& features);
 void extractNodes (std::vector<std::vector<FieldInstance>>& records, Nodes& points, DatasetParams datasetParams);
 void extractEdges (std::vector<std::vector<FieldInstance>>& records, Edges& edges, Nodes& points, DatasetParams datasetParams);
-void deformatAttrValues (AttrDictionary& attrDictionary, std::vector<FeatureDesc>& objects);
+void deformatAttrValues (AttrDictionary& attrDictionary, Features& features);
 void loadObjectDictionary (const char *path, ObjectDictionary& dictionary);
 void loadAttrDictionary (const char *path, AttrDictionary& dictionary);
 void loadDai (const char *path, Dai& dai);

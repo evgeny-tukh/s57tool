@@ -32,18 +32,17 @@ const int COL_NODE_LAT = 2;
 const int COL_NODE_LON = 3;
 const int COL_NODE_DEPTH = 4;
 
-
 enum TABS {
     RECORDS = 0,
     PROPERTIES,
-    OBJECTS,
     NODES,
     EDGES,
+    FEATURES,
 };
 
 struct Ctx {
     HINSTANCE instance;
-    HWND mainWnd, catalogCtl, recordTree, propsList, splashScreen, tabCtl, objectTree, nodeList, edgeTree;
+    HWND mainWnd, catalogCtl, recordTree, propsList, splashScreen, tabCtl, nodeList, edgeTree, featureTree;
     HMENU mainMenu;
     bool keepRunning, loaded;
     std::vector<CatalogItem> catalog;
@@ -145,9 +144,9 @@ void initWindow (HWND wnd, void *data) {
 
     addTab (TABS::RECORDS, "Records");
     addTab (TABS::PROPERTIES, "Properties");
-    addTab (TABS::OBJECTS, "Objects");
     addTab (TABS::NODES, "Nodes");
     addTab (TABS::EDGES, "Edges");
+    addTab (TABS::FEATURES, "Features");
 
     GetClientRect (ctx->tabCtl, & client);
     
@@ -157,9 +156,9 @@ void initWindow (HWND wnd, void *data) {
 
     ctx->recordTree = createTabChildControl (WC_TREEVIEW, TVS_HASBUTTONS | TVS_HASLINES | TVS_LINESATROOT | WS_VSCROLL, IDC_RECORDS, true);
     ctx->propsList = createTabChildControl (WC_LISTVIEW, LVS_REPORT | WS_VSCROLL | WS_HSCROLL, IDC_CATALOG, false);
-    ctx->objectTree = createTabChildControl (WC_TREEVIEW, TVS_HASBUTTONS | TVS_HASLINES | TVS_LINESATROOT | WS_VSCROLL, IDC_OBJECTS, false);
     ctx->nodeList = createTabChildControl (WC_LISTVIEW, LVS_REPORT | WS_VSCROLL | WS_HSCROLL, IDC_NODES, false);
     ctx->edgeTree = createTabChildControl (WC_TREEVIEW, TVS_HASBUTTONS | TVS_HASLINES | TVS_LINESATROOT | WS_VSCROLL, IDC_EDGES, false);
+    ctx->featureTree = createTabChildControl (WC_TREEVIEW, TVS_HASBUTTONS | TVS_HASLINES | TVS_LINESATROOT | WS_VSCROLL, IDC_FEATURES, false);
 
     SendMessage (ctx->catalogCtl, LVM_SETEXTENDEDLISTVIEWSTYLE, LVS_EX_FULLROWSELECT, LVS_EX_FULLROWSELECT);
     SendMessage (ctx->propsList, LVM_SETEXTENDEDLISTVIEWSTYLE, LVS_EX_FULLROWSELECT, LVS_EX_FULLROWSELECT);
@@ -302,7 +301,7 @@ void openFile (Ctx *ctx, CatalogItem *item) {
     PathCombine (path, ctx->basePath.c_str (), item->fileName.c_str ());
 
     std::vector<std::vector<FieldInstance>> records;
-    std::vector<FeatureDesc> objects;
+    //std::vector<FeatureDesc> objects;
     Nodes points;
     Edges edges;
     Features features;
@@ -314,7 +313,7 @@ void openFile (Ctx *ctx, CatalogItem *item) {
     extractNodes (records, points, datasetParams);
     extractEdges (records, edges, points, datasetParams);
     extractFeatureObjects (records, features);
-    deformatAttrValues (ctx->attrDictionary, objects);
+    deformatAttrValues (ctx->attrDictionary, features);
     
     SendMessage (ctx->recordTree, TVM_DELETEITEM, (WPARAM) TVI_ROOT, 0);
     SendMessage (ctx->propsList, LVM_DELETEALLITEMS, 0, 0);
@@ -409,61 +408,82 @@ void openFile (Ctx *ctx, CatalogItem *item) {
     data.item.mask = TVIF_TEXT;
     data.item.pszText = "Points";
 
-    HTREEITEM objectGroupItem [5];
+    HTREEITEM featureGroupItem [5];
 
-    objectGroupItem [0] = (HTREEITEM) SendMessage (ctx->objectTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+    featureGroupItem [0] = (HTREEITEM) SendMessage (ctx->featureTree, TVM_INSERTITEM, 0, (LPARAM) & data);
 
     data.item.pszText = "Lines";
 
-    objectGroupItem [1] = (HTREEITEM) SendMessage (ctx->objectTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+    featureGroupItem [1] = (HTREEITEM) SendMessage (ctx->featureTree, TVM_INSERTITEM, 0, (LPARAM) & data);
 
     data.item.pszText = "Areas";
 
-    objectGroupItem [2] = (HTREEITEM) SendMessage (ctx->objectTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+    featureGroupItem [2] = (HTREEITEM) SendMessage (ctx->featureTree, TVM_INSERTITEM, 0, (LPARAM) & data);
 
     data.item.pszText = "3D Points";
 
-    objectGroupItem [3] = (HTREEITEM) SendMessage (ctx->objectTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+    featureGroupItem [3] = (HTREEITEM) SendMessage (ctx->featureTree, TVM_INSERTITEM, 0, (LPARAM) & data);
 
     data.item.pszText = "Non-spatial objects";
 
-    objectGroupItem [4] = (HTREEITEM) SendMessage (ctx->objectTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+    featureGroupItem [4] = (HTREEITEM) SendMessage (ctx->featureTree, TVM_INSERTITEM, 0, (LPARAM) & data);
 
-    for (auto& object: objects) {
-        std::string featureID ("Feature id: " + std::to_string (object.featureID));
-        std::string id ("ID: " + std::to_string (object.id));
-        std::string classInfo (std::to_string (object.classCode));
+    for (auto& feature: features) {
+        std::string featureID ("Feature id: " + std::to_string (feature.fidn));
+        std::string id ("ID: " + std::to_string (feature.id));
+        std::string classInfo ("Class: " + std::to_string (feature.classCode));
+        std::string group ("Group: " + std::to_string (feature.group));
         static char *geometries [] { "Point", "Line", "Area", "3D points" };
 
-        auto objectDesc = ctx->objectDictionary.findByCode (object.classCode);
+        auto objectDesc = ctx->objectDictionary.findByCode (feature.classCode);
 
         classInfo +=  " [";
         classInfo += objectDesc ? objectDesc->name : "N/A";
         classInfo += "]";
 
-        data.hParent = (object.geometry > 0 && object.geometry < 5) ? objectGroupItem [object.geometry-1] : objectGroupItem [4];
+        data.hParent = (feature.primitive > 0 && feature.primitive < 5) ? featureGroupItem [feature.primitive-1] : featureGroupItem [4];
         data.hInsertAfter = TVI_LAST;
         data.item.mask = TVIF_TEXT;
         data.item.pszText = (char *) featureID.c_str ();
 
-        HTREEITEM objectItem = (HTREEITEM) SendMessage (ctx->objectTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+        HTREEITEM objectItem = (HTREEITEM) SendMessage (ctx->featureTree, TVM_INSERTITEM, 0, (LPARAM) & data);
 
         data.hParent = objectItem;
         data.hInsertAfter = TVI_LAST;
         data.item.mask = TVIF_TEXT;
         data.item.pszText = (char *) id.c_str ();
 
-        SendMessage (ctx->objectTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+        SendMessage (ctx->featureTree, TVM_INSERTITEM, 0, (LPARAM) & data);
 
         data.item.pszText = (char *) classInfo.c_str ();
 
-        SendMessage (ctx->objectTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+        SendMessage (ctx->featureTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+
+        data.item.pszText = (char *) group.c_str ();
+
+        SendMessage (ctx->featureTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+
+        if (feature.agency) {
+            std::string agency ("Agency: " + std::to_string (feature.agency));
+
+            data.item.pszText = (char *) agency.c_str ();
+
+            SendMessage (ctx->featureTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+        }
+
+        if (feature.subDiv) {
+            std::string subDiv ("Subdivision: " + std::to_string (feature.subDiv));
+
+            data.item.pszText = (char *) subDiv.c_str ();
+
+            SendMessage (ctx->featureTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+        }
 
         data.item.pszText = "Attributes";
 
-        HTREEITEM attrsItem = (HTREEITEM) SendMessage (ctx->objectTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+        HTREEITEM attrsItem = (HTREEITEM) SendMessage (ctx->featureTree, TVM_INSERTITEM, 0, (LPARAM) & data);
 
-        for (auto& attr: object.attributes) {
+        for (auto& attr: feature.attributes) {
             std::string attrInfo (std::to_string (attr.classCode));
 
             AttrDesc *attrDesc = (AttrDesc *) ctx->attrDictionary.findByCode (attr.classCode);
@@ -475,7 +495,7 @@ void openFile (Ctx *ctx, CatalogItem *item) {
             data.hParent = attrsItem;
             data.item.pszText = (char *) attrInfo.c_str ();
 
-            HTREEITEM attrItem = (HTREEITEM) SendMessage (ctx->objectTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+            HTREEITEM attrItem = (HTREEITEM) SendMessage (ctx->featureTree, TVM_INSERTITEM, 0, (LPARAM) & data);
 
             std::string attrType { "Type: " };
 
@@ -492,7 +512,7 @@ void openFile (Ctx *ctx, CatalogItem *item) {
             data.hParent = attrItem;
             data.item.pszText = (char *) attrType.c_str ();
 
-            SendMessage (ctx->objectTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+            SendMessage (ctx->featureTree, TVM_INSERTITEM, 0, (LPARAM) & data);
 
             std::string attrValue { "Value: " };
 
@@ -530,7 +550,7 @@ void openFile (Ctx *ctx, CatalogItem *item) {
 
             data.item.pszText = (char *) attrValue.c_str ();
 
-            SendMessage (ctx->objectTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+            SendMessage (ctx->featureTree, TVM_INSERTITEM, 0, (LPARAM) & data);
         }
     }
 
@@ -759,41 +779,41 @@ void onNotify (HWND wnd, NMHDR *hdr) {
                 case TABS::PROPERTIES: {
                     ShowWindow (ctx->propsList, SW_SHOW);
                     ShowWindow (ctx->recordTree, SW_HIDE);
-                    ShowWindow (ctx->objectTree, SW_HIDE);
                     ShowWindow (ctx->nodeList, SW_HIDE);
                     ShowWindow (ctx->edgeTree, SW_HIDE);
+                    ShowWindow (ctx->featureTree, SW_HIDE);
                     break;
                 }
                 case TABS::RECORDS: {
                     ShowWindow (ctx->propsList, SW_HIDE);
                     ShowWindow (ctx->recordTree, SW_SHOW);
-                    ShowWindow (ctx->objectTree, SW_HIDE);
                     ShowWindow (ctx->nodeList, SW_HIDE);
                     ShowWindow (ctx->edgeTree, SW_HIDE);
-                    break;
-                }
-                case TABS::OBJECTS: {
-                    ShowWindow (ctx->propsList, SW_HIDE);
-                    ShowWindow (ctx->recordTree, SW_HIDE);
-                    ShowWindow (ctx->objectTree, SW_SHOW);
-                    ShowWindow (ctx->nodeList, SW_HIDE);
-                    ShowWindow (ctx->edgeTree, SW_HIDE);
+                    ShowWindow (ctx->featureTree, SW_HIDE);
                     break;
                 }
                 case TABS::NODES: {
                     ShowWindow (ctx->propsList, SW_HIDE);
                     ShowWindow (ctx->recordTree, SW_HIDE);
-                    ShowWindow (ctx->objectTree, SW_HIDE);
                     ShowWindow (ctx->nodeList, SW_SHOW);
                     ShowWindow (ctx->edgeTree, SW_HIDE);
+                    ShowWindow (ctx->featureTree, SW_HIDE);
                     break;
                 }
                 case TABS::EDGES: {
                     ShowWindow (ctx->propsList, SW_HIDE);
                     ShowWindow (ctx->recordTree, SW_HIDE);
-                    ShowWindow (ctx->objectTree, SW_HIDE);
                     ShowWindow (ctx->nodeList, SW_HIDE);
                     ShowWindow (ctx->edgeTree, SW_SHOW);
+                    ShowWindow (ctx->featureTree, SW_HIDE);
+                    break;
+                }
+                case TABS::FEATURES: {
+                    ShowWindow (ctx->propsList, SW_HIDE);
+                    ShowWindow (ctx->recordTree, SW_HIDE);
+                    ShowWindow (ctx->nodeList, SW_HIDE);
+                    ShowWindow (ctx->edgeTree, SW_HIDE);
+                    ShowWindow (ctx->featureTree, SW_SHOW);
                     break;
                 }
             }
