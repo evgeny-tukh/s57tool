@@ -50,12 +50,13 @@ void paintChart (
     uint8_t zoom
 ) {
     for (auto& feature: features) {
-        for (size_t edgeIndex: feature.edgeIndexes) {
+        for (auto& edgeRef: feature.edgeRefs) {
+            if (edgeRef.hidden) continue;
             paintEdge (
                 client,
                 paintDC,
                 nodes,
-                edges [edgeIndex],
+                edges [edgeRef.index],
                 dai,
                 north,
                 west,

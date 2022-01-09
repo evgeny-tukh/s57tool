@@ -920,7 +920,11 @@ void extractFeatureObjects (std::vector<std::vector<FieldInstance>>& records, Fe
                                 size_t edgeIndex = edges.getIndexByForgeignKey (foreignIndex.value ());
 
                                 if (edgeIndex >= 0) {
-                                    features.back ().edgeIndexes.emplace_back (edgeIndex);
+                                    auto& edgeRef = features.back ().edgeRefs.emplace_back ();
+                                    edgeRef.index = edgeIndex;
+                                    edgeRef.hidden = mask == 1;
+                                    edgeRef.hole = usage == USAG::Interior;
+                                    edgeRef.unclockwise = orient == ORNT::Reverse;
                                 }
                             }
                         }

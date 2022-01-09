@@ -65,6 +65,13 @@ struct Attr {
     Attr (): classCode (0), noValue (true), intValue (0), floatValue (0.0f) {}
 };
 
+struct EdgeRef {
+    size_t index;
+    bool hidden;
+    bool hole;
+    bool unclockwise;
+};
+
 struct FeatureObject: TopologyObject {
     uint8_t primitive;
     uint8_t group;
@@ -73,7 +80,7 @@ struct FeatureObject: TopologyObject {
     uint32_t fidn;
     uint16_t subDiv;
     std::vector<Attr> attributes;
-    std::vector<size_t> edgeIndexes;    // Lines and areas
+    std::vector<EdgeRef> edgeRefs;    // Lines and areas
     size_t nodeIndex;                   // Point and sounding array
 
     FeatureObject (): TopologyObject (), primitive (PRIM::None), group (1), classCode (0), agency (0), fidn (0), subDiv (0), nodeIndex (-1) {}

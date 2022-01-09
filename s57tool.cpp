@@ -591,12 +591,22 @@ void openFile (Ctx *ctx, CatalogItem *item) {
             HTREEITEM edgesItem = (HTREEITEM) SendMessage (ctx->featureTree, TVM_INSERTITEM, 0, (LPARAM) & data);
             data.item.pszText = "Faces";
             HTREEITEM facesItem = (HTREEITEM) SendMessage (ctx->featureTree, TVM_INSERTITEM, 0, (LPARAM) & data);
-            for (size_t i = 0; i < feature.edgeIndexes.size (); ++ i) {
+            for (size_t i = 0; i < feature.edgeRefs.size (); ++ i) {
+                auto& ref = feature.edgeRefs [i];
                 std::string label = std::to_string (i);
                 data.item.pszText = label.data ();
                 data.hParent = edgesItem;
                 HTREEITEM edgeItem = (HTREEITEM) SendMessage (ctx->featureTree, TVM_INSERTITEM, 0, (LPARAM) & data);
-                auto& edge = ctx->edges [feature.edgeIndexes [i]];
+                std::string props;
+                if (ref.hidden) props += "<MASKED>";
+                if (ref.hole) props += "<HOLE>";
+                if (ref.unclockwise) props += "<UNCLK>";
+                if (!props.empty ()) {
+                    data.item.pszText = props.data ();
+                    data.hParent = edgeItem;
+                    (HTREEITEM) SendMessage (ctx->featureTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+                }
+                auto& edge = ctx->edges [feature.edgeRefs [i].index];
                 addPointItem (ctx->nodes [edge.beginIndex].points [0], "Begin", edgeItem);
                 for (size_t j = 0; j < edge.internalNodes.size (); ++ j) {
                     addPointItem (edge.internalNodes [j], std::to_string (j).data (), edgeItem);
