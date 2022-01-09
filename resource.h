@@ -21,6 +21,8 @@
 #define IDC_LINES       308
 #define IDC_POINTOBJ    309
 #define IDC_FEATURES    310
+#define IDC_ZOOM_IN     311
+#define IDC_ZOOM_OUT    312
 
 #define IDC_LOADINFO    400
 

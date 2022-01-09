@@ -8,9 +8,12 @@
 #include <map>
 #include "resource.h"
 #include "parser.h"
+#include "geo.h"
+#include "painter.h"
 
 const char *MAIN_CLASS = "S57ToolMainWnd";
 const char *SPLASH_CLASS = "S57ToolSplashScreen";
+const char *CHART_CLASS = "S57ToolChartWnd";
 const int COL_FILENAME = 0;
 const int COL_VOLUME = 1;
 const int COL_IMPL = 2;
@@ -42,17 +45,22 @@ enum TABS {
 
 struct Ctx {
     HINSTANCE instance;
-    HWND mainWnd, catalogCtl, recordTree, propsList, splashScreen, tabCtl, nodeList, edgeTree, featureTree;
+    HWND mainWnd, catalogCtl, recordTree, propsList, splashScreen, tabCtl, nodeList, edgeTree, featureTree, chartWnd, chartCtlBar;
     HMENU mainMenu;
     bool keepRunning, loaded;
+    double north, west;
+    uint8_t zoom;
     std::vector<CatalogItem> catalog;
     std::string basePath;
     std::string splashText;
     ObjectDictionary objectDictionary;
     AttrDictionary attrDictionary;
+    Nodes nodes;
+    Edges edges;
+    Features features;
     Dai dai;
 
-    Ctx (HINSTANCE _instance, HMENU _menu): instance (_instance), mainMenu (_menu), keepRunning (true), loaded (false) {}
+    Ctx (HINSTANCE _instance, HMENU _menu): instance (_instance), mainMenu (_menu), keepRunning (true), loaded (false), north (66.99/*64.48*/), west (-178.99/*-166.2*/), zoom (12) {}
 
     virtual ~Ctx () {
         DestroyMenu (mainMenu);
@@ -302,18 +310,15 @@ void openFile (Ctx *ctx, CatalogItem *item) {
 
     std::vector<std::vector<FieldInstance>> records;
     //std::vector<FeatureDesc> objects;
-    Nodes points;
-    Edges edges;
-    Features features;
     DatasetParams datasetParams;
 
     loadParseS57File (path, records);
     extractDatasetParameters (records, datasetParams);
     //extractFeatureObjects (records, objects);
-    extractNodes (records, points, datasetParams);
-    extractEdges (records, edges, points, datasetParams);
-    extractFeatureObjects (records, features, edges, points);
-    deformatAttrValues (ctx->attrDictionary, features);
+    extractNodes (records, ctx->nodes, datasetParams);
+    extractEdges (records, ctx->edges, ctx->nodes, datasetParams);
+    extractFeatureObjects (records, ctx->features, ctx->edges, ctx->nodes);
+    deformatAttrValues (ctx->attrDictionary, ctx->features);
     
     SendMessage (ctx->recordTree, TVM_DELETEITEM, (WPARAM) TVI_ROOT, 0);
     SendMessage (ctx->propsList, LVM_DELETEALLITEMS, 0, 0);
@@ -395,8 +400,8 @@ void openFile (Ctx *ctx, CatalogItem *item) {
     addParam ("Horizontal datum", datasetParams.horDatum.has_value () ? std::to_string (datasetParams.horDatum.value ()).c_str () : "N/A");
     addParam ("Vertical datum", datasetParams.verDatum.has_value () ? std::to_string (datasetParams.verDatum.value ()).c_str () : "N/A");
 
-    for (size_t i = 0; i < points.size (); ++ i) {
-        addNode (i, points);
+    for (size_t i = 0; i < ctx->nodes.size (); ++ i) {
+        addNode (i, ctx->nodes);
     }
 
     TV_INSERTSTRUCTA data;
@@ -428,7 +433,7 @@ void openFile (Ctx *ctx, CatalogItem *item) {
 
     featureGroupItem [4] = (HTREEITEM) SendMessage (ctx->featureTree, TVM_INSERTITEM, 0, (LPARAM) & data);
 
-    for (auto& feature: features) {
+    for (auto& feature: ctx->features) {
         std::string featureID ("Feature id: " + std::to_string (feature.fidn));
         std::string id ("ID: " + std::to_string (feature.id));
         std::string classInfo ("Class: " + std::to_string (feature.classCode));
@@ -569,7 +574,7 @@ void openFile (Ctx *ctx, CatalogItem *item) {
             SendMessage (ctx->featureTree, TVM_INSERTITEM, 0, (LPARAM) & data);
         };
         if (feature.primitive == PRIM::Point) {
-            auto& pointsArray = points [feature.nodeIndex].points;
+            auto& pointsArray = ctx->nodes [feature.nodeIndex].points;
             if (pointsArray.size () == 1) {
                 addPointItem (pointsArray.front (), "Position", objectItem);
             } else if (pointsArray.size () > 1) {
@@ -591,17 +596,17 @@ void openFile (Ctx *ctx, CatalogItem *item) {
                 data.item.pszText = label.data ();
                 data.hParent = edgesItem;
                 HTREEITEM edgeItem = (HTREEITEM) SendMessage (ctx->featureTree, TVM_INSERTITEM, 0, (LPARAM) & data);
-                auto& edge = edges [feature.edgeIndexes [i]];
-                addPointItem (points [edge.beginIndex].points [0], "Begin", edgeItem);
+                auto& edge = ctx->edges [feature.edgeIndexes [i]];
+                addPointItem (ctx->nodes [edge.beginIndex].points [0], "Begin", edgeItem);
                 for (size_t j = 0; j < edge.internalNodes.size (); ++ j) {
                     addPointItem (edge.internalNodes [j], std::to_string (j).data (), edgeItem);
                 }
-                addPointItem (points [edge.endIndex].points [0], "End", edgeItem);
+                addPointItem (ctx->nodes [edge.endIndex].points [0], "End", edgeItem);
             }
         }
     }
 
-    for (auto& edge: edges) {
+    for (auto& edge: ctx->edges) {
         TV_INSERTSTRUCT data;
         char buffer [200];
 
@@ -635,7 +640,7 @@ void openFile (Ctx *ctx, CatalogItem *item) {
             SendMessage (ctx->edgeTree, TVM_INSERTITEM, 0, (LPARAM) & data);
         };
 
-        addEdgeNodeItem (points [edge.beginIndex], "Begin");
+        addEdgeNodeItem (ctx->nodes [edge.beginIndex], "Begin");
 
         if (edge.internalNodes.size () > 0) {
             size_t count = 0;
@@ -668,7 +673,7 @@ void openFile (Ctx *ctx, CatalogItem *item) {
             }
         }
 
-        addEdgeNodeItem (points [edge.endIndex], "End");
+        addEdgeNodeItem (ctx->nodes [edge.endIndex], "End");
     }
 
     for (auto& rec: records) {
@@ -757,6 +762,8 @@ void openFile (Ctx *ctx, CatalogItem *item) {
             }
         }
     }
+
+    InvalidateRect (ctx->chartWnd, 0, 1);
 }
 
 void openFileByIndex (Ctx *ctx, int itemIndex) {
@@ -871,6 +878,133 @@ void onNotify (HWND wnd, NMHDR *hdr) {
     }
 }
 
+void initChartWnd (HWND wnd, void *param) {
+    Ctx *ctx = (Ctx *) param;
+    RECT client;
+
+    SetWindowLongPtr (wnd, GWLP_USERDATA, (LONG_PTR) param);
+    GetClientRect (wnd, & client);
+
+    TRACKMOUSEEVENT mouseTrackData;
+    mouseTrackData.cbSize = sizeof (mouseTrackData);
+    mouseTrackData.dwFlags = TME_HOVER | TME_LEAVE;
+    mouseTrackData.hwndTrack = wnd;
+    mouseTrackData.dwHoverTime = 3600000;
+
+    TrackMouseEvent (& mouseTrackData);
+
+    ctx->chartCtlBar = CreateWindow (WC_STATIC, "[No position] [Z12]", SS_CENTER | WS_CHILD | WS_VISIBLE | WS_BORDER, 0, 0, 200, 24, wnd, 0, ctx->instance, 0);
+
+    CreateWindow (WC_BUTTON, "Zoom In", BS_PUSHBUTTON | WS_VISIBLE | WS_CHILD, 200, 0, 80, 24, wnd, (HMENU) IDC_ZOOM_IN, ctx->instance, 0);
+    CreateWindow (WC_BUTTON, "Zoom Out", BS_PUSHBUTTON | WS_VISIBLE | WS_CHILD, 280, 0, 80, 24, wnd, (HMENU) IDC_ZOOM_OUT, ctx->instance, 0);
+}
+
+void onChartWndMouseMove (HWND wnd, uint16_t clientX, uint16_t clientY) {
+    double lat, lon;
+    Ctx *ctx = (Ctx *) GetWindowLongPtr (wnd, GWLP_USERDATA);
+    ClientPos pos;
+    int x, y;
+    geoToXY (ctx->north, ctx->west, ctx->zoom, x, y);
+    x += clientX;
+    y += clientY;
+    xyToGeo (x, y, ctx->zoom, lat, lon);
+
+    SetWindowText (ctx->chartCtlBar, (formatLat (lat).append (" ").append (formatLon (lon))).append (" Z").append (std::to_string (ctx->zoom)).c_str ());
+}
+
+void onChartWndMouseWheel (HWND wnd, int16_t delta) {
+    Ctx *ctx = (Ctx *) GetWindowLongPtr (wnd, GWLP_USERDATA);
+    uint8_t newZoom = ctx->zoom;
+    if (delta > 0) {
+        newZoom ++;
+    } else {
+        newZoom --;
+    }
+    if (newZoom < 1) {
+        newZoom = 1;
+    } else if (newZoom > 18) {
+        newZoom = 18;
+    }
+
+    if (ctx->zoom != newZoom) {
+        ctx->zoom = newZoom;
+        InvalidateRect (wnd, 0, true);
+    }
+}
+
+void onMouseOut (HWND wnd) {
+    Ctx *ctx = (Ctx *) GetWindowLongPtr (wnd, GWLP_USERDATA);
+    SetWindowText (ctx->chartCtlBar, std::to_string (ctx->zoom).c_str ());
+}
+
+void paintChartWnd (HWND wnd) {
+    Ctx *ctx = (Ctx *) GetWindowLongPtr (wnd, GWLP_USERDATA);
+    PAINTSTRUCT data;
+    HDC paintDC = BeginPaint (wnd, & data);
+    RECT client;
+
+    GetClientRect (wnd, & client);
+    FillRect (paintDC, & client, (HBRUSH) GetStockObject (WHITE_BRUSH));
+    paintChart (
+        client,
+        paintDC,
+        ctx->nodes,
+        ctx->edges,
+        ctx->features,
+        ctx->dai,
+        ctx->north,
+        ctx->west,
+        ctx->zoom
+    );
+    EndPaint (wnd, & data);
+}
+
+void onChartWndCommand (HWND wnd, uint16_t command) {
+    Ctx *ctx = (Ctx *) GetWindowLongPtr (wnd, GWLP_USERDATA);
+
+    switch (command) {
+        case IDC_ZOOM_IN:
+            if (ctx->zoom < 18) {
+                ++ ctx->zoom;
+                InvalidateRect (wnd, 0, 1);
+                onChartWndMouseMove (wnd, 240, 12);
+            }
+            break;
+        case IDC_ZOOM_OUT:
+            if (ctx->zoom > 1) {
+                -- ctx->zoom;
+                InvalidateRect (wnd, 0, 1);
+                onChartWndMouseMove (wnd, 320, 12);
+            }
+            break;
+    }
+}
+
+LRESULT chartWndProc (HWND wnd, UINT msg, WPARAM param1, LPARAM param2) {
+    LRESULT result = 0;
+
+    switch (msg) {
+        case WM_PAINT:
+            paintChartWnd (wnd); break;
+        case WM_COMMAND:
+            onChartWndCommand (wnd, LOWORD (param1)); break;
+        case WM_MOUSEHOVER:
+            SetCapture (wnd); break;
+        case WM_MOUSELEAVE:
+            onMouseOut (wnd); break;
+        case WM_MOUSEHWHEEL:
+            onChartWndMouseWheel (wnd, (int16_t) HIWORD (param1)); break;
+        case WM_MOUSEMOVE:
+            onChartWndMouseMove (wnd, LOWORD (param2), HIWORD (param2)); break;
+        case WM_CREATE:
+            initChartWnd (wnd, ((CREATESTRUCT *) param2)->lpCreateParams); break;
+        default:
+            result = DefWindowProc (wnd, msg, param1, param2);
+    }
+    
+    return result;
+}
+
 LRESULT wndSplashScreenProc (HWND wnd, UINT msg, WPARAM param1, LPARAM param2) {
     LRESULT result = 0;
     Ctx *ctx = (Ctx *) GetWindowLongPtr (wnd, GWLP_USERDATA);
@@ -943,6 +1077,16 @@ void registerClasses (Ctx& ctx) {
     classInfo.style = CS_HREDRAW | CS_VREDRAW;
 
     RegisterClass (& classInfo);
+
+    classInfo.hbrBackground = (HBRUSH) GetStockObject (WHITE_BRUSH);
+    classInfo.hCursor = (HCURSOR) LoadCursor (0, IDC_HAND);
+    classInfo.hIcon = (HICON) LoadIcon (0, IDI_APPLICATION);
+    classInfo.hInstance = ctx.instance;
+    classInfo.lpfnWndProc = chartWndProc;
+    classInfo.lpszClassName = CHART_CLASS;
+    classInfo.style = CS_HREDRAW | CS_VREDRAW;
+
+    RegisterClass (& classInfo);
 }
 
 void loadProc (Ctx *ctx) {
@@ -965,7 +1109,8 @@ void loadProc (Ctx *ctx) {
     ctx->loaded = true;
 
     ShowWindow (ctx->mainWnd, SW_SHOW);
-    UpdateWindow (ctx->mainWnd);
+    ShowWindow (ctx->chartWnd, SW_SHOW);
+    UpdateWindow (ctx->chartWnd);
     BringWindowToTop (ctx->mainWnd);
 }
 
@@ -983,6 +1128,7 @@ int WINAPI WinMain (HINSTANCE instance, HINSTANCE prevInstance, char *cmd, int s
 
     ctx.splashScreen = CreateWindow (SPLASH_CLASS, "", WS_POPUP | WS_VISIBLE, 200, 200, 500, 200, 0, 0, instance, & ctx);
     ctx.mainWnd = CreateWindow (MAIN_CLASS, "S57 Tool", WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, 800, 500, 0, ctx.mainMenu, instance, & ctx);
+    ctx.chartWnd = CreateWindow (CHART_CLASS, "Chart Window", WS_BORDER | WS_POPUP | WS_CAPTION, 400, 400, 500, 500, ctx.mainWnd, 0, instance, & ctx);
     ctx.keepRunning = true;
     ctx.splashText = "Initializing...";
 
