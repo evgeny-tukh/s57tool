@@ -553,30 +553,50 @@ void openFile (Ctx *ctx, CatalogItem *item) {
             SendMessage (ctx->featureTree, TVM_INSERTITEM, 0, (LPARAM) & data);
         }
 
+        auto addPointItem = [&data, &ctx, &objectItem] (Position& pos, char *label, HTREEITEM parentItem) {
+            data.hParent = parentItem;
+            data.item.pszText = label;
+            
+            HTREEITEM posItem = (HTREEITEM) SendMessage (ctx->featureTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+
+            std::string lat = formatLat (pos.lat);
+            std::string lon = formatLon (pos.lon);
+
+            data.item.pszText = lat.data ();
+            data.hParent = posItem;
+            SendMessage (ctx->featureTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+            data.item.pszText = lon.data ();
+            SendMessage (ctx->featureTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+        };
         if (feature.primitive == PRIM::Point) {
             auto& pointsArray = points [feature.nodeIndex].points;
-            auto addPointItem = [&data, &ctx, &objectItem] (Position& pos, char *label) {
-                data.hParent = objectItem;
-                data.item.pszText = label;
-                
-                HTREEITEM posItem = (HTREEITEM) SendMessage (ctx->featureTree, TVM_INSERTITEM, 0, (LPARAM) & data);
-
-                std::string lat = formatLat (pos.lat);
-                std::string lon = formatLon (pos.lon);
-
-                data.item.pszText = lat.data ();
-                data.hParent = posItem;
-                SendMessage (ctx->featureTree, TVM_INSERTITEM, 0, (LPARAM) & data);
-                data.item.pszText = lon.data ();
-                data.hParent = posItem;
-                SendMessage (ctx->featureTree, TVM_INSERTITEM, 0, (LPARAM) & data);
-            };
             if (pointsArray.size () == 1) {
-                addPointItem (pointsArray.front (), "Position");
+                addPointItem (pointsArray.front (), "Position", objectItem);
             } else if (pointsArray.size () > 1) {
+                data.item.pszText = "Soundings";
+                data.hParent = objectItem;
+                HTREEITEM soundingsItem = (HTREEITEM) SendMessage (ctx->featureTree, TVM_INSERTITEM, 0, (LPARAM) & data);
                 for (size_t i = 0; i < pointsArray.size (); ++ i) {
-                    addPointItem (pointsArray [i], std::to_string (i).data ());
+                    addPointItem (pointsArray [i], std::to_string (i).data (), soundingsItem);
                 }
+            }
+        } else if (feature.primitive == PRIM::Area || feature.primitive == PRIM::Line) {
+            data.item.pszText = "Edges";
+            data.hParent = objectItem;
+            HTREEITEM edgesItem = (HTREEITEM) SendMessage (ctx->featureTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+            data.item.pszText = "Faces";
+            HTREEITEM facesItem = (HTREEITEM) SendMessage (ctx->featureTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+            for (size_t i = 0; i < feature.edgeIndexes.size (); ++ i) {
+                std::string label = std::to_string (i);
+                data.item.pszText = label.data ();
+                data.hParent = edgesItem;
+                HTREEITEM edgeItem = (HTREEITEM) SendMessage (ctx->featureTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+                auto& edge = edges [feature.edgeIndexes [i]];
+                addPointItem (points [edge.beginIndex].points [0], "Begin", edgeItem);
+                for (size_t j = 0; j < edge.internalNodes.size (); ++ j) {
+                    addPointItem (edge.internalNodes [j], std::to_string (j).data (), edgeItem);
+                }
+                addPointItem (points [edge.endIndex].points [0], "End", edgeItem);
             }
         }
     }
