@@ -1128,7 +1128,7 @@ int WINAPI WinMain (HINSTANCE instance, HINSTANCE prevInstance, char *cmd, int s
 
     ctx.splashScreen = CreateWindow (SPLASH_CLASS, "", WS_POPUP | WS_VISIBLE, 200, 200, 500, 200, 0, 0, instance, & ctx);
     ctx.mainWnd = CreateWindow (MAIN_CLASS, "S57 Tool", WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, 800, 500, 0, ctx.mainMenu, instance, & ctx);
-    ctx.chartWnd = CreateWindow (CHART_CLASS, "Chart Window", WS_BORDER | WS_POPUP | WS_CAPTION, 400, 400, 500, 500, ctx.mainWnd, 0, instance, & ctx);
+    ctx.chartWnd = CreateWindow (CHART_CLASS, "Chart Window", WS_BORDER | WS_POPUP | WS_CAPTION | WS_SIZEBOX, 400, 400, 500, 500, ctx.mainWnd, 0, instance, & ctx);
     ctx.keepRunning = true;
     ctx.splashText = "Initializing...";
 
