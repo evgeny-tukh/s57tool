@@ -73,9 +73,10 @@ struct FeatureObject: TopologyObject {
     uint32_t fidn;
     uint16_t subDiv;
     std::vector<Attr> attributes;
-    std::vector<size_t> edgeIndexes;
+    std::vector<size_t> edgeIndexes;    // Lines and areas
+    size_t nodeIndex;                   // Point and sounding array
 
-    FeatureObject (): TopologyObject (), primitive (PRIM::None), group (1), classCode (0), agency (0), fidn (0), subDiv (0) {}
+    FeatureObject (): TopologyObject (), primitive (PRIM::None), group (1), classCode (0), agency (0), fidn (0), subDiv (0), nodeIndex (-1) {}
 };
 
 inline uint64_t constructForeignKey (uint8_t recName, uint32_t rcid) {

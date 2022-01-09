@@ -8,7 +8,7 @@ bool parseCatalog (const char *catPath, std::vector<CatalogItem>& catalog);
 bool loadParseS57File (char *path, std::vector<std::vector<FieldInstance>>& records);
 void extractDatasetParameters (std::vector<std::vector<FieldInstance>>& records, DatasetParams& datasetParams);
 void extractFeatureObjects (std::vector<std::vector<FieldInstance>>& records, std::vector<FeatureDesc>& objects);
-void extractFeatureObjects (std::vector<std::vector<FieldInstance>>& records, Features& features);
+void extractFeatureObjects (std::vector<std::vector<FieldInstance>>& records, Features& features, Edges& edges, Nodes& nodes);
 void extractNodes (std::vector<std::vector<FieldInstance>>& records, Nodes& points, DatasetParams datasetParams);
 void extractEdges (std::vector<std::vector<FieldInstance>>& records, Edges& edges, Nodes& points, DatasetParams datasetParams);
 void deformatAttrValues (AttrDictionary& attrDictionary, Features& features);

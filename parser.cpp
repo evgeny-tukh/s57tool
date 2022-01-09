@@ -573,11 +573,6 @@ void extractEdges (std::vector<std::vector<FieldInstance>>& records, Edges& edge
                         if (subField.first.compare ("*NAME") == 0) {
                             if (subField.second.binaryValue.size () > 0) {
                                 foreignIndex = constructForeignKey (subField.second.binaryValue.data ());
-                                /*foreignIndex = 0;
-                                for (auto byte = subField.second.binaryValue.begin (); byte != subField.second.binaryValue.end (); ++ byte) {
-                                    foreignIndex = foreignIndex.value () << 8;
-                                    foreignIndex = foreignIndex.value () + *byte;
-                                }*/
                             }
                         } else if (subField.first.compare ("MASK") == 0) {
                             if (subField.second.intValue.has_value ()) {
@@ -778,7 +773,7 @@ void extractNodes (std::vector<std::vector<FieldInstance>>& records, Nodes& poin
     points.buildIndex ();
 }
 
-void extractFeatureObjects (std::vector<std::vector<FieldInstance>>& records, Features& features) {
+void extractFeatureObjects (std::vector<std::vector<FieldInstance>>& records, Features& features, Edges& edges, Nodes& nodes) {
     features.clear ();
 
     for (auto& record: records) {
@@ -866,6 +861,70 @@ void extractFeatureObjects (std::vector<std::vector<FieldInstance>>& records, Fe
                         if (subField.second.intValue.has_value ()) {
                             features.back ().subDiv = subField.second.intValue.value ();
                         }
+                    }
+                }
+            } else if (field.tag.compare ("FSPT") == 0) {
+                std::optional<uint8_t> mask;
+                std::optional<uint8_t> orient;
+                std::optional<uint8_t> usage;
+                std::optional<uint64_t> foreignIndex;
+
+                auto checkSubField = [&mask, &orient, &usage, &foreignIndex] (std::pair<const std::string, SubFieldInstance> &subField) {
+                    if (subField.first.compare ("*NAME") == 0) {
+                        if (subField.second.binaryValue.size () > 0) {
+                            foreignIndex = constructForeignKey (subField.second.binaryValue.data ());
+                        }
+                    } else if (subField.first.compare ("MASK") == 0) {
+                        if (subField.second.intValue.has_value ()) {
+                            mask = (uint8_t) subField.second.intValue.value ();
+                        }
+                    } else if (subField.first.compare ("ORNT") == 0) {
+                        if (subField.second.intValue.has_value ()) {
+                            orient = (uint8_t) subField.second.intValue.value ();
+                        }
+                    } else if (subField.first.compare ("USAG") == 0) {
+                        if (subField.second.intValue.has_value ()) {
+                            usage = (uint8_t) subField.second.intValue.value ();
+                        }
+                    }                        
+                };
+
+                switch (features.back ().primitive) {
+                    case PRIM::Point: {
+                        for (auto& subField: firstFieldValue) {
+                            checkSubField (subField);
+                        }
+
+                        if (foreignIndex.has_value ()) {
+                            size_t nodeIndex = nodes.getIndexByForgeignKey (foreignIndex.value ());
+
+                            if (nodeIndex >= 0) {
+                                features.back ().nodeIndex = nodeIndex;
+                            }
+                        }
+                        break;
+                    }
+                    case PRIM::Line:
+                    case PRIM::Area: {
+                        for (auto& instanceValue: field.instanceValues) {
+                            mask.reset ();
+                            orient.reset ();
+                            usage.reset ();
+                            foreignIndex.reset ();
+
+                            for (auto& subField: instanceValue) {
+                                checkSubField (subField);
+                            }
+
+                            if (foreignIndex.has_value ()) {
+                                size_t edgeIndex = edges.getIndexByForgeignKey (foreignIndex.value ());
+
+                                if (edgeIndex >= 0) {
+                                    features.back ().edgeIndexes.emplace_back (edgeIndex);
+                                }
+                            }
+                        }
+                        break;
                     }
                 }
             } else if (field.tag.compare ("ATTF") == 0) {

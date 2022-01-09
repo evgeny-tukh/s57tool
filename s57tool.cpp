@@ -312,7 +312,7 @@ void openFile (Ctx *ctx, CatalogItem *item) {
     //extractFeatureObjects (records, objects);
     extractNodes (records, points, datasetParams);
     extractEdges (records, edges, points, datasetParams);
-    extractFeatureObjects (records, features);
+    extractFeatureObjects (records, features, edges, points);
     deformatAttrValues (ctx->attrDictionary, features);
     
     SendMessage (ctx->recordTree, TVM_DELETEITEM, (WPARAM) TVI_ROOT, 0);
@@ -551,6 +551,33 @@ void openFile (Ctx *ctx, CatalogItem *item) {
             data.item.pszText = (char *) attrValue.c_str ();
 
             SendMessage (ctx->featureTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+        }
+
+        if (feature.primitive == PRIM::Point) {
+            auto& pointsArray = points [feature.nodeIndex].points;
+            auto addPointItem = [&data, &ctx, &objectItem] (Position& pos, char *label) {
+                data.hParent = objectItem;
+                data.item.pszText = label;
+                
+                HTREEITEM posItem = (HTREEITEM) SendMessage (ctx->featureTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+
+                std::string lat = formatLat (pos.lat);
+                std::string lon = formatLon (pos.lon);
+
+                data.item.pszText = lat.data ();
+                data.hParent = posItem;
+                SendMessage (ctx->featureTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+                data.item.pszText = lon.data ();
+                data.hParent = posItem;
+                SendMessage (ctx->featureTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+            };
+            if (pointsArray.size () == 1) {
+                addPointItem (pointsArray.front (), "Position");
+            } else if (pointsArray.size () > 1) {
+                for (size_t i = 0; i < pointsArray.size (); ++ i) {
+                    addPointItem (pointsArray [i], std::to_string (i).data ());
+                }
+            }
         }
     }
 
