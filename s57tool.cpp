@@ -47,8 +47,9 @@ struct Ctx {
     HINSTANCE instance;
     HWND mainWnd, catalogCtl, recordTree, propsList, splashScreen, tabCtl, nodeList, edgeTree, featureTree, chartWnd, chartCtlBar;
     HMENU mainMenu;
-    bool keepRunning, loaded;
+    bool keepRunning, loaded, mouseDown;
     double north, west;
+    int mouseDownX, mouseDownY;
     uint8_t zoom;
     std::vector<CatalogItem> catalog;
     std::string basePath;
@@ -60,7 +61,16 @@ struct Ctx {
     Features features;
     Dai dai;
 
-    Ctx (HINSTANCE _instance, HMENU _menu): instance (_instance), mainMenu (_menu), keepRunning (true), loaded (false), north (66.99/*64.48*/), west (-178.99/*-166.2*/), zoom (12) {}
+    Ctx (HINSTANCE _instance, HMENU _menu):
+        instance (_instance),
+        mainMenu (_menu),
+        keepRunning (true),
+        loaded (false),
+        north (66.99),
+        west (-178.99),
+        zoom (12),
+        mouseDown (false) {
+    }
 
     virtual ~Ctx () {
         DestroyMenu (mainMenu);
@@ -598,9 +608,15 @@ void openFile (Ctx *ctx, CatalogItem *item) {
                 data.hParent = edgesItem;
                 HTREEITEM edgeItem = (HTREEITEM) SendMessage (ctx->featureTree, TVM_INSERTITEM, 0, (LPARAM) & data);
                 std::string props;
-                if (ref.hidden) props += "<MASKED>";
-                if (ref.hole) props += "<HOLE>";
-                if (ref.unclockwise) props += "<UNCLK>";
+                if (ref.hidden) {
+                    props += "<MASKED>";
+                }
+                if (ref.hole) {
+                    props += "<HOLE>";
+                }
+                if (ref.unclockwise) {
+                    props += "<UNCLK>";
+                }
                 if (!props.empty ()) {
                     data.item.pszText = props.data ();
                     data.hParent = edgeItem;
@@ -909,17 +925,41 @@ void initChartWnd (HWND wnd, void *param) {
     CreateWindow (WC_BUTTON, "Zoom Out", BS_PUSHBUTTON | WS_VISIBLE | WS_CHILD, 280, 0, 80, 24, wnd, (HMENU) IDC_ZOOM_OUT, ctx->instance, 0);
 }
 
+void onChartWndLeftButtonDown (HWND wnd, uint16_t clientX, uint16_t clientY) {
+    Ctx *ctx = (Ctx *) GetWindowLongPtr (wnd, GWLP_USERDATA);
+    ctx->mouseDown = true;
+    ctx->mouseDownX = clientX;
+    ctx->mouseDownY = clientY;
+}
+
 void onChartWndMouseMove (HWND wnd, uint16_t clientX, uint16_t clientY) {
     double lat, lon;
     Ctx *ctx = (Ctx *) GetWindowLongPtr (wnd, GWLP_USERDATA);
-    ClientPos pos;
     int x, y;
     geoToXY (ctx->north, ctx->west, ctx->zoom, x, y);
-    x += clientX;
-    y += clientY;
-    xyToGeo (x, y, ctx->zoom, lat, lon);
 
-    SetWindowText (ctx->chartCtlBar, (formatLat (lat).append (" ").append (formatLon (lon))).append (" Z").append (std::to_string (ctx->zoom)).c_str ());
+    if (ctx->mouseDown) {
+        int deltaX = clientX - ctx->mouseDownX;
+        int deltaY = clientY - ctx->mouseDownY;
+
+        if (std::abs (deltaX) > 3 || std::abs (deltaY) > 3) {
+            xyToGeo (x - deltaX, y - deltaY, ctx->zoom, ctx->north, ctx->west);
+            ctx->mouseDownX = clientX;
+            ctx->mouseDownY = clientY;
+
+            InvalidateRect (wnd, 0, true);
+        }
+    } else {
+        xyToGeo (x + clientX, y + clientY, ctx->zoom, lat, lon);
+
+        SetWindowText (ctx->chartCtlBar, (formatLat (lat).append (" ").append (formatLon (lon))).append (" Z").append (std::to_string (ctx->zoom)).c_str ());
+    }
+}
+
+void onChartWndLeftButtonUp (HWND wnd, uint16_t clientX, uint16_t clientY) {
+    Ctx *ctx = (Ctx *) GetWindowLongPtr (wnd, GWLP_USERDATA);
+    onChartWndMouseMove (wnd, clientX, clientY);
+    ctx->mouseDown = false;
 }
 
 void onChartWndMouseWheel (HWND wnd, int16_t delta) {
@@ -994,6 +1034,10 @@ LRESULT chartWndProc (HWND wnd, UINT msg, WPARAM param1, LPARAM param2) {
     LRESULT result = 0;
 
     switch (msg) {
+        case WM_LBUTTONDOWN:
+            onChartWndLeftButtonDown (wnd, LOWORD (param2), HIWORD (param2)); break;
+        case WM_LBUTTONUP:
+            onChartWndLeftButtonUp (wnd, LOWORD (param2), HIWORD (param2)); break;
         case WM_PAINT:
             paintChartWnd (wnd); break;
         case WM_COMMAND:
