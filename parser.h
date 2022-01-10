@@ -14,7 +14,7 @@ void extractEdges (std::vector<std::vector<FieldInstance>>& records, Edges& edge
 void deformatAttrValues (AttrDictionary& attrDictionary, Features& features);
 void loadObjectDictionary (const char *path, ObjectDictionary& dictionary);
 void loadAttrDictionary (const char *path, AttrDictionary& dictionary);
-void loadDai (const char *path, Dai& dai);
+void loadDai (const char *path, Dai& dai, ObjectDictionary& objectDictionary, AttrDictionary& dictionary);
 size_t parseRecord (const char *start);
 std::string formatLat (double lat);
 std::string formatLon (double lon);

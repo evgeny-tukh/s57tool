@@ -580,6 +580,18 @@ struct LookupTableItem {
     std::string instruction;
     DisplayCat displayCat;
     std::string comment;
+
+    // Lookup table index key compose rule:
+    // 2 bytes - object class code
+    // 1 byte - ((<display category (base/standard)>) << 4) + <charset (plain/symboolized boundaries)>
+    // 1 byte - object type (A/L/P)
+    static uint32_t composeKey (uint16_t classCode, DisplayCat displayCat, TableSet tableSet, char objectType) {
+        return ((uint32_t) classCode << 16) + ((((uint32_t) displayCat) & 15) << 12) + ((((uint32_t) tableSet) & 15) << 8) + (uint8_t) objectType;
+    }
+
+    uint32_t composeKey () {
+        return composeKey (classCode, displayCat, tableSet, objectType);
+    }
 };
 
 enum FillType {
@@ -639,13 +651,22 @@ struct LineDesc {
     std::vector<std::vector<std::string>> svgs;
 };
 
+typedef std::vector<LookupTableItem> LookupTable;
+
 struct Dai {
     LibraryIdentification libraryId;
     std::map<std::string, ColorItem> dayColorTable, duskColorTable, nightColorTable;
-    std::map<std::string, std::vector<LookupTableItem>> lookupTables;
+    std::vector<LookupTable> lookupTables;
+    std::map<uint32_t, size_t> lookupTableIndex;
     std::map<std::string, PatternDesc> patterns;
     std::map<std::string, SymbolDesc> symbols;
     std::map<std::string, LineDesc> lines;
+
+    LookupTable *findLookupTable (uint16_t code, DisplayCat displayCat, TableSet tableSet, char objectType) {
+        auto pos = lookupTableIndex.find (LookupTableItem::composeKey (code, displayCat, tableSet, objectType));
+
+        return pos == lookupTableIndex.end () ? 0 : & lookupTables [pos->second];
+    }
 };
 
 #pragma pack()

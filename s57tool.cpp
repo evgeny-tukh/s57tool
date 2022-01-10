@@ -1174,7 +1174,7 @@ void loadProc (Ctx *ctx) {
     ctx->splashText += "\nLoading DAI...";
     PathRemoveFileSpec (path);
     PathAppend (path, "PresLib_e4.0.3.dai");
-    loadDai (path, ctx->dai);
+    loadDai (path, ctx->dai, ctx->objectDictionary, ctx->attrDictionary);
     ctx->splashText += "\nDone.";
     ctx->loaded = true;
 

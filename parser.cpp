@@ -1375,6 +1375,120 @@ void loadColorTable (std::vector<std::string>& module, std::map<std::string, Col
     }
 }
 
+void loadLookupTableItem (
+    std::vector<std::string>& module,
+    std::vector<LookupTable>& lookupTables,
+    std::map<uint32_t, size_t>& lookupTableIndex,
+    ObjectDictionary& objectDictionary,
+    AttrDictionary& attrDictionary
+) {
+    size_t index = -1;
+    LookupTableItem item;
+
+    for (auto& line: module) {
+        char *source = (char *) line.c_str ();
+
+        if (memcmp (source, "LUPT", 4) == 0) {
+            source += 9;
+            std::string moduleName = extractFixedSize (source, 2);
+            uint32_t rcid = std::atoi (extractFixedSize (source, 5).c_str ());
+            std::string status = extractFixedSize (source, 3);
+            std::string acronym = extractFixedSize (source, 6);
+            ObjectDesc *objectDesc = objectDictionary.findByAcronym (acronym.c_str ());
+            std::string objType = extractFixedSize (source, 1);
+            uint32_t displayPriority = std::atoi (extractFixedSize (source, 5).c_str ());
+            std::string radarPriority = extractFixedSize (source, 1);
+            std::string tableSet = extractToUnitTerm (source);
+
+            memcpy (item.acronym, acronym.c_str (), 6);
+            item.displayPriority = displayPriority;
+            item.radarPriority = radarPriority [0];
+            item.objectType = objType [0];
+            item.attrCombination.clear ();
+            item.classCode = objectDesc ? objectDesc->code : 0;
+            item.comment.clear ();
+            item.instruction.clear ();
+            
+            if (tableSet.compare ("PLAIN_BOUNDARIES") == 0) {
+                item.tableSet = TableSet::PLAIN_BOUNDARIES;
+            } else if (tableSet.compare ("SYMBOLIZED_BOUNDARIES") == 0) {
+                item.tableSet = TableSet::SYMBOLIZED_BOUNDARIES;
+            } else if (tableSet.compare ("SIMPLIFIED") == 0) {
+                item.tableSet = TableSet::SIMPLIFIED;
+            } else if (tableSet.compare ("PAPER_CHART") == 0) {
+                item.tableSet = TableSet::PAPER_CHARTS;
+            } else if (tableSet.compare ("LINES") == 0) {
+                item.tableSet = TableSet::LINES;
+            }
+        } else if (memcmp (source, "ATTC", 4) == 0) {
+            if (index >= 0) {
+                source += 9;
+
+                std::string acronym;
+                std::string value;
+
+                if (*source == UT) {
+                    // No-attribute instance (general default rule)
+                } else {
+                    while (*source && *source != UT) {
+                        acronym = extractFixedSize (source, 6);
+                        value = extractToUnitTerm (source);
+
+                        if (!acronym.empty ()) {
+                            auto& instance = item.attrCombination.emplace_back ();
+
+                            AttrDesc *desc = (AttrDesc *) attrDictionary.findByAcronym (acronym.c_str ());
+
+                            instance.acronym = acronym;
+                            instance.strValue = value;
+
+                            if (desc) instance.classCode = desc->code;
+                        }
+                    }
+                }
+            }
+        } else if (memcmp (source, "INST", 4) == 0) {
+            source += 9;
+            item.instruction = extractToUnitTerm (source);
+        } else if (memcmp (source, "DISC", 4) == 0) {
+            source += 9;
+            std::string displayCat = extractToUnitTerm (source);
+            
+            if (displayCat.compare ("STANDARD") == 0) {
+                item.displayCat = DisplayCat::STANDARD;
+            } else if (displayCat.compare ("DISPLAY_BASE") == 0) {
+                item.displayCat = DisplayCat::DISPLAY_BASE;
+            }
+        } else if (memcmp (source, "LUCM", 4) == 0) {
+            source += 9;
+            item.comment = extractToUnitTerm (source);
+
+            // Item has been completed; need to add into table set
+            uint32_t key = item.composeKey ();
+            auto pos = lookupTableIndex.find (key);
+
+            if (pos == lookupTableIndex.end ()) {
+                // Absolutely new item group, add item
+                pos = lookupTableIndex.emplace (key, lookupTables.size ()).first;
+                lookupTables.emplace_back ();
+            }
+
+            auto& newItem = lookupTables [pos->second].emplace_back ();
+
+            memcpy (newItem.acronym, item.acronym, sizeof (item.acronym));
+            newItem.attrCombination.insert (newItem.attrCombination.begin (), item.attrCombination.begin (), item.attrCombination.end ());
+            newItem.classCode = item.classCode;
+            newItem.comment = item.comment;
+            newItem.displayCat = item.displayCat;
+            newItem.displayPriority = item.displayPriority;
+            newItem.instruction = item.instruction;
+            newItem.objectType = item.objectType;
+            newItem.radarPriority = item.radarPriority;
+            newItem.tableSet = item.tableSet;
+        }
+    }
+}
+/*
 void loadLookupTableItem (std::vector<std::string>& module, std::map<std::string, std::vector<LookupTableItem>>& lookupTables) {
     std::map<std::string, std::vector<LookupTableItem>>::iterator lookupTablePos = lookupTables.end ();
 
@@ -1458,7 +1572,7 @@ void loadLookupTableItem (std::vector<std::string>& module, std::map<std::string
         }
     }
 }
-
+*/
 void loadPattern (std::vector<std::string>& module, std::map<std::string, PatternDesc>& patterns) {
     std::map<std::string, PatternDesc>::iterator pos = patterns.end ();
 
@@ -1607,7 +1721,7 @@ void loadLine (std::vector<std::string>& module, std::map<std::string, LineDesc>
     }
 }
 
-void loadDai (const char *path, Dai& dai) {
+void loadDai (const char *path, Dai& dai, ObjectDictionary& objectDictionary, AttrDictionary& attrDictionary) {
     char *content = 0;
     size_t size = loadFileAndConvertToAnsi (path, content);
 
@@ -1643,7 +1757,8 @@ void loadDai (const char *path, Dai& dai) {
                     loadColorTable (module, dai.nightColorTable);
                 }
             } else if (memcmp (moduleName, "LUPT", 4) == 0) {
-                loadLookupTableItem (module, dai.lookupTables);
+                //loadLookupTableItem (module, dai.lookupTables);
+                loadLookupTableItem (module, dai.lookupTables, dai.lookupTableIndex, objectDictionary, attrDictionary);
             } else if (memcmp (moduleName, "PATT", 4) == 0) {
                 loadPattern (module, dai.patterns);
             } else if (memcmp (moduleName, "SYMB", 4) == 0) {
