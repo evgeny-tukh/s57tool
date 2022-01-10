@@ -35,7 +35,7 @@ void paintEdge (
     addNode (edge.endIndex);
 
     SelectObject (paintDC, GetStockObject (BLACK_PEN));
-    Polygon (paintDC, vertices.data (), (int) vertices.size ());
+    Polyline (paintDC, vertices.data (), (int) vertices.size ());
 }
 
 void paintChart (
@@ -49,19 +49,35 @@ void paintChart (
     double west,
     uint8_t zoom
 ) {
+    static char *objectTypes { "PLA" };
+    std::vector<LookupTable *> lookupTables;
+    
     for (auto& feature: features) {
-        for (auto& edgeRef: feature.edgeRefs) {
-            if (edgeRef.hidden) continue;
-            paintEdge (
-                client,
-                paintDC,
-                nodes,
-                edges [edgeRef.index],
-                dai,
-                north,
-                west,
-                zoom
-            );
+        auto lookupTable = dai.findLookupTable (feature.classCode, DisplayCat::STANDARD, TableSet::PLAIN_BOUNDARIES, objectTypes [feature.primitive-1]);
+
+        lookupTables.emplace_back (lookupTable);
+    }
+
+    for (int prty = 1; prty < 10; ++ prty) {
+        for (size_t i = 0; i < features.size (); ++ i) {
+            auto& feature = features [i];
+
+            if (!lookupTables [i]) continue;
+            if (lookupTables [i]->at (0).displayPriority != prty) continue;
+
+            for (auto& edgeRef: feature.edgeRefs) {
+                if (edgeRef.hidden) continue;
+                paintEdge (
+                    client,
+                    paintDC,
+                    nodes,
+                    edges [edgeRef.index],
+                    dai,
+                    north,
+                    west,
+                    zoom
+                );
+            }
         }
     }
 }
