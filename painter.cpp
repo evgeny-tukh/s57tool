@@ -102,13 +102,19 @@ void paintChart (
     Dai& dai,
     double north,
     double west,
-    uint8_t zoom
+    uint8_t zoom,
+    PaletteIndex paletteIndex,
+    DisplayCat displayCat,
+    TableSet tableSet
 ) {
     static char *objectTypes { "PLA" };
     std::vector<LookupTable *> lookupTables;
+    Palette *palette = dai.getPalette (paletteIndex);
     
+    if (!palette) return;
+
     for (auto& feature: features) {
-        auto lookupTable = dai.findLookupTable (feature.classCode, DisplayCat::STANDARD, TableSet::PLAIN_BOUNDARIES, objectTypes [feature.primitive-1]);
+        auto lookupTable = dai.findLookupTable (feature.classCode, displayCat, tableSet, objectTypes [feature.primitive-1]);
 
         lookupTables.emplace_back (lookupTable);
     }
@@ -116,47 +122,40 @@ void paintChart (
     for (int prty = 1; prty < 10; ++ prty) {
         for (size_t i = 0; i < features.size (); ++ i) {
             auto& feature = features [i];
-
+//if(feature.classCode!=42&&feature.classCode!=46&&feature.classCode!=4&&feature.classCode!=3)continue;
             if (!lookupTables [i]) continue;
-            auto& lookupTableItem = lookupTables [i]->at (0);
-            if (lookupTableItem.displayPriority != prty) continue;
-
-            HBRUSH brush = 0;
+            auto lookupTableItem = feature.findBestItem (displayCat, tableSet, dai);
+            if (!lookupTableItem || lookupTableItem->displayPriority != prty) continue;
 
             if (feature.primitive == 3) {
-                brush = lookupTableItem.dayBrushIndex >= 0 ? dai.day.brushes [lookupTableItem.dayBrushIndex] : (HBRUSH) GetStockObject (WHITE_BRUSH);
-                paintArea (
-                    client,
-                    paintDC,
-                    nodes,
-                    edges,
-                    feature.edgeRefs,
-                    dai,
-                    north,
-                    west,
-                    zoom,
-                    brush
-                );
-            }
-
-            for (auto& edgeRef: feature.edgeRefs) {
-                if (edgeRef.hidden) continue;
-                HPEN pen = 0;
-                
-                if (feature.primitive == 2 || feature.primitive == 3) {
-                    pen = lookupTableItem.dayPenIndex >= 0 ? dai.day.pens [lookupTableItem.dayPenIndex] : (HPEN) GetStockObject (BLACK_PEN);
-
-                    paintEdge (
+                size_t brushIndex = lookupTableItem->getBrushIndex (paletteIndex);
+                if (brushIndex != LookupTableItem::NOT_EXIST) {
+                    paintArea (
                         client,
                         paintDC,
                         nodes,
-                        edges [edgeRef.index],
+                        edges,
+                        feature.edgeRefs,
                         dai,
                         north,
                         west,
                         zoom,
-                        pen
+                        palette->brushes [brushIndex]
                     );
+                }
+            }
+
+            if (feature.primitive == 2 || feature.primitive == 3) {
+                size_t penIndex = lookupTableItem->getPenIndex (paletteIndex);
+                HPEN pen;
+                if (penIndex != LookupTableItem::NOT_EXIST) {
+                    pen = palette->pens [penIndex];
+                } else {
+                    pen = (HPEN) GetStockObject (BLACK_PEN);
+                }
+                for (auto& edgeRef: feature.edgeRefs) {
+                    if (edgeRef.hidden) continue;
+                    paintEdge (client, paintDC, nodes, edges [edgeRef.index], dai, north, west, zoom, pen);
                 }
             }
         }

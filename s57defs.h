@@ -14,6 +14,12 @@
 
 size_t splitString (std::string source, std::vector<std::string>& parts, char separator);
 
+enum PaletteIndex {
+    Day = 1,
+    Dusk,
+    Night,
+};
+
 enum RCNM {
     DatasetGeneralInfo = 10,
     DatasetGeoRef = 20,
@@ -329,15 +335,16 @@ struct GeoArea {
 };*/
 
 struct AttrInstance {
+    char domain;
     uint16_t classCode;
     std::string acronym;
-    bool noValue;
+    bool noValue, missing;
     uint32_t intValue;
     double floatValue;
     std::string strValue;
     std::vector<uint8_t> listValue;
 
-    AttrInstance (): classCode (0), noValue (true), intValue (0), floatValue (0.0f) {}
+    AttrInstance (): classCode (0), noValue (true), intValue (0), floatValue (0.0f), missing (false) {}
 };
 
 struct FeatureDesc {
@@ -588,6 +595,22 @@ struct LookupTableItem {
     size_t dayPenIndex, duskPenIndex, nightPenIndex;
     size_t dayBrushIndex, duskBrushIndex, nightBrushIndex;
 
+    static const size_t NOT_EXIST = 0xFFFFFFFFFFFFFFFF;
+
+    void reset () {
+        memset (acronym, 0, sizeof (acronym));
+        objectType = '\0';
+        radarPriority = '\0';
+        classCode = 0;
+        displayPriority = 0;
+        tableSet = TableSet::PLAIN_BOUNDARIES;
+        attrCombination.clear ();
+        instruction.clear ();
+        displayCat = DisplayCat::STANDARD;
+        comment.clear ();
+        dayPenIndex = duskPenIndex = nightPenIndex = dayBrushIndex = duskBrushIndex = nightBrushIndex = NOT_EXIST;
+    }
+
     // Lookup table index key compose rule:
     // 2 bytes - object class code
     // 1 byte - ((<display category (base/standard)>) << 4) + <charset (plain/symboolized boundaries)>
@@ -596,8 +619,45 @@ struct LookupTableItem {
         return ((uint32_t) classCode << 16) + ((((uint32_t) displayCat) & 15) << 12) + ((((uint32_t) tableSet) & 15) << 8) + (uint8_t) objectType;
     }
 
+    size_t getPenIndex (PaletteIndex paletteIndex) {
+        switch (paletteIndex) {
+            case PaletteIndex::Day: return dayPenIndex;
+            case PaletteIndex::Dusk: return duskPenIndex;
+            case PaletteIndex::Night: return nightPenIndex;
+            default: return NOT_EXIST;
+        }
+    }
+
+    size_t getBrushIndex (PaletteIndex paletteIndex) {
+        switch (paletteIndex) {
+            case PaletteIndex::Day: return dayBrushIndex;
+            case PaletteIndex::Dusk: return duskBrushIndex;
+            case PaletteIndex::Night: return nightBrushIndex;
+            default: return NOT_EXIST;
+        }
+    }
+
     uint32_t composeKey () {
         return composeKey (classCode, displayCat, tableSet, objectType);
+    }
+
+    void copyFrom (LookupTableItem& source) {
+        memcpy (acronym, source.acronym, sizeof (source.acronym));
+        attrCombination.insert (attrCombination.begin (), source.attrCombination.begin (), source.attrCombination.end ());
+        classCode = source.classCode;
+        comment = source.comment;
+        displayCat = source.displayCat;
+        displayPriority = source.displayPriority;
+        instruction = source.instruction;
+        objectType = source.objectType;
+        radarPriority = source.radarPriority;
+        tableSet = source.tableSet;
+        dayBrushIndex = source.dayBrushIndex;
+        dayPenIndex = source.dayPenIndex;
+        duskBrushIndex = source.duskBrushIndex;
+        duskPenIndex = source.duskPenIndex;
+        nightBrushIndex = source.nightBrushIndex;
+        nightPenIndex = source.nightPenIndex;
     }
 };
 
@@ -755,6 +815,15 @@ struct Dai {
         auto pos = lookupTableIndex.find (LookupTableItem::composeKey (code, displayCat, tableSet, objectType));
 
         return pos == lookupTableIndex.end () ? 0 : & lookupTables [pos->second];
+    }
+
+    Palette *getPalette (PaletteIndex paletteIndex) {
+        switch (paletteIndex) {
+            case PaletteIndex::Day: return & day;
+            case PaletteIndex::Dusk: return & dusk;
+            case PaletteIndex::Night: return & night;
+            default: return 0;
+        }
     }
 };
 

@@ -13,5 +13,8 @@ void paintChart (
     Dai& dai,
     double north,
     double west,
-    uint8_t zoom
+    uint8_t zoom,
+    PaletteIndex paletteIndex,
+    DisplayCat displayCat,
+    TableSet tableSet
 );

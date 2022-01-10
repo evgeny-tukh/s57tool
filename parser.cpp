@@ -643,6 +643,7 @@ void extractNodes (std::vector<std::vector<FieldInstance>>& records, Nodes& poin
                     } else if (subField.first.compare ("RCNM") == 0) {
                         if (subField.second.intValue.has_value ()) {
                             recName = subField.second.intValue.value ();
+
                             // skip record if not an edge
                             if (recName != RCNM::ConnectedNode && recName != RCNM::IsolatedNode) {
                                 goToNextRec = true; break;
@@ -822,6 +823,7 @@ void extractFeatureObjects (std::vector<std::vector<FieldInstance>>& records, Fe
                     } else if (subField.first.compare ("RCNM") == 0) {
                         if (subField.second.intValue.has_value ()) {
                             recName = subField.second.intValue.value ();
+
                             if (recName != RCNM::Feature) {
                                 goToNextRec = true; break;
                             }
@@ -1357,6 +1359,7 @@ void loadLibraryId (std::vector<std::string>& module, LibraryIdentification& lib
 }
 
 void loadColorTable (std::vector<std::string>& module, std::map<std::string, ColorItem>& colorTable) {
+    return;
     colorTable.clear ();
 
     for (auto& line: module) {
@@ -1421,7 +1424,7 @@ void loadLookupTableItem (
             item.classCode = objectDesc ? objectDesc->code : 0;
             item.comment.clear ();
             item.instruction.clear ();
-            item.dayBrushIndex = item.dayPenIndex = item.duskBrushIndex = item.duskPenIndex = item.nightBrushIndex = item.nightPenIndex = -1;
+            item.dayBrushIndex = item.dayPenIndex = item.duskBrushIndex = item.duskPenIndex = item.nightBrushIndex = item.nightPenIndex = LookupTableItem::NOT_EXIST;
             
             if (tableSet.compare ("PLAIN_BOUNDARIES") == 0) {
                 item.tableSet = TableSet::PLAIN_BOUNDARIES;
@@ -1455,6 +1458,17 @@ void loadLookupTableItem (
 
                             instance.acronym = acronym;
                             instance.strValue = value;
+                            instance.domain = desc->domain;
+
+                            if (value [0] == '?') instance.missing = true;
+
+                            switch (instance.domain) {
+                                case 'E':
+                                case 'I':
+                                    instance.intValue = std::atoi (value.c_str ()); break;
+                                case 'F':
+                                    instance.floatValue = std::atof (value.c_str ()); break;
+                            }
 
                             if (desc) instance.classCode = desc->code;
                         }
@@ -1490,18 +1504,7 @@ void loadLookupTableItem (
                 dai.lookupTables.emplace_back ();
             }
 
-            auto& newItem = dai.lookupTables [pos->second].emplace_back ();
-
-            memcpy (newItem.acronym, item.acronym, sizeof (item.acronym));
-            newItem.attrCombination.insert (newItem.attrCombination.begin (), item.attrCombination.begin (), item.attrCombination.end ());
-            newItem.classCode = item.classCode;
-            newItem.comment = item.comment;
-            newItem.displayCat = item.displayCat;
-            newItem.displayPriority = item.displayPriority;
-            newItem.instruction = item.instruction;
-            newItem.objectType = item.objectType;
-            newItem.radarPriority = item.radarPriority;
-            newItem.tableSet = item.tableSet;
+            dai.lookupTables [pos->second].emplace_back ().copyFrom (item);
         }
     }
 }
@@ -1734,6 +1737,41 @@ void loadLine (std::vector<std::string>& module, std::map<std::string, LineDesc>
             source += 9;
             auto& svg = pos->second.svgs.emplace_back ();
             splitString (extractToUnitTerm (source), svg, ';');
+        }
+    }
+}
+
+void loadColorTable (const char *path, Dai& dai) {
+    char *content = 0;
+    size_t size = loadFileAndConvertToAnsi (path, content);
+    std::vector<std::string> lines;
+    splitText (content, lines);
+    free (content);
+
+    std::map<std::string, ColorItem> *colorTable = 0;
+
+    for (auto& line: lines) {
+        if (line.compare ("Table:DAY") == 0) {
+            colorTable = & dai.dayColorTable; continue;
+        } if (line.compare ("Table:DUSK") == 0) {
+            colorTable = & dai.duskColorTable; continue;
+        } if (line.compare ("Table:NIGHT") == 0) {
+            colorTable = & dai.nightColorTable; continue;
+        }
+
+        std::vector<std::string> parts;
+        splitString (line, parts, ';');
+
+        if (parts.size () > 8) {
+            auto pos = colorTable->find (parts [0]);
+
+            if (pos == colorTable->end ()) {
+                pos = colorTable->emplace (parts [0], ColorItem ()).first;
+            }
+
+            pos->second.red = std::atoi (parts [5].c_str ());
+            pos->second.green = std::atoi (parts [6].c_str ());
+            pos->second.blue = std::atoi (parts [7].c_str ());
         }
     }
 }
