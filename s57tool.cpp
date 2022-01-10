@@ -932,6 +932,23 @@ void onChartWndLeftButtonDown (HWND wnd, uint16_t clientX, uint16_t clientY) {
     ctx->mouseDownY = clientY;
 }
 
+void repaintChart (HWND wnd) {
+    Ctx *ctx = (Ctx *) GetWindowLongPtr (wnd, GWLP_USERDATA);
+    RECT client;
+    HDC dc = GetDC (wnd);
+    GetClientRect (wnd, & client);
+    HDC tempDC = CreateCompatibleDC (dc);
+    HBITMAP tempBmp = CreateCompatibleBitmap (tempDC, client.right + 1, client.bottom + 1);
+    SelectObject (tempDC, tempBmp);
+    FillRect (tempDC, & client, (HBRUSH) GetStockObject (WHITE_BRUSH));
+    paintChart (client, tempDC, ctx->nodes, ctx->edges, ctx->features, ctx->dai, ctx->north, ctx->west, ctx->zoom);
+    BitBlt (dc, 0, 0, client.right + 1, client.bottom + 1, tempDC, 0, 0, SRCCOPY);
+    SelectObject (tempDC, (HBITMAP) 0);
+    DeleteDC (tempDC);
+    DeleteObject (tempBmp);
+    ReleaseDC (wnd, dc);
+}
+
 void onChartWndMouseMove (HWND wnd, uint16_t clientX, uint16_t clientY) {
     double lat, lon;
     Ctx *ctx = (Ctx *) GetWindowLongPtr (wnd, GWLP_USERDATA);
@@ -946,8 +963,7 @@ void onChartWndMouseMove (HWND wnd, uint16_t clientX, uint16_t clientY) {
             xyToGeo (x - deltaX, y - deltaY, ctx->zoom, ctx->north, ctx->west);
             ctx->mouseDownX = clientX;
             ctx->mouseDownY = clientY;
-
-            InvalidateRect (wnd, 0, true);
+            repaintChart (wnd);
         }
     } else {
         xyToGeo (x + clientX, y + clientY, ctx->zoom, lat, lon);
