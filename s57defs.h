@@ -6,8 +6,13 @@
 #include <map>
 #include <tuple>
 #include <optional>
+#include <Windows.h>
+#include <stdlib.h>
+#include <string.h>
 
 #pragma pack(1)
+
+size_t splitString (std::string source, std::vector<std::string>& parts, char separator);
 
 enum RCNM {
     DatasetGeneralInfo = 10,
@@ -580,6 +585,8 @@ struct LookupTableItem {
     std::string instruction;
     DisplayCat displayCat;
     std::string comment;
+    size_t dayPenIndex, duskPenIndex, nightPenIndex;
+    size_t dayBrushIndex, duskBrushIndex, nightBrushIndex;
 
     // Lookup table index key compose rule:
     // 2 bytes - object class code
@@ -653,9 +660,91 @@ struct LineDesc {
 
 typedef std::vector<LookupTableItem> LookupTable;
 
+struct Palette {
+    std::vector<HPEN> pens;
+    std::vector<HBRUSH> brushes;
+    std::map<std::string, size_t> penIndex;
+    std::map<std::string, size_t> brushIndex;
+
+    virtual ~Palette () {
+        for (auto& pen: pens) DeleteObject (pen);
+        for (auto& brush: brushes) DeleteObject (brush);
+    }
+
+    size_t checkPen (char *instr, std::map<std::string, ColorItem>& colorTable) {
+        auto pos = penIndex.find (instr);
+
+        if (pos == penIndex.end ()) {
+            char *leftBracket = strchr (instr, '(');
+            char *rightBracket = leftBracket ? strchr (leftBracket + 1, ')') : 0;
+            
+            if (rightBracket - leftBracket > 1) {
+                std::string lineType (leftBracket + 1, rightBracket - leftBracket - 1);
+                std::vector<std::string> parts;
+
+                splitString (lineType, parts, ',');
+
+                if (parts.size () > 2) {
+                    int penStyle, penWidth;
+                    if (parts [0].compare ("SOLD") == 0) {
+                        penStyle = PS_SOLID;
+                    } else if (parts [0].compare ("DASH") == 0) {
+                        penStyle = PS_DASH;
+                    } else if (parts [0].compare ("DOT") == 0) {
+                        penStyle = PS_DOT;
+                    } else {
+                        return -1;
+                    }
+
+                    penWidth = std::atoi (parts [1].c_str ());
+
+                    if (penWidth == 0) return -1;
+
+                    auto colorPos = colorTable.find (parts [2].c_str ());
+
+                    if (colorPos == colorTable.end ()) return -1;
+
+                    HPEN pen = CreatePen (penStyle, penWidth, RGB (colorPos->second.red, colorPos->second.green, colorPos->second.blue));
+                    size_t index = pens.size ();
+                    pens.emplace_back (pen);
+                    penIndex.emplace (instr, index);
+                    return index;
+                }
+            }
+        }
+        
+        return -1;
+    }
+
+    size_t checkSolidBrush (char *instr, std::map<std::string, ColorItem>& colorTable) {
+        auto pos = brushIndex.find (instr);
+
+        if (pos == brushIndex.end ()) {
+            char *leftBracket = strchr (instr, '(');
+            char *rightBracket = leftBracket ? strchr (leftBracket + 1, ')') : 0;
+            
+            if (rightBracket - leftBracket > 1) {
+                std::string colorName (leftBracket + 1, rightBracket - leftBracket - 1);
+                auto colorPos = colorTable.find (colorName.c_str ());
+
+                if (colorPos == colorTable.end ()) return -1;
+
+                HBRUSH brush = CreateSolidBrush (RGB (colorPos->second.red, colorPos->second.green, colorPos->second.blue));
+                size_t index = brushes.size ();
+                brushes.emplace_back (brush);
+                brushIndex.emplace (instr, index);
+                return index;
+            }
+        }
+        
+        return -1;
+    }
+};
+
 struct Dai {
     LibraryIdentification libraryId;
     std::map<std::string, ColorItem> dayColorTable, duskColorTable, nightColorTable;
+    Palette day, dusk, night;
     std::vector<LookupTable> lookupTables;
     std::map<uint32_t, size_t> lookupTableIndex;
     std::map<std::string, PatternDesc> patterns;

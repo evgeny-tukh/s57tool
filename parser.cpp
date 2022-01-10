@@ -1375,10 +1375,23 @@ void loadColorTable (std::vector<std::string>& module, std::map<std::string, Col
     }
 }
 
+void processInstructions (Dai& dai, LookupTableItem& item, std::vector<std::string>& instructions) {
+    for (auto& instruction: instructions) {
+        if (instruction [0] == 'L' && instruction [1] == 'S') {
+            item.dayPenIndex = dai.day.checkPen (instruction.data (), dai.dayColorTable);
+            item.duskPenIndex = dai.dusk.checkPen (instruction.data (), dai.duskColorTable);
+            item.nightPenIndex = dai.night.checkPen (instruction.data (), dai.nightColorTable);
+        } else if (instruction [0] == 'A' && instruction [1] == 'C') {
+            item.dayBrushIndex = dai.day.checkSolidBrush (instruction.data (), dai.dayColorTable);
+            item.duskBrushIndex = dai.dusk.checkSolidBrush (instruction.data (), dai.duskColorTable);
+            item.nightBrushIndex = dai.night.checkSolidBrush (instruction.data (), dai.nightColorTable);
+        }
+    }
+}
+
 void loadLookupTableItem (
     std::vector<std::string>& module,
-    std::vector<LookupTable>& lookupTables,
-    std::map<uint32_t, size_t>& lookupTableIndex,
+    Dai& dai, 
     ObjectDictionary& objectDictionary,
     AttrDictionary& attrDictionary
 ) {
@@ -1408,6 +1421,7 @@ void loadLookupTableItem (
             item.classCode = objectDesc ? objectDesc->code : 0;
             item.comment.clear ();
             item.instruction.clear ();
+            item.dayBrushIndex = item.dayPenIndex = item.duskBrushIndex = item.duskPenIndex = item.nightBrushIndex = item.nightPenIndex = -1;
             
             if (tableSet.compare ("PLAIN_BOUNDARIES") == 0) {
                 item.tableSet = TableSet::PLAIN_BOUNDARIES;
@@ -1450,6 +1464,9 @@ void loadLookupTableItem (
         } else if (memcmp (source, "INST", 4) == 0) {
             source += 9;
             item.instruction = extractToUnitTerm (source);
+            std::vector<std::string> parts;
+            splitString (item.instruction, parts, ';');
+            processInstructions (dai, item, parts);
         } else if (memcmp (source, "DISC", 4) == 0) {
             source += 9;
             std::string displayCat = extractToUnitTerm (source);
@@ -1465,15 +1482,15 @@ void loadLookupTableItem (
 
             // Item has been completed; need to add into table set
             uint32_t key = item.composeKey ();
-            auto pos = lookupTableIndex.find (key);
+            auto pos = dai.lookupTableIndex.find (key);
 
-            if (pos == lookupTableIndex.end ()) {
+            if (pos == dai.lookupTableIndex.end ()) {
                 // Absolutely new item group, add item
-                pos = lookupTableIndex.emplace (key, lookupTables.size ()).first;
-                lookupTables.emplace_back ();
+                pos = dai.lookupTableIndex.emplace (key, dai.lookupTables.size ()).first;
+                dai.lookupTables.emplace_back ();
             }
 
-            auto& newItem = lookupTables [pos->second].emplace_back ();
+            auto& newItem = dai.lookupTables [pos->second].emplace_back ();
 
             memcpy (newItem.acronym, item.acronym, sizeof (item.acronym));
             newItem.attrCombination.insert (newItem.attrCombination.begin (), item.attrCombination.begin (), item.attrCombination.end ());
@@ -1758,7 +1775,7 @@ void loadDai (const char *path, Dai& dai, ObjectDictionary& objectDictionary, At
                 }
             } else if (memcmp (moduleName, "LUPT", 4) == 0) {
                 //loadLookupTableItem (module, dai.lookupTables);
-                loadLookupTableItem (module, dai.lookupTables, dai.lookupTableIndex, objectDictionary, attrDictionary);
+                loadLookupTableItem (module, dai, objectDictionary, attrDictionary);
             } else if (memcmp (moduleName, "PATT", 4) == 0) {
                 loadPattern (module, dai.patterns);
             } else if (memcmp (moduleName, "SYMB", 4) == 0) {
