@@ -773,7 +773,7 @@ struct Palette {
             }
         }
         
-        return -1;
+        return pos->second;
     }
 
     size_t checkSolidBrush (char *instr, std::map<std::string, ColorItem>& colorTable) {
@@ -797,7 +797,7 @@ struct Palette {
             }
         }
         
-        return -1;
+        return pos->second;
     }
 };
 

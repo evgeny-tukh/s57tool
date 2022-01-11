@@ -122,7 +122,6 @@ void paintChart (
     for (int prty = 1; prty < 10; ++ prty) {
         for (size_t i = 0; i < features.size (); ++ i) {
             auto& feature = features [i];
-//if(feature.classCode!=42&&feature.classCode!=46&&feature.classCode!=4&&feature.classCode!=3)continue;
             if (!lookupTables [i]) continue;
             auto lookupTableItem = feature.findBestItem (displayCat, tableSet, dai);
             if (!lookupTableItem || lookupTableItem->displayPriority != prty) continue;
