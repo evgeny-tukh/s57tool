@@ -1357,8 +1357,8 @@ void loadLibraryId (std::vector<std::string>& module, LibraryIdentification& lib
     libraryId.objectCatVersionDate = extractFixedSize (source, 8);
     libraryId.comment = extractToUnitTerm (source);
 }
-
-void loadColorTable (std::vector<std::string>& module, std::map<std::string, ColorItem>& colorTable) {
+/*
+void loadColorTable (std::vector<std::string>& module, ColorTable& colorTable) {
     return;
     colorTable.clear ();
 
@@ -1377,17 +1377,13 @@ void loadColorTable (std::vector<std::string>& module, std::map<std::string, Col
         }
     }
 }
-
+*/
 void processInstructions (Dai& dai, LookupTableItem& item, std::vector<std::string>& instructions) {
     for (auto& instruction: instructions) {
         if (instruction [0] == 'L' && instruction [1] == 'S') {
-            item.dayPenIndex = dai.day.checkPen (instruction.data (), dai.dayColorTable);
-            item.duskPenIndex = dai.dusk.checkPen (instruction.data (), dai.duskColorTable);
-            item.nightPenIndex = dai.night.checkPen (instruction.data (), dai.nightColorTable);
+            item.penIndex = dai.palette.checkPen (instruction.data (), dai.colorTable);
         } else if (instruction [0] == 'A' && instruction [1] == 'C') {
-            item.dayBrushIndex = dai.day.checkSolidBrush (instruction.data (), dai.dayColorTable);
-            item.duskBrushIndex = dai.dusk.checkSolidBrush (instruction.data (), dai.duskColorTable);
-            item.nightBrushIndex = dai.night.checkSolidBrush (instruction.data (), dai.nightColorTable);
+            item.brushIndex = dai.palette.checkSolidBrush (instruction.data (), dai.colorTable);
         }
     }
 }
@@ -1424,7 +1420,7 @@ void loadLookupTableItem (
             item.classCode = objectDesc ? objectDesc->code : 0;
             item.comment.clear ();
             item.instruction.clear ();
-            item.dayBrushIndex = item.dayPenIndex = item.duskBrushIndex = item.duskPenIndex = item.nightBrushIndex = item.nightPenIndex = LookupTableItem::NOT_EXIST;
+            item.brushIndex = item.penIndex = LookupTableItem::NOT_EXIST;
             
             if (tableSet.compare ("PLAIN_BOUNDARIES") == 0) {
                 item.tableSet = TableSet::PLAIN_BOUNDARIES;
@@ -1748,32 +1744,33 @@ void loadColorTable (const char *path, Dai& dai) {
     splitText (content, lines);
     free (content);
 
-    std::map<std::string, ColorItem> *colorTable = 0;
+    PaletteIndex paletteIndex = (PaletteIndex) 0;
 
     for (auto& line: lines) {
         if (line.compare ("Table:DAY") == 0) {
-            colorTable = & dai.dayColorTable; continue;
+            paletteIndex = PaletteIndex::Day; continue;
         } if (line.compare ("Table:DUSK") == 0) {
-            colorTable = & dai.duskColorTable; continue;
+            paletteIndex = PaletteIndex::Dusk; continue;
         } if (line.compare ("Table:NIGHT") == 0) {
-            colorTable = & dai.nightColorTable; continue;
+            paletteIndex = PaletteIndex::Night; continue;
         }
 
         std::vector<std::string> parts;
         splitString (line, parts, ';');
 
-        if (parts.size () > 8) {
-            auto pos = colorTable->find (parts [0]);
-
-            if (pos == colorTable->end ()) {
-                pos = colorTable->emplace (parts [0], ColorItem ()).first;
-            }
-
-            pos->second.red = std::atoi (parts [5].c_str ());
-            pos->second.green = std::atoi (parts [6].c_str ());
-            pos->second.blue = std::atoi (parts [7].c_str ());
+        if (parts.size () > 8 && paletteIndex > 0) {
+            auto colorItem = dai.colorTable.checkAddColor (parts [0].c_str ());
+            auto rgb = colorItem->getColorDef (paletteIndex);
+            
+            rgb->red = std::atoi (parts [5].c_str ());
+            rgb->green = std::atoi (parts [6].c_str ());
+            rgb->blue = std::atoi (parts [7].c_str ());
         }
     }
+}
+
+void parseInstructionList (const char *source, DrawProcedure& drawProcedure) {
+
 }
 
 void loadDai (const char *path, Dai& dai, ObjectDictionary& objectDictionary, AttrDictionary& attrDictionary) {
@@ -1805,11 +1802,14 @@ void loadDai (const char *path, Dai& dai, ObjectDictionary& objectDictionary, At
                 loadLibraryId (module, dai.libraryId);
             } else if (memcmp (moduleName, "COLS", 4) == 0) {
                 if (memcmp (moduleName + 19, "DAY", 3) == 0) {
-                    loadColorTable (module, dai.dayColorTable);
+                    // It's not clear how to do - use external color table instead
+                    //loadColorTable (module, dai.dayColorTable);
                 } else if (memcmp (moduleName + 19, "DUSK", 4) == 0) {
-                    loadColorTable (module, dai.duskColorTable);
+                    // It's not clear how to do - use external color table instead
+                    //loadColorTable (module, dai.duskColorTable);
                 } else if (memcmp (moduleName + 19, "NIGHT", 5) == 0) {
-                    loadColorTable (module, dai.nightColorTable);
+                    // It's not clear how to do - use external color table instead
+                    //loadColorTable (module, dai.nightColorTable);
                 }
             } else if (memcmp (moduleName, "LUPT", 4) == 0) {
                 //loadLookupTableItem (module, dai.lookupTables);
@@ -1823,4 +1823,5 @@ void loadDai (const char *path, Dai& dai, ObjectDictionary& objectDictionary, At
             }
         }
     }
+    dai.palette.composeBasePens (dai.colorTable);
 }

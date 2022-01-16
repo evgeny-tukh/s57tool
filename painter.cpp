@@ -109,9 +109,6 @@ void paintChart (
 ) {
     static char *objectTypes { "PLA" };
     std::vector<LookupTable *> lookupTables;
-    Palette *palette = dai.getPalette (paletteIndex);
-    
-    if (!palette) return;
 
     for (auto& feature: features) {
         auto lookupTable = dai.findLookupTable (feature.classCode, displayCat, tableSet, objectTypes [feature.primitive-1]);
@@ -127,28 +124,30 @@ void paintChart (
             if (!lookupTableItem || lookupTableItem->displayPriority != prty) continue;
 
             if (feature.primitive == 3) {
-                size_t brushIndex = lookupTableItem->getBrushIndex (paletteIndex);
-                if (brushIndex != LookupTableItem::NOT_EXIST) {
-                    paintArea (
-                        client,
-                        paintDC,
-                        nodes,
-                        edges,
-                        feature.edgeRefs,
-                        dai,
-                        north,
-                        west,
-                        zoom,
-                        palette->brushes [brushIndex]
-                    );
+                if (lookupTableItem->brushIndex != LookupTableItem::NOT_EXIST) {
+                    auto [brushExists, brush] = dai.palette.brushes [lookupTableItem->brushIndex].get (paletteIndex);
+                    if (brushExists) {
+                        paintArea (
+                            client,
+                            paintDC,
+                            nodes,
+                            edges,
+                            feature.edgeRefs,
+                            dai,
+                            north,
+                            west,
+                            zoom,
+                            brush
+                        );
+                    }
                 }
             }
 
             if (feature.primitive == 2 || feature.primitive == 3) {
-                size_t penIndex = lookupTableItem->getPenIndex (paletteIndex);
                 HPEN pen;
-                if (penIndex != LookupTableItem::NOT_EXIST) {
-                    pen = palette->pens [penIndex];
+                if (lookupTableItem->penIndex != LookupTableItem::NOT_EXIST) {
+                    auto [penExists, penHandle] = dai.palette.pens [lookupTableItem->penIndex].get (paletteIndex);
+                    pen = penExists ? penHandle : 0;
                 } else {
                     pen = (HPEN) GetStockObject (BLACK_PEN);
                 }

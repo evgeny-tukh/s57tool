@@ -387,9 +387,11 @@ struct AttrDesc: ObjectDesc {
     AttrDesc (): ObjectDesc (), domain ('\0') {}
 };
 
+typedef std::map<std::string, size_t> StringIndex;
+
 struct GenericDictionary {
     std::map<uint16_t, size_t> indexByCode;
-    std::map<std::string, size_t> indexByAcronym;
+    StringIndex indexByAcronym;
 
     virtual void clearItems () {}
 
@@ -487,7 +489,7 @@ struct AttrDictionary: GenericDictionary {
 struct ObjectDictionary {
     std::vector<ObjectDesc> items;
     std::map<uint16_t, size_t> indexByCode;
-    std::map<std::string, size_t> indexByAcronym;
+    StringIndex indexByAcronym;
 
     void clear () {
         items.clear ();
@@ -545,13 +547,13 @@ struct LibraryIdentification {
     std::string comment;
 };
 
-struct ColorItem {
+struct ColorDef {
     std::string name;
     double x, y, luminance;
     double red, green, blue;
 
-    ColorItem (): name (), red (0), green (0), blue (0) {}
-    ColorItem (const char *_name, double _x, double _y, double _luminance):
+    ColorDef (): name (), red (0), green (0), blue (0) {}
+    ColorDef (const char *_name, double _x, double _y, double _luminance):
         name (_name),
         x (_x),
         y (_y),
@@ -565,6 +567,51 @@ struct ColorItem {
         red =  3.2404542*X - 1.5371385*Y - 0.4985314*Z;
         green = -0.9692660*X + 1.8760108*Y + 0.0415560*Z;
         blue =  0.0556434*X - 0.2040259*Y + 1.0572252*Z;      
+    }
+};
+
+struct ColorItem {
+    ColorDef day, dusk, night;
+    ColorDef *getColorDef (PaletteIndex index) {
+        switch (index) {
+            case PaletteIndex::Day: return & day;
+            case PaletteIndex::Dusk: return & dusk;
+            case PaletteIndex::Night: return & night;
+            default: return 0;
+        }
+    }
+};
+
+struct ColorTable {
+    std::vector<ColorItem> container;
+    StringIndex index;
+
+    ColorItem *getItem (const char *colorName) {
+        auto pos = index.find (colorName);
+
+        return (pos == index.end ()) ? 0 : & container [pos->second];
+    }
+
+    size_t size () { return container.size (); }
+
+    std::vector<ColorItem>::iterator begin () { return container.begin (); }
+    std::vector<ColorItem>::iterator end () { return container.end (); }
+    StringIndex::iterator colorBegin () { return index.begin (); }
+    StringIndex::iterator colorEnd () { return index.end (); }
+    
+    ColorItem *getItemByPos (StringIndex::iterator pos) {
+        return (pos == index.end ()) ? 0 : & container [pos->second];
+    }
+
+    ColorItem* checkAddColor (const char *colorName) {
+        auto pos = index.find (colorName);
+
+        if (pos == index.end ()) {
+            index.emplace (colorName, container.size ());
+            return & container.emplace_back ();
+        } else {
+            return & container [pos->second];
+        }
     }
 };
 
@@ -582,9 +629,17 @@ enum DisplayCat {
     CUSTOM = 3,
 };
 
+enum DrawFlags {
+    SET_PEN = 1,
+    SET_BRUSH = 2,
+    SET_CENTRAL_SYMBOL = 4,
+    SET_CSP = 8,
+};
+
 struct LookupTableItem {
     char objectType, radarPriority;
     char acronym [6];
+    uint8_t drawFlags;
     uint16_t classCode;
     uint32_t displayPriority;
     TableSet tableSet;
@@ -592,23 +647,27 @@ struct LookupTableItem {
     std::string instruction;
     DisplayCat displayCat;
     std::string comment;
-    size_t dayPenIndex, duskPenIndex, nightPenIndex;
-    size_t dayBrushIndex, duskBrushIndex, nightBrushIndex;
+    size_t penIndex;
+    size_t brushIndex;
+    size_t centralSymbolIndex;
+    size_t symbProcIndex;
+    std::vector<size_t> symbols;
 
     static const size_t NOT_EXIST = 0xFFFFFFFFFFFFFFFF;
 
     void reset () {
         memset (acronym, 0, sizeof (acronym));
+        symbols.clear ();
+        comment.clear ();
+        attrCombination.clear ();
+        instruction.clear ();
         objectType = '\0';
         radarPriority = '\0';
         classCode = 0;
         displayPriority = 0;
         tableSet = TableSet::PLAIN_BOUNDARIES;
-        attrCombination.clear ();
-        instruction.clear ();
         displayCat = DisplayCat::STANDARD;
-        comment.clear ();
-        dayPenIndex = duskPenIndex = nightPenIndex = dayBrushIndex = duskBrushIndex = nightBrushIndex = NOT_EXIST;
+        penIndex = brushIndex = centralSymbolIndex = symbProcIndex = NOT_EXIST;
     }
 
     // Lookup table index key compose rule:
@@ -619,24 +678,6 @@ struct LookupTableItem {
         return ((uint32_t) classCode << 16) + ((((uint32_t) displayCat) & 15) << 12) + ((((uint32_t) tableSet) & 15) << 8) + (uint8_t) objectType;
     }
 
-    size_t getPenIndex (PaletteIndex paletteIndex) {
-        switch (paletteIndex) {
-            case PaletteIndex::Day: return dayPenIndex;
-            case PaletteIndex::Dusk: return duskPenIndex;
-            case PaletteIndex::Night: return nightPenIndex;
-            default: return NOT_EXIST;
-        }
-    }
-
-    size_t getBrushIndex (PaletteIndex paletteIndex) {
-        switch (paletteIndex) {
-            case PaletteIndex::Day: return dayBrushIndex;
-            case PaletteIndex::Dusk: return duskBrushIndex;
-            case PaletteIndex::Night: return nightBrushIndex;
-            default: return NOT_EXIST;
-        }
-    }
-
     uint32_t composeKey () {
         return composeKey (classCode, displayCat, tableSet, objectType);
     }
@@ -644,6 +685,9 @@ struct LookupTableItem {
     void copyFrom (LookupTableItem& source) {
         memcpy (acronym, source.acronym, sizeof (source.acronym));
         attrCombination.insert (attrCombination.begin (), source.attrCombination.begin (), source.attrCombination.end ());
+        instruction.insert (instruction.begin (), source.instruction.begin (), source.instruction.end ());
+        symbols.insert (symbols.begin (), source.symbols.begin (), source.symbols.end ());
+        comment = source.comment.c_str ();
         classCode = source.classCode;
         comment = source.comment;
         displayCat = source.displayCat;
@@ -652,12 +696,10 @@ struct LookupTableItem {
         objectType = source.objectType;
         radarPriority = source.radarPriority;
         tableSet = source.tableSet;
-        dayBrushIndex = source.dayBrushIndex;
-        dayPenIndex = source.dayPenIndex;
-        duskBrushIndex = source.duskBrushIndex;
-        duskPenIndex = source.duskPenIndex;
-        nightBrushIndex = source.nightBrushIndex;
-        nightPenIndex = source.nightPenIndex;
+        brushIndex = source.brushIndex;
+        penIndex = source.penIndex;
+        symbProcIndex = source.symbProcIndex;
+        centralSymbolIndex = source.centralSymbolIndex;
     }
 };
 
@@ -720,18 +762,97 @@ struct LineDesc {
 
 typedef std::vector<LookupTableItem> LookupTable;
 
-struct Palette {
-    std::vector<HPEN> pens;
-    std::vector<HBRUSH> brushes;
-    std::map<std::string, size_t> penIndex;
-    std::map<std::string, size_t> brushIndex;
+struct Pens {
+    HPEN container [5];
+    HPEN *handles () { return container; }
+    HPEN& operator[] (const size_t index) { return container [index]; }
+    Pens () { memset (container, 0, sizeof (container)); }
+    Pens (int): Pens () {}
+    virtual ~Pens () {
+        for (size_t i = 0; i < 5; ++ i) {
+            if (container [i]) DeleteObject (container [i]);
+        }
+    }
+};
 
-    virtual ~Palette () {
-        for (auto& pen: pens) DeleteObject (pen);
-        for (auto& brush: brushes) DeleteObject (brush);
+template<typename TYPE>
+struct DrawToolItem {
+    TYPE day, dusk, night;
+
+    std::tuple<bool, TYPE&> get (PaletteIndex index) {
+        switch (index) {
+            case PaletteIndex::Day: return std::tuple<bool, TYPE&> (true, day);
+            case PaletteIndex::Dusk: return std::tuple<bool, TYPE&> (true, dusk);
+            case PaletteIndex::Night: return std::tuple<bool, TYPE&> (true, night);
+            default: return std::tuple<bool, TYPE&> (false, *((TYPE *) 0));
+        }
     }
 
-    size_t checkPen (char *instr, std::map<std::string, ColorItem>& colorTable) {
+    DrawToolItem () {}
+    DrawToolItem (TYPE _day, TYPE _dusk, TYPE _night): day (_day), dusk (_dusk), night (_night) {}
+};
+
+struct Palette {
+    std::vector<DrawToolItem <HPEN>> pens;
+    std::vector<DrawToolItem <HBRUSH>> brushes;
+    std::vector<DrawToolItem <Pens>> basePens;
+    StringIndex colorIndex;
+    StringIndex penIndex;
+    StringIndex brushIndex;
+
+    virtual ~Palette () {
+        for (auto& penItem: pens) {
+            DeleteObject (penItem.day);
+            DeleteObject (penItem.dusk);
+            DeleteObject (penItem.night);
+        }
+        for (auto& brushItem: brushes) {
+            DeleteObject (brushItem.day);
+            DeleteObject (brushItem.dusk);
+            DeleteObject (brushItem.night);
+        }
+        for (auto& basePenItem: basePens) {
+            for (size_t i = 0; i < 5; ++ i) {
+                DeleteObject (basePenItem.day [i]);
+                DeleteObject (basePenItem.dusk [i]);
+                DeleteObject (basePenItem.night [i]);
+            }
+        }
+    }
+
+    size_t getColorIndex (const char *colorName) {
+        auto pos = colorIndex.find (colorName);
+
+        return pos == colorIndex.end () ? LookupTableItem::NOT_EXIST : pos->second;
+    }
+
+    void composeBasePens (ColorTable& colorTable) {
+        colorIndex.clear ();
+        basePens.clear ();
+        for (auto pos = colorTable.colorBegin (); pos != colorTable.colorEnd (); ++ pos) {
+            colorIndex.emplace (pos->first, pos->second);
+            auto colorDesc = colorTable.getItemByPos (pos);
+            auto& item = basePens.emplace_back ();
+            for (int i = 0; i < 5; ++ i) {
+                int penWidth = i + 1;
+                item.day [i] = CreatePen (PS_SOLID, penWidth, RGB (colorDesc->day.red, colorDesc->day.green, colorDesc->day.blue));
+                item.dusk [i] = CreatePen (PS_SOLID, penWidth, RGB (colorDesc->dusk.red, colorDesc->dusk.green, colorDesc->dusk.blue));
+                item.night [i] = CreatePen (PS_SOLID, penWidth, RGB (colorDesc->night.red, colorDesc->night.green, colorDesc->night.blue));
+            }
+        }
+    }
+
+    HPEN *getBasePens (const char *colorName, PaletteIndex paletteIndex) {
+        auto pos = colorIndex.find (colorName);
+
+        if (pos == colorIndex.end ()) return 0;
+
+        auto [exists, pens] = basePens [pos->second].get (paletteIndex);
+
+        return exists ? pens.handles () : 0;
+    }
+
+    size_t checkPen (char *instr, ColorTable& colorTable) {
         auto pos = penIndex.find (instr);
 
         if (pos == penIndex.end ()) {
@@ -760,13 +881,16 @@ struct Palette {
 
                     if (penWidth == 0) return -1;
 
-                    auto colorPos = colorTable.find (parts [2].c_str ());
+                    auto colorDesc = colorTable.getItem (parts [2].c_str ());
 
-                    if (colorPos == colorTable.end ()) return -1;
+                    if (!colorDesc) return LookupTableItem::NOT_EXIST;
 
-                    HPEN pen = CreatePen (penStyle, penWidth, RGB (colorPos->second.red, colorPos->second.green, colorPos->second.blue));
                     size_t index = pens.size ();
-                    pens.emplace_back (pen);
+                    pens.emplace_back (
+                        CreatePen (penStyle, penWidth, RGB (colorDesc->day.red, colorDesc->day.green, colorDesc->day.blue)),
+                        CreatePen (penStyle, penWidth, RGB (colorDesc->dusk.red, colorDesc->dusk.green, colorDesc->dusk.blue)),
+                        CreatePen (penStyle, penWidth, RGB (colorDesc->night.red, colorDesc->night.green, colorDesc->night.blue))
+                    );
                     penIndex.emplace (instr, index);
                     return index;
                 }
@@ -776,7 +900,7 @@ struct Palette {
         return pos->second;
     }
 
-    size_t checkSolidBrush (char *instr, std::map<std::string, ColorItem>& colorTable) {
+    size_t checkSolidBrush (char *instr, ColorTable& colorTable) {
         auto pos = brushIndex.find (instr);
 
         if (pos == brushIndex.end ()) {
@@ -785,13 +909,16 @@ struct Palette {
             
             if (rightBracket - leftBracket > 1) {
                 std::string colorName (leftBracket + 1, rightBracket - leftBracket - 1);
-                auto colorPos = colorTable.find (colorName.c_str ());
+                auto colorDesc = colorTable.getItem (colorName.c_str ());
 
-                if (colorPos == colorTable.end ()) return -1;
+                if (!colorDesc) return LookupTableItem::NOT_EXIST;
 
-                HBRUSH brush = CreateSolidBrush (RGB (colorPos->second.red, colorPos->second.green, colorPos->second.blue));
                 size_t index = brushes.size ();
-                brushes.emplace_back (brush);
+                brushes.emplace_back (
+                    CreateSolidBrush (RGB (colorDesc->day.red, colorDesc->day.green, colorDesc->day.blue)),
+                    CreateSolidBrush (RGB (colorDesc->dusk.red, colorDesc->dusk.green, colorDesc->dusk.blue)),
+                    CreateSolidBrush (RGB (colorDesc->night.red, colorDesc->night.green, colorDesc->night.blue))
+                );
                 brushIndex.emplace (instr, index);
                 return index;
             }
@@ -803,8 +930,11 @@ struct Palette {
 
 struct Dai {
     LibraryIdentification libraryId;
-    std::map<std::string, ColorItem> dayColorTable, duskColorTable, nightColorTable;
-    Palette day, dusk, night;
+    ColorTable colorTable;
+    Palette palette;
+    StringIndex penIndex;
+    StringIndex basePenIndex;
+    StringIndex brushIndex;
     std::vector<LookupTable> lookupTables;
     std::map<uint32_t, size_t> lookupTableIndex;
     std::map<std::string, PatternDesc> patterns;
@@ -816,13 +946,72 @@ struct Dai {
 
         return pos == lookupTableIndex.end () ? 0 : & lookupTables [pos->second];
     }
+};
 
-    Palette *getPalette (PaletteIndex paletteIndex) {
-        switch (paletteIndex) {
-            case PaletteIndex::Day: return & day;
-            case PaletteIndex::Dusk: return & dusk;
-            case PaletteIndex::Night: return & night;
-            default: return 0;
+enum DrawOperCode {
+    // Symbols
+    NONE = 0,
+    SELECT_PEN,
+    SELECT_PEN_WIDTH,
+    SELECT_TRANSP,
+    PEN_UP,
+    PEN_DOWN,
+    CIRCLE,
+    SET_POLYGON_MODE,
+    EXEC_POLYGON,
+    FILL_POLYGON,
+    SYMBOL_CALL,
+};
+
+struct DrawOper {
+    DrawOperCode oper;
+    std::vector<uint64_t> args;
+    Pens *dayPens, *duskPens, *nightPens;
+
+    DrawOper (): oper (DrawOperCode::NONE), dayPens (0), duskPens (0), nightPens (0) {}
+};
+
+struct DrawProcedure {
+    std::vector<DrawOper> instructions;
+    std::map<char, std::string> penColors;
+
+    const char *getPenColorName (char code) {
+        auto pos = penColors.find (code);
+        return pos == penColors.end () ? 0 : pos->second.c_str ();
+    }
+
+    void definePen (char code, const char *colorName) {
+        if (penColors.find (code) == penColors.end ()) {
+            penColors.emplace (code, colorName);
+        }
+    }
+
+    void defineOperation (const char *operDesc, Dai& dai) {
+        static const char *SP = "SP";
+        static const char *ST = "ST";
+        static const char *SW = "SW";
+        static const char *PU = "PU";
+        static const char *PD = "PD";
+        static const char *CI = "CI";
+        static const char *EP = "EP";
+        static const char *FP = "FP";
+        static const char *SC = "SC";
+        static const char *PM = "PM";
+
+        auto isOperCode = [&operDesc] (const char *code) {
+            return *((uint16_t *) code) == *((uint16_t *) operDesc);
+        };
+
+        if (isOperCode (SP)) {
+            // Pen selection
+            const char *colorName = getPenColorName (operDesc [2]);
+            size_t colorIndex = dai.palette.getColorIndex (colorName);
+
+            if (colorIndex != LookupTableItem::NOT_EXIST) {
+                auto& oper = instructions.emplace_back ();
+                oper.oper = DrawOperCode::SELECT_PEN;
+                oper.args.emplace_back (colorIndex);
+            }
         }
     }
 };
