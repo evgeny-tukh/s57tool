@@ -1824,6 +1824,10 @@ void loadColorTable (const char *path, Dai& dai) {
             rgb->blue = std::atoi (parts [7].c_str ());
         }
     }
+
+    for (auto item: dai.colorTable.index) {
+        dai.palette.checkSolidBrush (item.first.c_str (), dai.colorTable);
+    }
 }
 
 void parseInstructionList (const char *source, DrawProcedure& drawProcedure) {

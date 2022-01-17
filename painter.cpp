@@ -67,10 +67,12 @@ void completeDrawProc (HDC paintDC, DrawProcedure& drawProc, int startX, int sta
         screenX = absCoordToScreen (absX) + startX;
         screenY = absCoordToScreen (absY) + startY;
     };
-    auto selectPen = [&paintDC, &penWidth, &penColorIndex, &paletteIndex, &dai] () {
+    auto selectPenAndBrush = [&paintDC, &penWidth, &penColorIndex, &paletteIndex, &dai] () {
         auto [pensExist, pens] = penColorIndex >= 0 ? dai.palette.basePens [penColorIndex].get (paletteIndex) : std::tuple<bool, Pens> (false, Pens ());
+        auto [brushExists, brush] = penColorIndex >= 0 ? dai.palette.brushes [penColorIndex].get (paletteIndex) : std::tuple<bool, HBRUSH> (false, 0);
         if (pensExist && penWidth > 0) {
             SelectObject (paintDC, pens [penWidth-1]);
+            if (brushExists) SelectObject (paintDC, brush);
         }
     };
     for (auto& instr: drawProc.instructions) {
@@ -87,7 +89,7 @@ void completeDrawProc (HDC paintDC, DrawProcedure& drawProc, int startX, int sta
                 break;
             }
             case DrawOperCode::PEN_DOWN: {
-                selectPen ();
+                selectPenAndBrush ();
                 for (size_t i = 0; i < instr.args.size (); i += 2) {
                     absPosToScreen (instr.args [i], instr.args [i+1], curX, curY);
                     LineTo (paintDC, curX, curY);
@@ -96,7 +98,7 @@ void completeDrawProc (HDC paintDC, DrawProcedure& drawProc, int startX, int sta
             }
             case DrawOperCode::CIRCLE: {
                 int radius = absCoordToScreen (instr.args [0]);
-                selectPen ();
+                selectPenAndBrush ();
                 Ellipse (paintDC, curX - radius, curY - radius, curX + radius, curY + radius);
                 break;
             }
@@ -121,7 +123,11 @@ void paintSymbol (
     int westX, northY;
     geoToXY (north, west, zoom, westX, northY);
     geoToXY (node.points.front ().lat, node.points.front ().lon, zoom, symbolX, symbolY);
-    completeDrawProc (paintDC, symbol.drawProc, symbolX - westX, symbolY - northY, paletteIndex, dai);
+    symbolX -= westX;
+    symbolY -= northY;
+    if (symbolX >= 0 && symbolX <= client.right && symbolY >= 0 && symbolY <= client.bottom) {
+        completeDrawProc (paintDC, symbol.drawProc, symbolX, symbolY, paletteIndex, dai);
+    }
 }
 
 void paintEdge (
