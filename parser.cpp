@@ -1489,9 +1489,9 @@ void loadLookupTableItem (
         } else if (memcmp (source, "INST", 4) == 0) {
             source += 9;
             item.instruction = extractToUnitTerm (source);
-            std::vector<std::string> parts;
-            splitString (item.instruction, parts, ';');
-            processInstructions (dai, item, parts);
+            //std::vector<std::string> parts;
+            //splitString (item.instruction, parts, ';');
+            //processInstructions (dai, item, parts);
         } else if (memcmp (source, "DISC", 4) == 0) {
             source += 9;
             std::string displayCat = extractToUnitTerm (source);
@@ -1665,7 +1665,7 @@ void loadPattern (std::vector<std::string>& module, Dai& dai) {
             source += 9;
             while (*source) {
                 std::string colorDef = extractFixedSize (source, 6);
-                dai.patterns.back ().drawProc.definePen (colorDef [0], colorDef.substr (1).c_str ());
+                dai.patterns.back ().drawProc.definePen (colorDef [0], colorDef.substr (1).c_str (), dai.colorTable.index);
             }
         } else if (memcmp (source, "PBTM", 4) == 0) {
             source += 9;
@@ -1723,7 +1723,7 @@ void loadSymbol (std::vector<std::string>& module, Dai& dai) {
             source += 9;
             while (*source) {
                 std::string colorDef = extractFixedSize (source, 6);
-                dai.symbols.back ().drawProc.definePen (colorDef [0], colorDef.substr (1).c_str ());
+                dai.symbols.back ().drawProc.definePen (colorDef [0], colorDef.substr (1).c_str (), dai.colorTable.index);
             }
         } else if (memcmp (source, "SBTM", 4) == 0) {
             source += 9;
@@ -1781,7 +1781,7 @@ void loadLine (std::vector<std::string>& module, Dai& dai) {
             source += 9;
             while (*source) {
                 std::string colorDef = extractFixedSize (source, 6);
-                dai.lines.back ().drawProc.definePen (colorDef [0], colorDef.substr (1).c_str ());
+                dai.lines.back ().drawProc.definePen (colorDef [0], colorDef.substr (1).c_str (), dai.colorTable.index);
             }
         } else if (memcmp (source, "LVCT", 4) == 0) {
             source += 9;
@@ -1881,4 +1881,13 @@ void loadDai (const char *path, Dai& dai, ObjectDictionary& objectDictionary, At
         }
     }
     dai.palette.composeBasePens (dai.colorTable);
+
+    // Translate instructions
+    for (auto& lookupTable: dai.lookupTables) {
+        for (auto& item: lookupTable) {
+            std::vector<std::string> parts;
+            splitString (item.instruction, parts, ';');
+            processInstructions (dai, item, parts);
+        }
+    }
 }

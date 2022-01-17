@@ -16,5 +16,6 @@ void paintChart (
     uint8_t zoom,
     PaletteIndex paletteIndex,
     DisplayCat displayCat,
-    TableSet tableSet
+    TableSet spatialObjTableSet,
+    TableSet pointObjTableSet
 );

@@ -681,6 +681,11 @@ struct LookupTableItem {
     // 1 byte - ((<display category (base/standard)>) << 4) + <charset (plain/symboolized boundaries)>
     // 1 byte - object type (A/L/P)
     static uint32_t composeKey (uint16_t classCode, DisplayCat displayCat, TableSet tableSet, char objectType) {
+if(classCode==39){
+int iii=0;
+++iii;
+--iii;
+}
         return ((uint32_t) classCode << 16) + ((((uint32_t) displayCat) & 15) << 12) + ((((uint32_t) tableSet) & 15) << 8) + (uint8_t) objectType;
     }
 
@@ -937,16 +942,20 @@ struct DrawOper {
 
 struct DrawProcedure {
     std::vector<DrawOper> instructions;
-    std::map<char, std::string> penColors;
+    std::map<char, size_t> penColors;
 
-    const char *getPenColorName (char code) {
+    size_t getPenColorIndex (char code) {
         auto pos = penColors.find (code);
-        return pos == penColors.end () ? 0 : pos->second.c_str ();
+        return pos == penColors.end () ? LookupTableItem::NOT_EXIST : pos->second;
     }
 
-    void definePen (char code, const char *colorName) {
+    void definePen (char code, const char *colorName, StringIndex& colorIndex) {
         if (penColors.find (code) == penColors.end ()) {
-            penColors.emplace (code, colorName);
+            auto pos = colorIndex.find (colorName);
+
+            if (pos != colorIndex.end ()) {
+                penColors.emplace (code, pos->second);
+            }
         }
     }
 
@@ -968,8 +977,7 @@ struct DrawProcedure {
 
         if (isOperCode (SP)) {
             // Pen selection
-            const char *colorName = getPenColorName (operDesc [2]);
-            size_t colorIndex = dai.colorTable.getColorIndex (colorName);
+            size_t colorIndex = getPenColorIndex (operDesc [2]);
 
             if (colorIndex != LookupTableItem::NOT_EXIST) {
                 auto& oper = instructions.emplace_back ();

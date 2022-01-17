@@ -941,7 +941,21 @@ void repaintChart (HWND wnd) {
     HBITMAP tempBmp = CreateCompatibleBitmap (tempDC, client.right + 1, client.bottom + 1);
     SelectObject (tempDC, tempBmp);
     FillRect (tempDC, & client, (HBRUSH) GetStockObject (WHITE_BRUSH));
-    paintChart (client, tempDC, ctx->nodes, ctx->edges, ctx->features, ctx->dai, ctx->north, ctx->west, ctx->zoom, PaletteIndex::Day, DisplayCat::STANDARD, TableSet::PLAIN_BOUNDARIES);
+    paintChart (
+        client,
+        tempDC,
+        ctx->nodes,
+        ctx->edges,
+        ctx->features,
+        ctx->dai,
+        ctx->north,
+        ctx->west,
+        ctx->zoom,
+        PaletteIndex::Day,
+        DisplayCat::STANDARD,
+        TableSet::PLAIN_BOUNDARIES,
+        TableSet::SIMPLIFIED
+    );
     BitBlt (dc, 0, 0, client.right + 1, client.bottom + 1, tempDC, 0, 0, SRCCOPY);
     SelectObject (tempDC, (HBITMAP) 0);
     DeleteDC (tempDC);
@@ -1023,7 +1037,8 @@ void paintChartWnd (HWND wnd) {
         ctx->zoom,
         PaletteIndex::Day,
         DisplayCat::STANDARD,
-        TableSet::PLAIN_BOUNDARIES
+        TableSet::PLAIN_BOUNDARIES,
+        TableSet::SIMPLIFIED
     );
     EndPaint (wnd, & data);
 }

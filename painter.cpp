@@ -55,6 +55,75 @@ void paintArea (
     Polygon (paintDC, vertices.data (), (int) vertices.size ());
 }
 
+void completeDrawProc (HDC paintDC, DrawProcedure& drawProc, int startX, int startY, PaletteIndex paletteIndex, Dai& dai) {
+    int curX = 0, curY = 0;
+    int penColorIndex = -1;
+    int penWidth = 0;
+    auto absCoordToScreen = [] (int absCoord) {
+        static const double PIXEL_SIZE_IN_MM = 0.264583333;
+        return (int) ((double) absCoord / PIXEL_SIZE_IN_MM * 0.01);
+    };
+    auto absPosToScreen = [startX, startY, &absCoordToScreen] (int absX, int absY, int& screenX, int& screenY) {
+        screenX = absCoordToScreen (absX) + startX;
+        screenY = absCoordToScreen (absY) + startY;
+    };
+    auto selectPen = [&paintDC, &penWidth, &penColorIndex, &paletteIndex, &dai] () {
+        auto [pensExist, pens] = penColorIndex >= 0 ? dai.palette.basePens [penColorIndex].get (paletteIndex) : std::tuple<bool, Pens> (false, Pens ());
+        if (pensExist && penWidth > 0) {
+            SelectObject (paintDC, pens [penWidth-1]);
+        }
+    };
+    for (auto& instr: drawProc.instructions) {
+        switch (instr.oper) {
+            case DrawOperCode::SELECT_PEN: {
+                penColorIndex = instr.args [0]; break;
+            }
+            case DrawOperCode::SELECT_PEN_WIDTH: {
+                penWidth = instr.args [0]; break;
+            }
+            case DrawOperCode::PEN_UP: {
+                absPosToScreen (instr.args [0], instr.args [1], curX, curY);
+                MoveToEx (paintDC, curX, curY, 0);
+                break;
+            }
+            case DrawOperCode::PEN_DOWN: {
+                selectPen ();
+                for (size_t i = 0; i < instr.args.size (); i += 2) {
+                    absPosToScreen (instr.args [i], instr.args [i+1], curX, curY);
+                    LineTo (paintDC, curX, curY);
+                }
+                break;
+            }
+            case DrawOperCode::CIRCLE: {
+                int radius = absCoordToScreen (instr.args [0]);
+                selectPen ();
+                Ellipse (paintDC, curX - radius, curY - radius, curX + radius, curY + radius);
+                break;
+            }
+        }
+    }
+}
+
+void paintSymbol (
+    RECT& client,
+    HDC paintDC,
+    GeoNode& node,
+    Dai& dai,
+    double north,
+    double west,
+    uint8_t zoom,
+    int& offset,
+    size_t symbolIndex,
+    PaletteIndex paletteIndex
+) {
+    int symbolX, symbolY;
+    auto& symbol = dai.symbols [symbolIndex];
+    int westX, northY;
+    geoToXY (north, west, zoom, westX, northY);
+    geoToXY (node.points.front ().lat, node.points.front ().lon, zoom, symbolX, symbolY);
+    completeDrawProc (paintDC, symbol.drawProc, symbolX - westX, symbolY - northY, paletteIndex, dai);
+}
+
 void paintEdge (
     RECT& client,
     HDC paintDC,
@@ -105,12 +174,20 @@ void paintChart (
     uint8_t zoom,
     PaletteIndex paletteIndex,
     DisplayCat displayCat,
-    TableSet tableSet
+    TableSet spatialObjTableSet,
+    TableSet pointObjTableSet
 ) {
     static char *objectTypes { "PLA" };
     std::vector<LookupTable *> lookupTables;
 
     for (auto& feature: features) {
+if(feature.primitive==1)
+{
+int iii=0;
+++iii;
+--iii;
+}
+        auto tableSet = (feature.primitive == 1 || feature.primitive == 4) ? pointObjTableSet : spatialObjTableSet;
         auto lookupTable = dai.findLookupTable (feature.classCode, displayCat, tableSet, objectTypes [feature.primitive-1]);
 
         lookupTables.emplace_back (lookupTable);
@@ -119,8 +196,9 @@ void paintChart (
     for (int prty = 1; prty < 10; ++ prty) {
         for (size_t i = 0; i < features.size (); ++ i) {
             auto& feature = features [i];
+            if (feature.primitive != 2 && feature.primitive != 3) continue;
             if (!lookupTables [i]) continue;
-            auto lookupTableItem = feature.findBestItem (displayCat, tableSet, dai);
+            auto lookupTableItem = feature.findBestItem (displayCat, spatialObjTableSet, dai);
             if (!lookupTableItem || lookupTableItem->displayPriority != prty) continue;
 
             if (feature.primitive == 3) {
@@ -163,7 +241,11 @@ void paintChart (
         auto& feature = features [i];
         if (feature.primitive != 1) continue;
         if (!lookupTables [i]) continue;
-        auto lookupTableItem = feature.findBestItem (displayCat, tableSet, dai);
+        auto lookupTableItem = feature.findBestItem (displayCat, pointObjTableSet, dai);
         if (!lookupTableItem) continue;
+        int offset = 0;
+        for (auto symbolIndex: lookupTableItem->symbols) {
+            paintSymbol (client, paintDC, nodes [feature.nodeIndex], dai, north, west, zoom, offset, symbolIndex, paletteIndex);
+        }
     }
 }
