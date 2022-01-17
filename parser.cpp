@@ -1383,7 +1383,14 @@ void processInstructions (Dai& dai, LookupTableItem& item, std::vector<std::stri
         if (instruction [0] == 'L' && instruction [1] == 'S') {
             item.penIndex = dai.palette.checkPen (instruction.data (), dai.colorTable);
         } else if (instruction [0] == 'A' && instruction [1] == 'C') {
-            item.brushIndex = dai.palette.checkSolidBrush (instruction.data (), dai.colorTable);
+            size_t leftBracketPos = instruction.find ('(', 2);
+            size_t rightBracketPos = leftBracketPos == std::string::npos ? std::string::npos : instruction.find (')', leftBracketPos + 1);
+            
+            if (rightBracketPos != std::string::npos) {
+                std::string colorName (instruction.substr (leftBracketPos + 1, rightBracketPos - leftBracketPos - 1));
+                
+                item.brushIndex = dai.palette.checkSolidBrush (colorName.c_str (), dai.colorTable);
+            }
         }
     }
 }
@@ -1652,8 +1659,8 @@ void loadPattern (std::vector<std::string>& module, std::map<std::string, Patter
     }
 }
 
-void loadSymbol (std::vector<std::string>& module, std::map<std::string, SymbolDesc>& symbols) {
-    std::map<std::string, SymbolDesc>::iterator pos = symbols.end ();
+void loadSymbol (std::vector<std::string>& module, Dai& dai) {
+    std::map<std::string, SymbolDesc>::iterator pos = dai.symbols.end ();
 
     for (auto& line: module) {
         char *source = (char *) line.c_str ();
@@ -1670,7 +1677,7 @@ void loadSymbol (std::vector<std::string>& module, std::map<std::string, SymbolD
             uint32_t bBoxCol = std::atol (extractFixedSize (source, 5).c_str ());
             uint32_t bBoxRow = std::atol (extractFixedSize (source, 5).c_str ());
             
-            pos = symbols.emplace (name, SymbolDesc ()).first;
+            pos = dai.symbols.emplace (name, SymbolDesc ()).first;
 
             memcpy (pos->second.name, name.c_str (), 8);
             pos->second.type = type [0];
@@ -1685,7 +1692,10 @@ void loadSymbol (std::vector<std::string>& module, std::map<std::string, SymbolD
             pos->second.exposition = extractToUnitTerm (source);
         } else if (memcmp (source, "SCRF", 4) == 0) {
             source += 9;
-            pos->second.color = extractFixedSize (source, 5);
+            while (*source) {
+                std::string colorDef = extractFixedSize (source, 6);
+                pos->second.drawProc.definePen (colorDef [0], colorDef.substr (1).c_str ());
+            }
         } else if (memcmp (source, "SBTM", 4) == 0) {
             source += 9;
             pos->second.bitmap = extractToUnitTerm (source);
@@ -1693,6 +1703,9 @@ void loadSymbol (std::vector<std::string>& module, std::map<std::string, SymbolD
             source += 9;
             auto& svg = pos->second.svgs.emplace_back ();
             splitString (extractToUnitTerm (source), svg, ';');
+            for (auto& instr: svg) {
+                pos->second.drawProc.defineOperation (instr.c_str (), dai);
+            }
         }
     }
 }
@@ -1817,7 +1830,7 @@ void loadDai (const char *path, Dai& dai, ObjectDictionary& objectDictionary, At
             } else if (memcmp (moduleName, "PATT", 4) == 0) {
                 loadPattern (module, dai.patterns);
             } else if (memcmp (moduleName, "SYMB", 4) == 0) {
-                loadSymbol (module, dai.symbols);
+                loadSymbol (module, dai);
             } else if (memcmp (moduleName, "LNST", 4) == 0) {
                 loadLine (module, dai.lines);
             }

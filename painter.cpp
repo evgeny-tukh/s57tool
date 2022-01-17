@@ -140,7 +140,7 @@ void paintChart (
                             brush
                         );
                     }
-                }
+                }               
             }
 
             if (feature.primitive == 2 || feature.primitive == 3) {

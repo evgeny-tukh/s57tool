@@ -586,6 +586,12 @@ struct ColorTable {
     std::vector<ColorItem> container;
     StringIndex index;
 
+    size_t getColorIndex (const char *colorName) {
+        auto pos = index.find (colorName);
+
+        return (pos == index.end ()) ? (size_t) -1 : pos->second;
+    }
+
     ColorItem *getItem (const char *colorName) {
         auto pos = index.find (colorName);
 
@@ -703,64 +709,22 @@ struct LookupTableItem {
     }
 };
 
-enum FillType {
-    STRAGGERED = 1,
-    LINEAR,
+enum DrawOperCode {
+    // Symbols
+    NONE = 0,
+    SELECT_PEN,
+    SELECT_PEN_WIDTH,
+    SELECT_TRANSP,
+    PEN_UP,
+    PEN_DOWN,
+    CIRCLE,
+    NEW_POLYGON,
+    NEW_SHAPE,
+    END_POLYGON,
+    EXEC_POLYGON,
+    FILL_POLYGON,
+    SYMBOL_CALL,
 };
-
-enum Spacing {
-    CONSTANT = 1,
-    SCALE_DEPENDENT,
-};
-
-struct PatternDesc {
-    char name [8];
-    char type;  // V/R
-    FillType fillType;
-    Spacing spacing;
-    uint32_t minDistance;
-    uint32_t maxDistance;
-    uint32_t pivotPtCol;
-    uint32_t pivotPtRow;
-    uint32_t bBoxWidth;
-    uint32_t bBoxHeight;
-    uint32_t bBoxCol;
-    uint32_t bBoxRow;
-    std::string exposition;
-    std::string color;
-    std::string bitmap;
-    std::vector<std::vector<std::string>> svgs;
-};
-
-struct SymbolDesc {
-    char name [8];
-    char type;  // V/R
-    uint32_t pivotPtCol;
-    uint32_t pivotPtRow;
-    uint32_t bBoxWidth;
-    uint32_t bBoxHeight;
-    uint32_t bBoxCol;
-    uint32_t bBoxRow;
-    std::string exposition;
-    std::string color;
-    std::string bitmap;
-    std::vector<std::vector<std::string>> svgs;
-};
-
-struct LineDesc {
-    char name [8];
-    uint32_t pivotPtCol;
-    uint32_t pivotPtRow;
-    uint32_t bBoxWidth;
-    uint32_t bBoxHeight;
-    uint32_t bBoxCol;
-    uint32_t bBoxRow;
-    std::string exposition;
-    std::string color;
-    std::vector<std::vector<std::string>> svgs;
-};
-
-typedef std::vector<LookupTableItem> LookupTable;
 
 struct Pens {
     HPEN container [5];
@@ -774,6 +738,8 @@ struct Pens {
         }
     }
 };
+
+typedef std::vector<LookupTableItem> LookupTable;
 
 template<typename TYPE>
 struct DrawToolItem {
@@ -900,33 +866,31 @@ struct Palette {
         return pos->second;
     }
 
-    size_t checkSolidBrush (char *instr, ColorTable& colorTable) {
-        auto pos = brushIndex.find (instr);
+    size_t checkSolidBrush (const char *colorName, ColorTable& colorTable) {
+        auto pos = brushIndex.find (colorName);
 
         if (pos == brushIndex.end ()) {
-            char *leftBracket = strchr (instr, '(');
-            char *rightBracket = leftBracket ? strchr (leftBracket + 1, ')') : 0;
-            
-            if (rightBracket - leftBracket > 1) {
-                std::string colorName (leftBracket + 1, rightBracket - leftBracket - 1);
-                auto colorDesc = colorTable.getItem (colorName.c_str ());
+            auto colorDesc = colorTable.getItem (colorName);
 
-                if (!colorDesc) return LookupTableItem::NOT_EXIST;
+            if (!colorDesc) return LookupTableItem::NOT_EXIST;
 
-                size_t index = brushes.size ();
-                brushes.emplace_back (
-                    CreateSolidBrush (RGB (colorDesc->day.red, colorDesc->day.green, colorDesc->day.blue)),
-                    CreateSolidBrush (RGB (colorDesc->dusk.red, colorDesc->dusk.green, colorDesc->dusk.blue)),
-                    CreateSolidBrush (RGB (colorDesc->night.red, colorDesc->night.green, colorDesc->night.blue))
-                );
-                brushIndex.emplace (instr, index);
-                return index;
-            }
+            size_t index = brushes.size ();
+            brushes.emplace_back (
+                CreateSolidBrush (RGB (colorDesc->day.red, colorDesc->day.green, colorDesc->day.blue)),
+                CreateSolidBrush (RGB (colorDesc->dusk.red, colorDesc->dusk.green, colorDesc->dusk.blue)),
+                CreateSolidBrush (RGB (colorDesc->night.red, colorDesc->night.green, colorDesc->night.blue))
+            );
+            brushIndex.emplace (/*instr*/colorName, index);
+            return index;
         }
         
         return pos->second;
     }
 };
+
+struct SymbolDesc;
+struct PatternDesc;
+struct LineDesc;
 
 struct Dai {
     LibraryIdentification libraryId;
@@ -946,21 +910,6 @@ struct Dai {
 
         return pos == lookupTableIndex.end () ? 0 : & lookupTables [pos->second];
     }
-};
-
-enum DrawOperCode {
-    // Symbols
-    NONE = 0,
-    SELECT_PEN,
-    SELECT_PEN_WIDTH,
-    SELECT_TRANSP,
-    PEN_UP,
-    PEN_DOWN,
-    CIRCLE,
-    SET_POLYGON_MODE,
-    EXEC_POLYGON,
-    FILL_POLYGON,
-    SYMBOL_CALL,
 };
 
 struct DrawOper {
@@ -1005,15 +954,170 @@ struct DrawProcedure {
         if (isOperCode (SP)) {
             // Pen selection
             const char *colorName = getPenColorName (operDesc [2]);
-            size_t colorIndex = dai.palette.getColorIndex (colorName);
+            size_t colorIndex = dai.colorTable.getColorIndex (colorName);
 
             if (colorIndex != LookupTableItem::NOT_EXIST) {
                 auto& oper = instructions.emplace_back ();
                 oper.oper = DrawOperCode::SELECT_PEN;
                 oper.args.emplace_back (colorIndex);
             }
+        } else if (isOperCode (SW)) {
+            // Pen width selection, arg is one digit-int
+            if (isdigit (operDesc [2])) {
+                auto& oper = instructions.emplace_back ();
+                oper.oper = DrawOperCode::SELECT_PEN_WIDTH;
+                oper.args.emplace_back (operDesc [2] - '0');
+            }
+        } else if (isOperCode (CI)) {
+            // Draw a circle, arg is a radius
+            if (isdigit (operDesc [2])) {
+                auto& oper = instructions.emplace_back ();
+                oper.oper = DrawOperCode::CIRCLE;
+                oper.args.emplace_back (std::atoi (operDesc + 2));
+            }
+        } else if (isOperCode (ST)) {
+            // Pen transparency selection, arg is a number of quarters, so 0 is 0%, 1 is 25% etc.
+            if (isdigit (operDesc [2])) {
+                auto& oper = instructions.emplace_back ();
+                oper.oper = DrawOperCode::SELECT_TRANSP;
+                oper.args.emplace_back ((operDesc [2] - '0') * 25);
+            }
+        } else if (isOperCode (PM)) {
+            // Polygon control command, arg is command id (0/1/2 - enter, new shape, end).
+            DrawOperCode operCode;
+            switch (operDesc [2]) {
+                case '0': operCode = DrawOperCode::NEW_POLYGON; break;
+                case '1': operCode = DrawOperCode::NEW_SHAPE; break;
+                case '2': operCode = DrawOperCode::END_POLYGON; break;
+                default: return;
+            }
+
+            auto& oper = instructions.emplace_back ();
+            oper.oper = operCode;
+        } else if (isOperCode (PU)) {
+            // Pen up command, args are x and y
+            if (isdigit (operDesc [2])) {
+                char *comma = strchr ((char *) operDesc + 2, ',');
+
+                if (comma && isdigit (comma [1])) {
+                    auto& oper = instructions.emplace_back ();
+                    oper.oper = DrawOperCode::PEN_UP;
+                    oper.args.emplace_back (std::atoi (operDesc + 2));
+                    oper.args.emplace_back (std::atoi (comma + 1));
+                }
+            }
+        } else if (isOperCode (SC)) {
+            // Symbol call, args are symbol name and orientation 0/1/2
+            auto& oper = instructions.emplace_back ();
+            oper.oper = DrawOperCode::SYMBOL_CALL;
+            for (size_t i = 0; i < 8; oper.args.emplace_back (operDesc [(i++)+2]));
+            oper.args.emplace_back (operDesc [11] - '0');
+        } else if (isOperCode (FP)) {
+            // Fill polygon, no args
+            auto& oper = instructions.emplace_back ();
+            oper.oper = DrawOperCode::FILL_POLYGON;
+        } else if (isOperCode (EP)) {
+            // Exec polygon, no args
+            auto& oper = instructions.emplace_back ();
+            oper.oper = DrawOperCode::EXEC_POLYGON;
+        } else if (isOperCode (PD)) {
+            // Pen down command, args are x and y pairs (one or more)
+            if (isdigit (operDesc [2])) {
+                auto extractPoint = [] (char *instr) {
+                    if (isdigit (instr [0])) {
+                        char *comma = strchr (instr + 1, ',');
+
+                        if (comma && isdigit (comma [1])) {
+                            char *nextComma = strchr (comma + 1, ',');
+
+                            int x = std::atoi (instr);
+                            int y = std::atoi (comma + 1);
+                            bool morePoints = nextComma && isdigit (nextComma [1]);
+                            char *nextChar = morePoints ? nextComma + 1 : 0;
+
+                            return std::tuple (true, x, y, morePoints, nextChar);
+                        }
+                    }
+
+                    return std::tuple (false, 0, 0, false, (char *) 0);
+                };
+                char *source = (char *) operDesc + 2;
+                while (true) {
+                    auto [isPoint, x, y, morePoints, nextChar] = extractPoint (source);
+
+                    if (isPoint) {
+                        auto& oper = instructions.emplace_back ();
+                        oper.oper = DrawOperCode::PEN_DOWN;
+                        oper.args.emplace_back (x);
+                        oper.args.emplace_back (y);
+                    }
+
+                    if (!morePoints) break;
+
+                    source = nextChar;
+                }
+            }
         }
     }
 };
+
+enum FillType {
+    STRAGGERED = 1,
+    LINEAR,
+};
+
+enum Spacing {
+    CONSTANT = 1,
+    SCALE_DEPENDENT,
+};
+
+struct PatternDesc {
+    char name [8];
+    char type;  // V/R
+    FillType fillType;
+    Spacing spacing;
+    uint32_t minDistance;
+    uint32_t maxDistance;
+    uint32_t pivotPtCol;
+    uint32_t pivotPtRow;
+    uint32_t bBoxWidth;
+    uint32_t bBoxHeight;
+    uint32_t bBoxCol;
+    uint32_t bBoxRow;
+    std::string exposition;
+    std::string color;
+    std::string bitmap;
+    std::vector<std::vector<std::string>> svgs;
+};
+
+struct LineDesc {
+    char name [8];
+    uint32_t pivotPtCol;
+    uint32_t pivotPtRow;
+    uint32_t bBoxWidth;
+    uint32_t bBoxHeight;
+    uint32_t bBoxCol;
+    uint32_t bBoxRow;
+    std::string exposition;
+    std::string color;
+    std::vector<std::vector<std::string>> svgs;
+};
+
+struct SymbolDesc {
+    char name [8];
+    char type;  // V/R
+    uint32_t pivotPtCol;
+    uint32_t pivotPtRow;
+    uint32_t bBoxWidth;
+    uint32_t bBoxHeight;
+    uint32_t bBoxCol;
+    uint32_t bBoxRow;
+    std::string exposition;
+    std::string color;
+    std::string bitmap;
+    std::vector<std::vector<std::string>> svgs;
+    DrawProcedure drawProc;
+};
+
 
 #pragma pack()

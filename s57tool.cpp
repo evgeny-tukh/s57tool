@@ -1116,7 +1116,11 @@ LRESULT wndProc (HWND wnd, UINT msg, WPARAM param1, LPARAM param2) {
         case WM_DESTROY:
             PostQuitMessage (0); break;
         case WM_SYSCOMMAND:
-            if (param1 == SC_CLOSE && queryExit (wnd)) DestroyWindow (wnd);
+            if (param1 == SC_CLOSE) {
+                if (queryExit (wnd))
+                    DestroyWindow (wnd);
+                break;
+            }
         default:
             result = DefWindowProc (wnd, msg, param1, param2);
     }
