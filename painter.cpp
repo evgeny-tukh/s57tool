@@ -158,4 +158,12 @@ void paintChart (
             }
         }
     }
+
+    for (size_t i = 0; i < features.size (); ++ i) {
+        auto& feature = features [i];
+        if (feature.primitive != 1) continue;
+        if (!lookupTables [i]) continue;
+        auto lookupTableItem = feature.findBestItem (displayCat, tableSet, dai);
+        if (!lookupTableItem) continue;
+    }
 }

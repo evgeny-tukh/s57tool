@@ -1379,18 +1379,26 @@ void loadColorTable (std::vector<std::string>& module, ColorTable& colorTable) {
 }
 */
 void processInstructions (Dai& dai, LookupTableItem& item, std::vector<std::string>& instructions) {
+    auto extractInstr = [] (std::string& instruction) {
+        size_t leftBracketPos = instruction.find ('(', 2);
+        size_t rightBracketPos = leftBracketPos == std::string::npos ? std::string::npos : instruction.find (')', leftBracketPos + 1);
+        return std::string (rightBracketPos == std::string::npos ? "" : instruction.substr (leftBracketPos + 1, rightBracketPos - leftBracketPos - 1));
+    };
+
     for (auto& instruction: instructions) {
         if (instruction [0] == 'L' && instruction [1] == 'S') {
             item.penIndex = dai.palette.checkPen (instruction.data (), dai.colorTable);
-        } else if (instruction [0] == 'A' && instruction [1] == 'C') {
-            size_t leftBracketPos = instruction.find ('(', 2);
-            size_t rightBracketPos = leftBracketPos == std::string::npos ? std::string::npos : instruction.find (')', leftBracketPos + 1);
-            
-            if (rightBracketPos != std::string::npos) {
-                std::string colorName (instruction.substr (leftBracketPos + 1, rightBracketPos - leftBracketPos - 1));
-                
-                item.brushIndex = dai.palette.checkSolidBrush (colorName.c_str (), dai.colorTable);
+        } else if (instruction [0] == 'S' && instruction [1] == 'Y') {
+            auto symbolName = extractInstr (instruction);
+
+            if (!symbolName.empty ()) {
+                size_t index = dai.getSymbolIndex (symbolName.c_str ());
+                if (index != LookupTableItem::NOT_EXIST) item.symbols.emplace_back (index);
             }
+        } else if (instruction [0] == 'A' && instruction [1] == 'C') {
+            auto colorName = extractInstr (instruction);
+
+            if (!colorName.empty ()) item.brushIndex = dai.palette.checkSolidBrush (colorName.c_str (), dai.colorTable);
         }
     }
 }
@@ -1596,8 +1604,8 @@ void loadLookupTableItem (std::vector<std::string>& module, std::map<std::string
     }
 }
 */
-void loadPattern (std::vector<std::string>& module, std::map<std::string, PatternDesc>& patterns) {
-    std::map<std::string, PatternDesc>::iterator pos = patterns.end ();
+void loadPattern (std::vector<std::string>& module, Dai& dai) {
+    size_t patternIndex = LookupTableItem::NOT_EXIST;
 
     for (auto& line: module) {
         char *source = (char *) line.c_str ();
@@ -1618,49 +1626,63 @@ void loadPattern (std::vector<std::string>& module, std::map<std::string, Patter
             uint32_t bBoxCol = std::atol (extractFixedSize (source, 5).c_str ());
             uint32_t bBoxRow = std::atol (extractFixedSize (source, 5).c_str ());
             
-            pos = patterns.emplace (name, PatternDesc ()).first;
+            auto pos = dai.patternIndex.find (name);
 
-            memcpy (pos->second.name, name.c_str (), 8);
-            pos->second.type = type [0];
-            pos->second.bBoxCol = bBoxCol;
-            pos->second.bBoxRow = bBoxRow;
-            pos->second.bBoxWidth = bBoxWidth;
-            pos->second.bBoxHeight = bBoxHeight;
-            pos->second.maxDistance = maxDistance;
-            pos->second.minDistance = minDistance;
-            pos->second.pivotPtCol = pivotPtCol;
-            pos->second.pivotPtRow = pivotPtRow;
+            if (pos == dai.patternIndex.end ()) {
+                patternIndex = dai.patterns.size ();
+                dai.patterns.emplace_back (PatternDesc ());
+                dai.patternIndex.emplace (name, patternIndex);
+            }
+
+            auto& patternDesc = dai.patterns.back ();
+
+            memcpy (patternDesc.name, name.c_str (), 8);
+            patternDesc.type = type [0];
+            patternDesc.bBoxCol = bBoxCol;
+            patternDesc.bBoxRow = bBoxRow;
+            patternDesc.bBoxWidth = bBoxWidth;
+            patternDesc.bBoxHeight = bBoxHeight;
+            patternDesc.maxDistance = maxDistance;
+            patternDesc.minDistance = minDistance;
+            patternDesc.pivotPtCol = pivotPtCol;
+            patternDesc.pivotPtRow = pivotPtRow;
 
             if (spacing.compare ("CON") == 0) {
-                pos->second.spacing = Spacing::CONSTANT;
+                patternDesc.spacing = Spacing::CONSTANT;
             } else if (spacing.compare ("SCL") == 0) {
-                pos->second.spacing = Spacing::SCALE_DEPENDENT;
+                patternDesc.spacing = Spacing::SCALE_DEPENDENT;
             }
 
             if (fillType.compare ("STG")) {
-                pos->second.fillType = FillType::STRAGGERED;
+                patternDesc.fillType = FillType::STRAGGERED;
             } else if (fillType.compare ("LIN")) {
-                pos->second.fillType = FillType::LINEAR;
+                patternDesc.fillType = FillType::LINEAR;
             }
         } else if (memcmp (source, "PXPO", 4) == 0) {
             source += 9;
-            pos->second.exposition = extractToUnitTerm (source);
+            dai.patterns.back ().exposition = extractToUnitTerm (source);
         } else if (memcmp (source, "PCRF", 4) == 0) {
             source += 9;
-            pos->second.color = extractFixedSize (source, 5);
+            while (*source) {
+                std::string colorDef = extractFixedSize (source, 6);
+                dai.patterns.back ().drawProc.definePen (colorDef [0], colorDef.substr (1).c_str ());
+            }
         } else if (memcmp (source, "PBTM", 4) == 0) {
             source += 9;
-            pos->second.bitmap = extractToUnitTerm (source);
+            dai.patterns.back ().bitmap = extractToUnitTerm (source);
         } else if (memcmp (source, "PVCT", 4) == 0) {
             source += 9;
-            auto& svg = pos->second.svgs.emplace_back ();
+            auto& svg = dai.patterns.back ().svgs.emplace_back ();
             splitString (extractToUnitTerm (source), svg, ';');
+            for (auto& instr: svg) {
+                dai.patterns.back ().drawProc.defineOperation (instr.c_str (), dai);
+            }
         }
     }
 }
 
 void loadSymbol (std::vector<std::string>& module, Dai& dai) {
-    std::map<std::string, SymbolDesc>::iterator pos = dai.symbols.end ();
+    size_t symbolIndex = LookupTableItem::NOT_EXIST;
 
     for (auto& line: module) {
         char *source = (char *) line.c_str ();
@@ -1676,42 +1698,49 @@ void loadSymbol (std::vector<std::string>& module, Dai& dai) {
             uint32_t bBoxHeight = std::atol (extractFixedSize (source, 5).c_str ());
             uint32_t bBoxCol = std::atol (extractFixedSize (source, 5).c_str ());
             uint32_t bBoxRow = std::atol (extractFixedSize (source, 5).c_str ());
-            
-            pos = dai.symbols.emplace (name, SymbolDesc ()).first;
 
-            memcpy (pos->second.name, name.c_str (), 8);
-            pos->second.type = type [0];
-            pos->second.bBoxCol = bBoxCol;
-            pos->second.bBoxRow = bBoxRow;
-            pos->second.bBoxWidth = bBoxWidth;
-            pos->second.bBoxHeight = bBoxHeight;
-            pos->second.pivotPtCol = pivotPtCol;
-            pos->second.pivotPtRow = pivotPtRow;
+            auto pos = dai.symbolIndex.find (name);
+
+            if (pos == dai.symbolIndex.end ()) {
+                symbolIndex = dai.symbols.size ();
+                dai.symbols.emplace_back (SymbolDesc ());
+                dai.symbolIndex.emplace (name, symbolIndex);
+            }
+
+            auto& symbolDesc = dai.symbols.back ();
+            memcpy (symbolDesc.name, name.c_str (), 8);
+            symbolDesc.type = type [0];
+            symbolDesc.bBoxCol = bBoxCol;
+            symbolDesc.bBoxRow = bBoxRow;
+            symbolDesc.bBoxWidth = bBoxWidth;
+            symbolDesc.bBoxHeight = bBoxHeight;
+            symbolDesc.pivotPtCol = pivotPtCol;
+            symbolDesc.pivotPtRow = pivotPtRow;
         } else if (memcmp (source, "SXPO", 4) == 0) {
             source += 9;
-            pos->second.exposition = extractToUnitTerm (source);
+            dai.symbols.back ().exposition = extractToUnitTerm (source);
         } else if (memcmp (source, "SCRF", 4) == 0) {
             source += 9;
             while (*source) {
                 std::string colorDef = extractFixedSize (source, 6);
-                pos->second.drawProc.definePen (colorDef [0], colorDef.substr (1).c_str ());
+                dai.symbols.back ().drawProc.definePen (colorDef [0], colorDef.substr (1).c_str ());
             }
         } else if (memcmp (source, "SBTM", 4) == 0) {
             source += 9;
-            pos->second.bitmap = extractToUnitTerm (source);
+            dai.symbols.back ().bitmap = extractToUnitTerm (source);
         } else if (memcmp (source, "SVCT", 4) == 0) {
             source += 9;
-            auto& svg = pos->second.svgs.emplace_back ();
+            auto& svg = dai.symbols.back ().svgs.emplace_back ();
             splitString (extractToUnitTerm (source), svg, ';');
             for (auto& instr: svg) {
-                pos->second.drawProc.defineOperation (instr.c_str (), dai);
+                dai.symbols.back ().drawProc.defineOperation (instr.c_str (), dai);
             }
         }
     }
 }
 
-void loadLine (std::vector<std::string>& module, std::map<std::string, LineDesc>& lines) {
-    std::map<std::string, LineDesc>::iterator pos = lines.end ();
+void loadLine (std::vector<std::string>& module, Dai& dai) {
+    size_t lineIndex = LookupTableItem::NOT_EXIST;
 
     for (auto& line: module) {
         char *source = (char *) line.c_str ();
@@ -1727,25 +1756,40 @@ void loadLine (std::vector<std::string>& module, std::map<std::string, LineDesc>
             uint32_t bBoxCol = std::atol (extractFixedSize (source, 5).c_str ());
             uint32_t bBoxRow = std::atol (extractFixedSize (source, 5).c_str ());
             
-            pos = lines.emplace (name, LineDesc ()).first;
+            auto pos = dai.lineIndex.find (name);
 
-            memcpy (pos->second.name, name.c_str (), 8);
-            pos->second.bBoxCol = bBoxCol;
-            pos->second.bBoxRow = bBoxRow;
-            pos->second.bBoxWidth = bBoxWidth;
-            pos->second.bBoxHeight = bBoxHeight;
-            pos->second.pivotPtCol = pivotPtCol;
-            pos->second.pivotPtRow = pivotPtRow;
+            if (pos == dai.lineIndex.end ()) {
+                lineIndex = dai.symbols.size ();
+                dai.lines.emplace_back (LineDesc ());
+                dai.lineIndex.emplace (name, lineIndex);
+            }
+
+            auto& lineDesc = dai.lines.back ();
+            memcpy (lineDesc.name, name.c_str (), 8);
+
+            memcpy (lineDesc.name, name.c_str (), 8);
+            lineDesc.bBoxCol = bBoxCol;
+            lineDesc.bBoxRow = bBoxRow;
+            lineDesc.bBoxWidth = bBoxWidth;
+            lineDesc.bBoxHeight = bBoxHeight;
+            lineDesc.pivotPtCol = pivotPtCol;
+            lineDesc.pivotPtRow = pivotPtRow;
         } else if (memcmp (source, "LXPO", 4) == 0) {
             source += 9;
-            pos->second.exposition = extractToUnitTerm (source);
+            dai.lines.back ().exposition = extractToUnitTerm (source);
         } else if (memcmp (source, "LCRF", 4) == 0) {
             source += 9;
-            pos->second.color = extractFixedSize (source, 5);
+            while (*source) {
+                std::string colorDef = extractFixedSize (source, 6);
+                dai.lines.back ().drawProc.definePen (colorDef [0], colorDef.substr (1).c_str ());
+            }
         } else if (memcmp (source, "LVCT", 4) == 0) {
             source += 9;
-            auto& svg = pos->second.svgs.emplace_back ();
+            auto& svg = dai.lines.back ().svgs.emplace_back ();
             splitString (extractToUnitTerm (source), svg, ';');
+            for (auto& instr: svg) {
+                dai.lines.back ().drawProc.defineOperation (instr.c_str (), dai);
+            }
         }
     }
 }
@@ -1828,11 +1872,11 @@ void loadDai (const char *path, Dai& dai, ObjectDictionary& objectDictionary, At
                 //loadLookupTableItem (module, dai.lookupTables);
                 loadLookupTableItem (module, dai, objectDictionary, attrDictionary);
             } else if (memcmp (moduleName, "PATT", 4) == 0) {
-                loadPattern (module, dai.patterns);
+                loadPattern (module, dai);
             } else if (memcmp (moduleName, "SYMB", 4) == 0) {
                 loadSymbol (module, dai);
             } else if (memcmp (moduleName, "LNST", 4) == 0) {
-                loadLine (module, dai.lines);
+                loadLine (module, dai);
             }
         }
     }

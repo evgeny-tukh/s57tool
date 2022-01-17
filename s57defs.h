@@ -899,16 +899,31 @@ struct Dai {
     StringIndex penIndex;
     StringIndex basePenIndex;
     StringIndex brushIndex;
+    StringIndex patternIndex;
+    StringIndex symbolIndex;
+    StringIndex lineIndex;
     std::vector<LookupTable> lookupTables;
     std::map<uint32_t, size_t> lookupTableIndex;
-    std::map<std::string, PatternDesc> patterns;
-    std::map<std::string, SymbolDesc> symbols;
-    std::map<std::string, LineDesc> lines;
+    std::vector<PatternDesc> patterns;
+    std::vector<SymbolDesc> symbols;
+    std::vector<LineDesc> lines;
 
     LookupTable *findLookupTable (uint16_t code, DisplayCat displayCat, TableSet tableSet, char objectType) {
         auto pos = lookupTableIndex.find (LookupTableItem::composeKey (code, displayCat, tableSet, objectType));
 
         return pos == lookupTableIndex.end () ? 0 : & lookupTables [pos->second];
+    }
+    size_t getSymbolIndex (const char *name) {
+        auto pos = symbolIndex.find (name);
+        return pos == symbolIndex.end () ? LookupTableItem::NOT_EXIST : pos->second;
+    }
+    size_t getLineIndex (const char *name) {
+        auto pos = lineIndex.find (name);
+        return pos == lineIndex.end () ? LookupTableItem::NOT_EXIST : pos->second;
+    }
+    size_t getPatternIndex (const char *name) {
+        auto pos = patternIndex.find (name);
+        return pos == patternIndex.end () ? LookupTableItem::NOT_EXIST : pos->second;
     }
 };
 
@@ -1071,52 +1086,35 @@ enum Spacing {
     SCALE_DEPENDENT,
 };
 
-struct PatternDesc {
+struct DrawableObjDesc {
     char name [8];
+    uint32_t pivotPtCol;
+    uint32_t pivotPtRow;
+    std::string exposition;
+    std::string color;
+    uint32_t bBoxWidth;
+    uint32_t bBoxHeight;
+    uint32_t bBoxCol;
+    uint32_t bBoxRow;
+    std::vector<std::vector<std::string>> svgs;
+    DrawProcedure drawProc;
+};
+
+struct PatternDesc: DrawableObjDesc {
     char type;  // V/R
     FillType fillType;
     Spacing spacing;
     uint32_t minDistance;
     uint32_t maxDistance;
-    uint32_t pivotPtCol;
-    uint32_t pivotPtRow;
-    uint32_t bBoxWidth;
-    uint32_t bBoxHeight;
-    uint32_t bBoxCol;
-    uint32_t bBoxRow;
-    std::string exposition;
-    std::string color;
     std::string bitmap;
-    std::vector<std::vector<std::string>> svgs;
 };
 
-struct LineDesc {
-    char name [8];
-    uint32_t pivotPtCol;
-    uint32_t pivotPtRow;
-    uint32_t bBoxWidth;
-    uint32_t bBoxHeight;
-    uint32_t bBoxCol;
-    uint32_t bBoxRow;
-    std::string exposition;
-    std::string color;
-    std::vector<std::vector<std::string>> svgs;
+struct LineDesc: DrawableObjDesc {
 };
 
-struct SymbolDesc {
-    char name [8];
+struct SymbolDesc: DrawableObjDesc {
     char type;  // V/R
-    uint32_t pivotPtCol;
-    uint32_t pivotPtRow;
-    uint32_t bBoxWidth;
-    uint32_t bBoxHeight;
-    uint32_t bBoxCol;
-    uint32_t bBoxRow;
-    std::string exposition;
-    std::string color;
     std::string bitmap;
-    std::vector<std::vector<std::string>> svgs;
-    DrawProcedure drawProc;
 };
 
 
