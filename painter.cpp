@@ -55,7 +55,7 @@ void paintArea (
     Polygon (paintDC, vertices.data (), (int) vertices.size ());
 }
 
-void completeDrawProc (HDC paintDC, DrawProcedure& drawProc, int startX, int startY, PaletteIndex paletteIndex, Dai& dai) {
+void completeDrawProc (HDC paintDC, DrawProcedure& drawProc, int startX, int startY, PaletteIndex paletteIndex, Dai& dai, int pivotPtCol, int pivotPtRow) {
     int curX = 0, curY = 0;
     int penColorIndex = -1;
     int penWidth = 0;
@@ -63,9 +63,9 @@ void completeDrawProc (HDC paintDC, DrawProcedure& drawProc, int startX, int sta
         static const double PIXEL_SIZE_IN_MM = 0.264583333;
         return (int) ((double) absCoord / PIXEL_SIZE_IN_MM * 0.01);
     };
-    auto absPosToScreen = [startX, startY, &absCoordToScreen] (int absX, int absY, int& screenX, int& screenY) {
-        screenX = absCoordToScreen (absX) + startX;
-        screenY = absCoordToScreen (absY) + startY;
+    auto absPosToScreen = [startX, startY, &absCoordToScreen, &pivotPtCol, &pivotPtRow] (int absX, int absY, int& screenX, int& screenY) {
+        screenX = absCoordToScreen (absX - pivotPtCol) + startX;
+        screenY = absCoordToScreen (absY - pivotPtRow) + startY;
     };
     auto selectPenAndBrush = [&paintDC, &penWidth, &penColorIndex, &paletteIndex, &dai] () {
         auto [pensExist, pens] = penColorIndex >= 0 ? dai.palette.basePens [penColorIndex].get (paletteIndex) : std::tuple<bool, Pens> (false, Pens ());
@@ -126,7 +126,7 @@ void paintSymbol (
     symbolX -= westX;
     symbolY -= northY;
     if (symbolX >= 0 && symbolX <= client.right && symbolY >= 0 && symbolY <= client.bottom) {
-        completeDrawProc (paintDC, symbol.drawProc, symbolX, symbolY, paletteIndex, dai);
+        completeDrawProc (paintDC, symbol.drawProc, symbolX, symbolY, paletteIndex, dai, symbol.pivotPtCol, symbol.pivotPtRow);
     }
 }
 
