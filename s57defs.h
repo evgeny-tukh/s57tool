@@ -797,28 +797,12 @@ struct Palette {
         return pos == colorIndex.end () ? LookupTableItem::NOT_EXIST : pos->second;
     }
 
-    void composeBasePens (ColorTable& colorTable) {
-        colorIndex.clear ();
-        basePens.clear ();
-        for (auto pos = colorTable.colorBegin (); pos != colorTable.colorEnd (); ++ pos) {
-            colorIndex.emplace (pos->first, pos->second);
-            auto colorDesc = colorTable.getItemByPos (pos);
-            auto& item = basePens.emplace_back ();
-            for (int i = 0; i < 5; ++ i) {
-                int penWidth = i + 1;
-                item.day [i] = CreatePen (PS_SOLID, penWidth, RGB (colorDesc->day.red, colorDesc->day.green, colorDesc->day.blue));
-                item.dusk [i] = CreatePen (PS_SOLID, penWidth, RGB (colorDesc->dusk.red, colorDesc->dusk.green, colorDesc->dusk.blue));
-                item.night [i] = CreatePen (PS_SOLID, penWidth, RGB (colorDesc->night.red, colorDesc->night.green, colorDesc->night.blue));
-            }
-        }
-    }
-
     HPEN *getBasePens (const char *colorName, PaletteIndex paletteIndex) {
         auto pos = colorIndex.find (colorName);
 
         if (pos == colorIndex.end ()) return 0;
 
-        auto [exists, pens] = basePens [pos->second].get (paletteIndex);
+        auto& [exists, pens] = basePens [pos->second].get (paletteIndex);
 
         return exists ? pens.handles () : 0;
     }

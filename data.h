@@ -106,13 +106,12 @@ struct FeatureObject: TopologyObject {
 
         for (size_t i = 1; i < table->size (); ++ i) {
             LookupTableItem *item = & table->at (i);
-            bool itemOk = false;
+            bool itemOk = true;
             for (size_t j = 0; j < item->attrCombination.size (); ++ j) {
                 auto& attrRequired = item->attrCombination [j];
-                bool attrFound;
+                bool attrFound = true;
 
                 if (attrRequired.missing) {
-                    attrFound = true;
                     for (auto& attr: attributes) {
                         if (attr.classCode == attrRequired.classCode) {
                             // The attribute should be missing but it exists
@@ -121,18 +120,28 @@ struct FeatureObject: TopologyObject {
                         }
                     }
                 } else {
-                    attrFound = false;
                     for (auto& attr: attributes) {
                         if (attr.classCode == attrRequired.classCode) {
-                            // The attribute found, just check value
-                            switch (attrRequired.domain) {
-                                case 'I':
-                                case 'E':
-                                    attrFound = attr.intValue == attrRequired.intValue; break;
-                                case 'F':
-                                    attrFound = attr.floatValue == attrRequired.floatValue; break;
-                                default:
-                                    attrFound = true; break; // TO BE DONE!!!!!
+                            // The attribute found, just check value (if it is needed)
+                            if (attrRequired.noValue) {
+                                attrFound = true;
+                            } else {
+                                switch (attrRequired.domain) {
+                                    case 'I':
+                                    case 'E':
+                                        attrFound = attr.intValue == attrRequired.intValue; break;
+                                    case 'F':
+                                        attrFound = attr.floatValue == attrRequired.floatValue; break;
+                                    case 'L':
+                                        for (uint8_t byte: attr.listValue) {
+                                            if (byte == std::atoi (attrRequired.strValue.c_str ())) {
+                                                attrFound = true; break;
+                                            }
+                                        }
+                                        break;
+                                    default:
+                                        attrFound = true; break; // TO BE DONE!!!!!
+                                }
                             }
                             break;
                         }

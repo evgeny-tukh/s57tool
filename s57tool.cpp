@@ -43,6 +43,24 @@ enum TABS {
     FEATURES,
 };
 
+struct Coord {
+    double value;
+    Coord (double deg): value (deg) {}
+    Coord (double deg, double min, bool negative = false): value (deg + min / 60.0) {
+        if (negative) value = -value;
+    }
+
+    operator double () {
+        return value;
+    }
+
+    Coord& operator = (Coord& src) {
+        if (this != & src) value = src.value;
+        
+        return *this;
+    }
+};
+
 struct Ctx {
     HINSTANCE instance;
     HWND mainWnd, catalogCtl, recordTree, propsList, splashScreen, tabCtl, nodeList, edgeTree, featureTree, chartWnd, chartCtlBar;
@@ -66,9 +84,9 @@ struct Ctx {
         mainMenu (_menu),
         keepRunning (true),
         loaded (false),
-        north (66.99),
-        west (-178.99),
-        zoom (12),
+        north (/*66.99*/Coord (32.0, 28.457, true)),
+        west (/*-178.99*/Coord (60.0, 54.605)),
+        zoom (/*12*/13),
         mouseDown (false) {
     }
 

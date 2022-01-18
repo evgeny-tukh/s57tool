@@ -56,9 +56,13 @@ void paintArea (
 }
 
 void completeDrawProc (HDC paintDC, DrawProcedure& drawProc, int startX, int startY, PaletteIndex paletteIndex, Dai& dai, int pivotPtCol, int pivotPtRow) {
+    bool polygonMode = false;
+    std::vector<std::vector<POINT>> polyPolygon;
     int curX = 0, curY = 0;
     int penColorIndex = -1;
-    int penWidth = 0;
+    int penWidth = 1;
+    HPEN savedPen = 0;
+    HBRUSH savedBrush = 0;
     auto absCoordToScreen = [] (int absCoord) {
         static const double PIXEL_SIZE_IN_MM = 0.264583333;
         return (int) ((double) absCoord / PIXEL_SIZE_IN_MM * 0.01);
@@ -67,16 +71,64 @@ void completeDrawProc (HDC paintDC, DrawProcedure& drawProc, int startX, int sta
         screenX = absCoordToScreen (absX - pivotPtCol) + startX;
         screenY = absCoordToScreen (absY - pivotPtRow) + startY;
     };
-    auto selectPenAndBrush = [&paintDC, &penWidth, &penColorIndex, &paletteIndex, &dai] () {
-        auto [pensExist, pens] = penColorIndex >= 0 ? dai.palette.basePens [penColorIndex].get (paletteIndex) : std::tuple<bool, Pens> (false, Pens ());
-        auto [brushExists, brush] = penColorIndex >= 0 ? dai.palette.brushes [penColorIndex].get (paletteIndex) : std::tuple<bool, HBRUSH> (false, 0);
+    auto selectPen = [&savedPen, &paintDC, &penWidth, &penColorIndex, &paletteIndex, &dai] () {
+        auto& [pensExist, pens] = penColorIndex >= 0 ? dai.palette.basePens [penColorIndex].get (paletteIndex) : std::tuple<bool, Pens&> (false, Pens ());
         if (pensExist && penWidth > 0) {
-            SelectObject (paintDC, pens [penWidth-1]);
-            if (brushExists) SelectObject (paintDC, brush);
+            savedPen = (HPEN) SelectObject (paintDC, (HPEN) pens [penWidth-1]);
         }
+    };
+    auto selectBrush = [&savedBrush, &paintDC, &penColorIndex, &paletteIndex, &dai] () {
+        auto& [brushExists, brush] = penColorIndex >= 0 ? dai.palette.brushes [penColorIndex].get (paletteIndex) : std::tuple<bool, HBRUSH> (false, 0);
+        if (brushExists) {
+            savedBrush = (HBRUSH) SelectObject (paintDC, (HBRUSH) brush);
+        }
+    };
+    auto restorePen = [&paintDC, &savedPen] () {
+        if (savedPen) SelectObject (paintDC, savedPen);
+    };
+    auto restoreBrush = [&paintDC, &savedBrush] () {
+        if (savedBrush) SelectObject (paintDC, savedBrush);
     };
     for (auto& instr: drawProc.instructions) {
         switch (instr.oper) {
+            case DrawOperCode::NEW_POLYGON: {
+                polygonMode = true;
+                polyPolygon.clear ();
+                polyPolygon.emplace_back ();
+                polyPolygon.back ().emplace_back ();
+                polyPolygon.back ().back ().x = curX;
+                polyPolygon.back ().back ().y = curY;
+                break;
+            }
+            case DrawOperCode::NEW_SHAPE: {
+                if (polygonMode) {
+                    polyPolygon.emplace_back ();
+                }
+                break;
+            }
+            case DrawOperCode::END_POLYGON: {
+                polygonMode = false; break;
+            }
+            case DrawOperCode::FILL_POLYGON:
+            case DrawOperCode::EXEC_POLYGON: {
+                std::vector<POINT> vertices;
+                std::vector<uint32_t> sizes;
+                for (auto& contour: polyPolygon) {
+                    sizes.emplace_back ((int) contour.size ());
+                    vertices.insert (vertices.begin (), contour.begin (), contour.end ());
+                }
+                selectPen ();
+                if (instr.oper == DrawOperCode::EXEC_POLYGON) {
+                    PolyPolyline (paintDC, vertices.data (), (DWORD *) sizes.data (), (int) sizes.size ());
+                } else {
+                    selectBrush ();
+                    PolyPolygon (paintDC, vertices.data (), (int *) sizes.data (), (int) sizes.size ());
+                    restoreBrush ();
+                }
+                restorePen ();
+                if (!polygonMode) polyPolygon.clear ();
+                break;
+            }
             case DrawOperCode::SELECT_PEN: {
                 penColorIndex = instr.args [0]; break;
             }
@@ -89,17 +141,54 @@ void completeDrawProc (HDC paintDC, DrawProcedure& drawProc, int startX, int sta
                 break;
             }
             case DrawOperCode::PEN_DOWN: {
-                selectPenAndBrush ();
+                if (!polygonMode) selectPen ();
                 for (size_t i = 0; i < instr.args.size (); i += 2) {
                     absPosToScreen (instr.args [i], instr.args [i+1], curX, curY);
-                    LineTo (paintDC, curX, curY);
+                    if (polygonMode) {
+                        auto& vertex = polyPolygon.back ().emplace_back ();
+                        vertex.x = curX;
+                        vertex.y = curY;                      
+                    } else {
+                        LineTo (paintDC, curX, curY);
+                    }
                 }
                 break;
             }
             case DrawOperCode::CIRCLE: {
                 int radius = absCoordToScreen (instr.args [0]);
-                selectPenAndBrush ();
-                Ellipse (paintDC, curX - radius, curY - radius, curX + radius, curY + radius);
+                if (polygonMode) {
+                    if (radius < 2) {
+                        polyPolygon.back ().resize (5);
+                        polyPolygon.back () [0].x = curX - 1;
+                        polyPolygon.back () [0].y = curY;
+                        polyPolygon.back () [1].x = curX;
+                        polyPolygon.back () [1].y = curY - 1;
+                        polyPolygon.back () [2].x = curX + 1;
+                        polyPolygon.back () [2].y = curY;
+                        polyPolygon.back () [3].x = curX;
+                        polyPolygon.back () [3].y = curY + 1;
+                    } else {
+                        polyPolygon.back ().resize (37);
+                        double rad = (double) radius;
+                        double centerX = (double) curX;
+                        double centerY = (double) curY;
+                        for (int i = 0; i < 36; ++ i) {
+                            double brg = (double) i * 10.0 * RAD_IN_DEG;
+                            double x = centerX + rad * sin (brg);
+                            double y = centerY - rad * cos (brg);
+                            polyPolygon.back () [i].x = x;
+                            polyPolygon.back () [i].y = y;
+                        }
+                    }
+                    polyPolygon.back ().back ().x = polyPolygon.back ().front ().x;
+                    polyPolygon.back ().back ().y = polyPolygon.back ().front ().y;
+                } else {
+                    selectPen ();
+                    savedBrush = (HBRUSH) SelectObject (paintDC, (HBRUSH) GetStockObject (NULL_BRUSH));
+                    Ellipse (paintDC, curX - radius, curY - radius, curX + radius, curY + radius);
+                    restorePen ();
+                    restoreBrush ();
+                }
                 break;
             }
         }
@@ -187,12 +276,6 @@ void paintChart (
     std::vector<LookupTable *> lookupTables;
 
     for (auto& feature: features) {
-if(feature.primitive==1)
-{
-int iii=0;
-++iii;
---iii;
-}
         auto tableSet = (feature.primitive == 1 || feature.primitive == 4) ? pointObjTableSet : spatialObjTableSet;
         auto lookupTable = dai.findLookupTable (feature.classCode, displayCat, tableSet, objectTypes [feature.primitive-1]);
 
@@ -202,6 +285,11 @@ int iii=0;
     for (int prty = 1; prty < 10; ++ prty) {
         for (size_t i = 0; i < features.size (); ++ i) {
             auto& feature = features [i];
+if(feature.fidn==29143965){
+int iii=0;
+++iii;
+--iii;
+}
             if (feature.primitive != 2 && feature.primitive != 3) continue;
             if (!lookupTables [i]) continue;
             auto lookupTableItem = feature.findBestItem (displayCat, spatialObjTableSet, dai);
@@ -209,7 +297,7 @@ int iii=0;
 
             if (feature.primitive == 3) {
                 if (lookupTableItem->brushIndex != LookupTableItem::NOT_EXIST) {
-                    auto [brushExists, brush] = dai.palette.brushes [lookupTableItem->brushIndex].get (paletteIndex);
+                    auto& [brushExists, brush] = dai.palette.brushes [lookupTableItem->brushIndex].get (paletteIndex);
                     if (brushExists) {
                         paintArea (
                             client,
@@ -230,7 +318,7 @@ int iii=0;
             if (feature.primitive == 2 || feature.primitive == 3) {
                 HPEN pen;
                 if (lookupTableItem->penIndex != LookupTableItem::NOT_EXIST) {
-                    auto [penExists, penHandle] = dai.palette.pens [lookupTableItem->penIndex].get (paletteIndex);
+                    auto& [penExists, penHandle] = dai.palette.pens [lookupTableItem->penIndex].get (paletteIndex);
                     pen = penExists ? penHandle : 0;
                 } else {
                     pen = (HPEN) GetStockObject (BLACK_PEN);

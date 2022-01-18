@@ -1476,9 +1476,15 @@ void loadLookupTableItem (
                             switch (instance.domain) {
                                 case 'E':
                                 case 'I':
-                                    instance.intValue = std::atoi (value.c_str ()); break;
+                                    instance.noValue = false;
+                                    instance.intValue = std::atoi (value.c_str ());
+                                    break;
                                 case 'F':
-                                    instance.floatValue = std::atof (value.c_str ()); break;
+                                    instance.noValue = false;
+                                    instance.floatValue = std::atof (value.c_str ());
+                                    break;
+                                case 'L':
+                                    break;
                             }
 
                             if (desc) instance.classCode = desc->code;
@@ -1825,8 +1831,25 @@ void loadColorTable (const char *path, Dai& dai) {
         }
     }
 
+    std::vector<std::string> sortedColors;
+    size_t numOfColors = dai.colorTable.container.size ();
+    sortedColors.resize (numOfColors);
     for (auto item: dai.colorTable.index) {
-        dai.palette.checkSolidBrush (item.first.c_str (), dai.colorTable);
+        sortedColors [item.second] = item.first;
+    }
+    dai.palette.basePens.resize (numOfColors);
+    for (size_t i = 0; i < numOfColors; ++ i) {
+        const char *colorName = sortedColors [i].c_str ();
+        dai.palette.checkSolidBrush (colorName, dai.colorTable);
+        auto colorDesc = dai.colorTable.getItem (colorName);
+
+        dai.palette.colorIndex.emplace (colorName, i);
+
+        for (int j = 0; j < 5; ++ j) {
+            dai.palette.basePens [i].day [j] = CreatePen (PS_SOLID, j + 1, RGB (colorDesc->day.red, colorDesc->day.green, colorDesc->day.blue));
+            dai.palette.basePens [i].dusk [j] = CreatePen (PS_SOLID, j + 1, RGB (colorDesc->dusk.red, colorDesc->dusk.green, colorDesc->dusk.blue));
+            dai.palette.basePens [i].night [j] = CreatePen (PS_SOLID, j + 1, RGB (colorDesc->night.red, colorDesc->night.green, colorDesc->night.blue));
+        }
     }
 }
 
@@ -1884,7 +1907,6 @@ void loadDai (const char *path, Dai& dai, ObjectDictionary& objectDictionary, At
             }
         }
     }
-    dai.palette.composeBasePens (dai.colorTable);
 
     // Translate instructions
     for (auto& lookupTable: dai.lookupTables) {
