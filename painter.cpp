@@ -207,7 +207,10 @@ void completeDrawProc (
     HPEN savedPen = 0;
     HBRUSH savedBrush = 0;
     auto absPosToScreen = [startX, startY, &pivotPtCol, &pivotPtRow, patternMode, bBoxCol, bBoxRow] (int absX, int absY, int& screenX, int& screenY) {
-        if (!patternMode) {
+        if (patternMode) {
+            absX -= bBoxCol;
+            absY -= bBoxRow;
+        } else {
             absX -= pivotPtCol;
             absY -= pivotPtRow;
         }
@@ -494,8 +497,8 @@ void paintChart (
 
 HBRUSH createPatternBrush (PatternDesc& pattern, PaletteIndex paletteIndex, Dai& dai) {
     HDC dc = GetDC (HWND_DESKTOP);
-    int fullWidth = /*absCoordToScreen (pattern.bBoxHeight);*/absCoordToScreen (pattern.bBoxWidth + pattern.bBoxCol) + 2;
-    int fullHeight = /*absCoordToScreen (pattern.bBoxWidth);*/absCoordToScreen (pattern.bBoxHeight + pattern.bBoxRow) + 2;
+    int fullWidth = absCoordToScreen (pattern.bBoxWidth + pattern.minDistance);//absCoordToScreen (pattern.bBoxWidth + pattern.bBoxCol) + 2;
+    int fullHeight = absCoordToScreen (pattern.bBoxHeight + pattern.minDistance);//absCoordToScreen (pattern.bBoxHeight + pattern.bBoxRow) + 2;
     HBITMAP bmp = CreateBitmap (fullWidth, fullHeight, 1, 1, 0);
     HDC tempDC = CreateCompatibleDC (dc);
     RECT brushRect;
