@@ -7,6 +7,7 @@
 #include <tuple>
 #include "s57defs.h"
 #include "data.h"
+#include "painter.h"
 
 size_t splitString (std::string source, std::vector<std::string>& parts, char separator) {
     parts.clear ();
@@ -1922,4 +1923,7 @@ void loadDai (const char *path, Dai& dai, ObjectDictionary& objectDictionary, At
             processInstructions (dai, item, parts);
         }
     }
+
+    // Create pattern tools
+    createPatternTools (dai);
 }

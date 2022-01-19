@@ -3,100 +3,124 @@
 
 HBRUSH createPatternBrush (PatternDesc& pattern, PaletteIndex paletteIndex, Dai& dai);
 
+std::vector<DrawToolItem <PatternTool>> patternTools;
+
+void createPatternTools (Dai& dai) {
+    for (auto& pattern: dai.patterns) {
+        patternTools.emplace_back (
+            PatternTool (pattern, PaletteIndex::Day, dai),
+            PatternTool (pattern, PaletteIndex::Dusk, dai),
+            PatternTool (pattern, PaletteIndex::Night, dai)
+        );
+    }
+}
+
+void deletePatternTools () {
+    for (auto& patternTool: patternTools) {
+        patternTool.day.deleteMasks ();
+        patternTool.dusk.deleteMasks ();
+        patternTool.night.deleteMasks ();
+    }
+
+    patternTools.clear ();
+}
+
 inline int absCoordToScreen (int absCoord) {
     static const double PIXEL_SIZE_IN_MM = 0.264583333;
     return (int) ((double) absCoord / PIXEL_SIZE_IN_MM * 0.01);
 }
 
-struct PatternTool {
-    HBITMAP andMask;
-    HBITMAP orMask;
-    int width, height;
+PatternTool::PatternTool (PatternDesc& pattern, PaletteIndex paletteIndex, Dai& dai): andMask (0), orMask (0) {
+    HDC dc = GetDC (HWND_DESKTOP);
+    HDC tempDC = CreateCompatibleDC (dc);
+    width = GetDeviceCaps (dc, HORZRES);
+    height = GetDeviceCaps (dc, VERTRES);
+    HBRUSH brush = createPatternBrush (pattern, paletteIndex, dai);
+    RECT bmpRect;
+    COLORREF color;
+    
+    ColorItem *colorItem = dai.colorTable.getItem (pattern.color.c_str ());
 
-    PatternTool (PatternDesc& pattern, PaletteIndex paletteIndex, Dai& dai, const char *colorName): andMask (0), orMask (0) {
-        HDC dc = GetDC (HWND_DESKTOP);
-        HDC tempDC = CreateCompatibleDC (dc);
-        width = GetDeviceCaps (dc, HORZRES);
-        height = GetDeviceCaps (dc, VERTRES);
-        HBRUSH brush = createPatternBrush (pattern, paletteIndex, dai);
-        RECT bmpRect;
-        COLORREF color;
-        
-        ColorItem *colorItem = dai.colorTable.getItem (colorName);
+    if (colorItem) {
+        ColorDef *colorDef = colorItem->getColorDef (paletteIndex);
 
-        if (colorItem) {
-            ColorDef *colorDef = colorItem->getColorDef (paletteIndex);
-
-            color = RGB (colorDef->red, colorDef->green, colorDef->blue);
-        }
-
-        bmpRect.left = bmpRect.top = 0;
-        bmpRect.bottom = height - 1;
-        bmpRect.right = width - 1;
-
-        andMask = CreateCompatibleBitmap (dc, width, height);
-        orMask = CreateCompatibleBitmap (dc, width, height);
-        
-        SelectObject (tempDC, andMask);
-        FillRect (tempDC, & bmpRect, (HBRUSH) GetStockObject (WHITE_BRUSH));
-        SetTextColor (tempDC, 0);
-        SetBkColor (tempDC, RGB (255, 255, 255));
-        FillRect (tempDC, & bmpRect, brush);
-
-        SelectObject (tempDC, orMask);
-        FillRect (tempDC, & bmpRect, (HBRUSH) GetStockObject (BLACK_BRUSH));
-        SetTextColor (tempDC, color);
-        SetBkColor (tempDC, 0);
-        FillRect (tempDC, & bmpRect, brush);
-
-        DeleteDC (tempDC);
-        DeleteObject (brush);
-        ReleaseDC (HWND_DESKTOP, dc);
+        color = RGB (colorDef->red, colorDef->green, colorDef->blue);
     }
 
-    virtual ~PatternTool () {
-        DeleteObject (andMask);
-        DeleteObject (orMask);
+    bmpRect.left = bmpRect.top = 0;
+    bmpRect.bottom = height - 1;
+    bmpRect.right = width - 1;
+
+    andMask = CreateCompatibleBitmap (dc, width, height);
+    orMask = CreateCompatibleBitmap (dc, width, height);
+    
+    SelectObject (tempDC, andMask);
+    FillRect (tempDC, & bmpRect, (HBRUSH) GetStockObject (WHITE_BRUSH));
+    SetTextColor (tempDC, 0);
+    SetBkColor (tempDC, RGB (255, 255, 255));
+    FillRect (tempDC, & bmpRect, brush);
+
+    SelectObject (tempDC, orMask);
+    FillRect (tempDC, & bmpRect, (HBRUSH) GetStockObject (BLACK_BRUSH));
+    SetTextColor (tempDC, color);
+    SetBkColor (tempDC, 0);
+    FillRect (tempDC, & bmpRect, brush);
+
+    DeleteDC (tempDC);
+    DeleteObject (brush);
+    ReleaseDC (HWND_DESKTOP, dc);
+}
+
+void PatternTool::deleteMasks () {
+    DeleteObject (andMask);
+    DeleteObject (orMask);
+}
+
+void PatternTool::paint (HDC dc, std::vector<std::vector<POINT>>& polyPolygon) {
+    RECT client;
+    GetClientRect (WindowFromDC (dc), & client);
+
+    std::vector<POINT> vertices;
+    std::vector<int> sizes;
+    for (auto& contour: polyPolygon) {
+        sizes.emplace_back ((int) contour.size ());
+        vertices.insert (vertices.begin (), contour.begin (), contour.end ());
+    }
+    int minX, minY, maxX, maxY;
+    minX = maxX = vertices.front ().x;
+    minY = maxY = vertices.front ().y;
+
+    for (auto& pt: vertices) {
+        if (pt.x < minX) minX = pt.x;
+        if (pt.x > maxX) maxX = pt.x;
+        if (pt.y < minY) minY = pt.y;
+        if (pt.y > maxY) maxY = pt.y;
     }
 
-    void paint (HDC dc, std::vector<std::vector<POINT>>& polyPolygon) {
-        HDC andDC = CreateCompatibleDC (dc);
-        HDC orDC = CreateCompatibleDC (dc);
-        std::vector<POINT> vertices;
-        std::vector<int> sizes;
-        for (auto& contour: polyPolygon) {
-            sizes.emplace_back ((int) contour.size ());
-            vertices.insert (vertices.begin (), contour.begin (), contour.end ());
+    if (maxX < client.left || minX > client.right || maxY < client.top || minY > client.bottom) return;
+
+    HDC andDC = CreateCompatibleDC (dc);
+    HDC orDC = CreateCompatibleDC (dc);
+    HRGN region = CreatePolyPolygonRgn (vertices.data (), sizes.data (), sizes.size (), WINDING);
+    SelectClipRgn (dc, region);
+    SelectObject (andDC, andMask);
+    SelectObject (orDC, orMask);
+
+    int actualWidth = min (width, maxX - minX + 1);
+    int actualHeight = min (height, maxY - minY + 1);
+
+    for (int x = minX; x <= maxX; x += width) {
+        for (int y = minY; y <= maxY; y += height) {
+            BitBlt (dc, x, y, actualWidth, actualHeight, andDC, 0, 0, SRCAND);
+            BitBlt (dc, x, y, actualWidth, actualHeight, orDC, 0, 0, SRCPAINT);
         }
-        int minX, minY, maxX, maxY;
-        minX = maxX = vertices.front ().x;
-        minY = maxY = vertices.front ().y;
-
-        for (auto& pt: vertices) {
-            if (pt.x < minX) minX = pt.x;
-            if (pt.x > maxX) maxX = pt.x;
-            if (pt.y < minY) minY = pt.y;
-            if (pt.y > maxY) maxY = pt.y;
-        }
-
-        HRGN region = CreatePolyPolygonRgn (vertices.data (), sizes.data (), sizes.size (), WINDING);
-        SelectClipRgn (dc, region);
-        SelectObject (andDC, andMask);
-        SelectObject (orDC, orMask);
-
-        for (int x = minX; x <= maxX; x += width) {
-            for (int y = minY; y <= maxY; y += height) {
-                BitBlt (dc, x, y, width, height, andDC, 0, 0, SRCAND);
-                BitBlt (dc, x, y, width, height, orDC, 0, 0, SRCPAINT);
-            }
-        }
-
-        SelectClipRgn (dc, 0);
-        DeleteObject (region);
-        DeleteDC (andDC);
-        DeleteDC (orDC);
     }
-};
+
+    SelectClipRgn (dc, 0);
+    DeleteObject (region);
+    DeleteDC (andDC);
+    DeleteDC (orDC);
+}
 
 void paintArea (
     RECT& client,
@@ -109,7 +133,8 @@ void paintArea (
     double west,
     uint8_t zoom,
     HBRUSH brush,
-    bool patternMode
+    //bool patternMode
+    PatternTool *patternTool
 ) {
     std::vector<POINT> vertices;
 
@@ -148,12 +173,12 @@ void paintArea (
 
     vertices.push_back (vertices [0]);
 
-    if (patternMode) {
+    if (patternTool) {
         std::vector<std::vector<POINT>> polyPolygon;
         polyPolygon.emplace_back ();
         polyPolygon.back ().insert (polyPolygon.back ().begin (), vertices.begin (), vertices.end ());
-        PatternTool patternTool (dai.patterns [0], PaletteIndex::Day, dai, "LANDF");
-        patternTool.paint (paintDC, polyPolygon);
+        //PatternTool patternTool (dai.patterns [0], PaletteIndex::Day, dai, "LANDF");
+        patternTool->paint (paintDC, polyPolygon);
     } else {
         SelectObject (paintDC, (HPEN) GetStockObject (NULL_PEN));
         SelectObject (paintDC, brush);
@@ -421,18 +446,21 @@ void paintChart (
             if (feature.primitive == 3) {
                 HBRUSH brush = 0;
                 HPEN pen = 0;
-                bool patternMode = false;
+                //bool patternMode = false;
                 if (lookupTableItem->brushIndex != LookupTableItem::NOT_EXIST) {
                     auto& [brushExists, solidBrush] = dai.palette.brushes [lookupTableItem->brushIndex].get (paletteIndex);
-                    if (brushExists) brush = solidBrush;
+                    if (brushExists) {
+                        paintArea (client, paintDC, nodes, edges, feature.edgeRefs, dai, north, west, zoom, solidBrush, 0);
+                    }
                 } else if (lookupTableItem->patternBrushIndex != LookupTableItem::NOT_EXIST) {
-                    auto& [brushExists, patternBrush] = dai.palette.patternBrushes [lookupTableItem->patternBrushIndex].get (paletteIndex);
-                    if (brushExists) brush = patternBrush;
-                    patternMode = true;
+                    //auto& [brushExists, patternBrush] = dai.palette.patternBrushes [lookupTableItem->patternBrushIndex].get (paletteIndex);
+                    //if (brushExists) brush = patternBrush;
+                    //patternMode = true;
+                    auto& [toolExists, tool] = patternTools [lookupTableItem->patternBrushIndex].get (paletteIndex);
+                    if (toolExists) {
+                        paintArea (client, paintDC, nodes, edges, feature.edgeRefs, dai, north, west, zoom, 0, & tool);
+                    }
                 }
-                if (brush) {
-                    paintArea (client, paintDC, nodes, edges, feature.edgeRefs, dai, north, west, zoom, brush, patternMode);
-                }               
             }
 
             if (feature.primitive == 2 || feature.primitive == 3) {

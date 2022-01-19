@@ -21,3 +21,17 @@ void paintChart (
 );
 
 HBRUSH createPatternBrush (PatternDesc& pattern, PaletteIndex paletteIndex, Dai& dai);
+
+struct PatternTool {
+    HBITMAP andMask;
+    HBITMAP orMask;
+    int width, height;
+
+    PatternTool (): andMask (0), orMask (0), width (0), height (0) {}
+    PatternTool (PatternDesc& pattern, PaletteIndex paletteIndex, Dai& dai);
+    void deleteMasks ();
+    void paint (HDC dc, std::vector<std::vector<POINT>>& polyPolygon);
+};
+
+void createPatternTools (Dai& dai);
+void deletePatternTools ();

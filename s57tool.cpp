@@ -1260,4 +1260,5 @@ int WINAPI WinMain (HINSTANCE instance, HINSTANCE prevInstance, char *cmd, int s
         DispatchMessage (& msg);
     }
 
+    deletePatternTools ();
 }
