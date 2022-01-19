@@ -38,14 +38,11 @@ PatternTool::PatternTool (PatternDesc& pattern, PaletteIndex paletteIndex, Dai& 
     HBRUSH brush = createPatternBrush (pattern, paletteIndex, dai);
     RECT bmpRect;
     COLORREF color;
-    
-    ColorItem *colorItem = dai.colorTable.getItem (pattern.color.c_str ());
 
-    if (colorItem) {
-        ColorDef *colorDef = colorItem->getColorDef (paletteIndex);
+    ColorItem& colorItem = dai.colorTable.container [pattern.drawProc.penColors.begin ()->second];
+    ColorDef *colorDef = colorItem.getColorDef (paletteIndex);
 
-        color = RGB (colorDef->red, colorDef->green, colorDef->blue);
-    }
+    color = RGB (colorDef->red, colorDef->green, colorDef->blue);
 
     bmpRect.left = bmpRect.top = 0;
     bmpRect.bottom = height - 1;
@@ -529,7 +526,7 @@ HBRUSH createPatternBrush (PatternDesc& pattern, PaletteIndex paletteIndex, Dai&
 
     HBRUSH brush = CreatePatternBrush (bmp);
     
-    //DeleteObject (bmp);
+    DeleteObject (bmp);
 
     return brush;
 }
