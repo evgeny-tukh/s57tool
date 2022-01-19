@@ -13,6 +13,7 @@
 #pragma pack(1)
 
 size_t splitString (std::string source, std::vector<std::string>& parts, char separator);
+HBRUSH createPatternBrush (struct PatternDesc& pattern, enum PaletteIndex paletteIndex, struct Dai& dai);
 
 enum PaletteIndex {
     Day = 1,
@@ -427,25 +428,7 @@ struct ObjectDictionary: GenericDictionary {
         items.clear ();
     }
 
-    void checkAddObject (uint16_t code, const char *acronym, const char *name) {
-        auto codePos = indexByCode.find (code);
-        auto acronymPos = indexByAcronym.find (acronym);
-        size_t entryIndex;
-
-        if (codePos == indexByCode.end () && acronymPos == indexByAcronym.end ()) {
-            entryIndex = items.size ();
-            auto& item = items.emplace_back ();
-            item.code = code;
-            item.acronym = acronym;
-            item.name = name;
-            indexByCode.emplace (code, entryIndex);
-            indexByAcronym.emplace (acronym, entryIndex);
-        } else if (codePos == indexByCode.end ()) {
-            indexByCode.emplace (code, acronymPos->second).first;
-        } else if (acronymPos == indexByAcronym.end ()) {
-            indexByAcronym.emplace (acronym, codePos->second).first;
-        }
-    }
+    void checkAddObject (uint16_t code, const char *acronym, const char *name);
 };
 
 struct AttrDictionary: GenericDictionary {
@@ -463,26 +446,7 @@ struct AttrDictionary: GenericDictionary {
         items.clear ();
     }
 
-    void checkAddAttr (uint16_t code, char domain, const char *acronym, const char *name) {
-        auto codePos = indexByCode.find (code);
-        auto acronymPos = indexByAcronym.find (acronym);
-        size_t entryIndex;
-
-        if (codePos == indexByCode.end () && acronymPos == indexByAcronym.end ()) {
-            entryIndex = items.size ();
-            auto& item = items.emplace_back ();
-            item.code = code;
-            item.acronym = acronym;
-            item.domain = domain;
-            item.name = name;
-            indexByCode.emplace (code, entryIndex);
-            indexByAcronym.emplace (acronym, entryIndex);
-        } else if (codePos == indexByCode.end ()) {
-            indexByCode.emplace (code, acronymPos->second).first;
-        } else if (acronymPos == indexByAcronym.end ()) {
-            indexByAcronym.emplace (acronym, codePos->second).first;
-        }
-    }
+    void checkAddAttr (uint16_t code, char domain, const char *acronym, const char *name);
 };
 
 #if 0
@@ -589,7 +553,7 @@ struct ColorTable {
     size_t getColorIndex (const char *colorName) {
         auto pos = index.find (colorName);
 
-        return (pos == index.end ()) ? (size_t) -1 : pos->second;
+        return (pos == index.end ()) ? (size_t) 0xFFFFFFFFFFFFFFFF : pos->second;
     }
 
     ColorItem *getItem (const char *colorName) {
@@ -655,11 +619,16 @@ struct LookupTableItem {
     std::string comment;
     size_t penIndex;
     size_t brushIndex;
+    size_t patternBrushIndex;
     size_t centralSymbolIndex;
     size_t symbProcIndex;
     std::vector<size_t> symbols;
 
     static const size_t NOT_EXIST = 0xFFFFFFFFFFFFFFFF;
+
+    LookupTableItem () {
+        reset ();
+    }
 
     void reset () {
         memset (acronym, 0, sizeof (acronym));
@@ -673,7 +642,7 @@ struct LookupTableItem {
         displayPriority = 0;
         tableSet = TableSet::PLAIN_BOUNDARIES;
         displayCat = DisplayCat::STANDARD;
-        penIndex = brushIndex = centralSymbolIndex = symbProcIndex = NOT_EXIST;
+        penIndex = brushIndex = patternBrushIndex = centralSymbolIndex = symbProcIndex = NOT_EXIST;
     }
 
     // Lookup table index key compose rule:
@@ -681,11 +650,6 @@ struct LookupTableItem {
     // 1 byte - ((<display category (base/standard)>) << 4) + <charset (plain/symboolized boundaries)>
     // 1 byte - object type (A/L/P)
     static uint32_t composeKey (uint16_t classCode, DisplayCat displayCat, TableSet tableSet, char objectType) {
-if(classCode==39){
-int iii=0;
-++iii;
---iii;
-}
         return ((uint32_t) classCode << 16) + ((((uint32_t) displayCat) & 15) << 12) + ((((uint32_t) tableSet) & 15) << 8) + (uint8_t) objectType;
     }
 
@@ -708,6 +672,7 @@ int iii=0;
         radarPriority = source.radarPriority;
         tableSet = source.tableSet;
         brushIndex = source.brushIndex;
+        patternBrushIndex = source.patternBrushIndex;
         penIndex = source.penIndex;
         symbProcIndex = source.symbProcIndex;
         centralSymbolIndex = source.centralSymbolIndex;
@@ -763,33 +728,21 @@ struct DrawToolItem {
     DrawToolItem (TYPE _day, TYPE _dusk, TYPE _night): day (_day), dusk (_dusk), night (_night) {}
 };
 
+struct SymbolDesc;
+struct PatternDesc;
+struct LineDesc;
+struct Dai;
+
 struct Palette {
     std::vector<DrawToolItem <HPEN>> pens;
-    std::vector<DrawToolItem <HBRUSH>> brushes;
+    std::vector<DrawToolItem <HBRUSH>> brushes, patternBrushes;
     std::vector<DrawToolItem <Pens>> basePens;
     StringIndex colorIndex;
     StringIndex penIndex;
     StringIndex brushIndex;
+    StringIndex patternBrushIndex;
 
-    virtual ~Palette () {
-        for (auto& penItem: pens) {
-            DeleteObject (penItem.day);
-            DeleteObject (penItem.dusk);
-            DeleteObject (penItem.night);
-        }
-        for (auto& brushItem: brushes) {
-            DeleteObject (brushItem.day);
-            DeleteObject (brushItem.dusk);
-            DeleteObject (brushItem.night);
-        }
-        for (auto& basePenItem: basePens) {
-            for (size_t i = 0; i < 5; ++ i) {
-                DeleteObject (basePenItem.day [i]);
-                DeleteObject (basePenItem.dusk [i]);
-                DeleteObject (basePenItem.night [i]);
-            }
-        }
-    }
+    virtual ~Palette ();
 
     size_t getColorIndex (const char *colorName) {
         auto pos = colorIndex.find (colorName);
@@ -807,79 +760,12 @@ struct Palette {
         return exists ? pens.handles () : 0;
     }
 
-    size_t checkPen (char *instr, ColorTable& colorTable) {
-        auto pos = penIndex.find (instr);
-
-        if (pos == penIndex.end ()) {
-            char *leftBracket = strchr (instr, '(');
-            char *rightBracket = leftBracket ? strchr (leftBracket + 1, ')') : 0;
-            
-            if (rightBracket - leftBracket > 1) {
-                std::string lineType (leftBracket + 1, rightBracket - leftBracket - 1);
-                std::vector<std::string> parts;
-
-                splitString (lineType, parts, ',');
-
-                if (parts.size () > 2) {
-                    int penStyle, penWidth;
-                    if (parts [0].compare ("SOLD") == 0) {
-                        penStyle = PS_SOLID;
-                    } else if (parts [0].compare ("DASH") == 0) {
-                        penStyle = PS_DASH;
-                    } else if (parts [0].compare ("DOT") == 0) {
-                        penStyle = PS_DOT;
-                    } else {
-                        return -1;
-                    }
-
-                    penWidth = std::atoi (parts [1].c_str ());
-
-                    if (penWidth == 0) return -1;
-
-                    auto colorDesc = colorTable.getItem (parts [2].c_str ());
-
-                    if (!colorDesc) return LookupTableItem::NOT_EXIST;
-
-                    size_t index = pens.size ();
-                    pens.emplace_back (
-                        CreatePen (penStyle, penWidth, RGB (colorDesc->day.red, colorDesc->day.green, colorDesc->day.blue)),
-                        CreatePen (penStyle, penWidth, RGB (colorDesc->dusk.red, colorDesc->dusk.green, colorDesc->dusk.blue)),
-                        CreatePen (penStyle, penWidth, RGB (colorDesc->night.red, colorDesc->night.green, colorDesc->night.blue))
-                    );
-                    penIndex.emplace (instr, index);
-                    return index;
-                }
-            }
-        }
-        
-        return pos->second;
-    }
-
-    size_t checkSolidBrush (const char *colorName, ColorTable& colorTable) {
-        auto pos = brushIndex.find (colorName);
-
-        if (pos == brushIndex.end ()) {
-            auto colorDesc = colorTable.getItem (colorName);
-
-            if (!colorDesc) return LookupTableItem::NOT_EXIST;
-
-            size_t index = brushes.size ();
-            brushes.emplace_back (
-                CreateSolidBrush (RGB (colorDesc->day.red, colorDesc->day.green, colorDesc->day.blue)),
-                CreateSolidBrush (RGB (colorDesc->dusk.red, colorDesc->dusk.green, colorDesc->dusk.blue)),
-                CreateSolidBrush (RGB (colorDesc->night.red, colorDesc->night.green, colorDesc->night.blue))
-            );
-            brushIndex.emplace (/*instr*/colorName, index);
-            return index;
-        }
-        
-        return pos->second;
-    }
+    size_t checkPen (char *instr, ColorTable& colorTable);
+    size_t checkSolidBrush (const char *colorName, ColorTable& colorTable);
+    size_t checkPatternBrush (PatternDesc& pattern, struct Dai& dai);
+    size_t getPatternBrushIndex (const char *patternName);
+    size_t getSolidBrushIndex (const char *colorName);
 };
-
-struct SymbolDesc;
-struct PatternDesc;
-struct LineDesc;
 
 struct Dai {
     LibraryIdentification libraryId;
@@ -891,6 +777,7 @@ struct Dai {
     StringIndex patternIndex;
     StringIndex symbolIndex;
     StringIndex lineIndex;
+    StringIndex bitmapIndex;
     std::vector<LookupTable> lookupTables;
     std::map<uint32_t, size_t> lookupTableIndex;
     std::vector<PatternDesc> patterns;
@@ -914,6 +801,7 @@ struct Dai {
         auto pos = patternIndex.find (name);
         return pos == patternIndex.end () ? LookupTableItem::NOT_EXIST : pos->second;
     }
+    void composePatternBrushes ();
 };
 
 struct DrawOper {
@@ -943,129 +831,7 @@ struct DrawProcedure {
         }
     }
 
-    void defineOperation (const char *operDesc, Dai& dai) {
-        static const char *SP = "SP";
-        static const char *ST = "ST";
-        static const char *SW = "SW";
-        static const char *PU = "PU";
-        static const char *PD = "PD";
-        static const char *CI = "CI";
-        static const char *EP = "EP";
-        static const char *FP = "FP";
-        static const char *SC = "SC";
-        static const char *PM = "PM";
-
-        auto isOperCode = [&operDesc] (const char *code) {
-            return *((uint16_t *) code) == *((uint16_t *) operDesc);
-        };
-
-        if (isOperCode (SP)) {
-            // Pen selection
-            size_t colorIndex = getPenColorIndex (operDesc [2]);
-
-            if (colorIndex != LookupTableItem::NOT_EXIST) {
-                auto& oper = instructions.emplace_back ();
-                oper.oper = DrawOperCode::SELECT_PEN;
-                oper.args.emplace_back (colorIndex);
-            }
-        } else if (isOperCode (SW)) {
-            // Pen width selection, arg is one digit-int
-            if (isdigit (operDesc [2])) {
-                auto& oper = instructions.emplace_back ();
-                oper.oper = DrawOperCode::SELECT_PEN_WIDTH;
-                oper.args.emplace_back (operDesc [2] - '0');
-            }
-        } else if (isOperCode (CI)) {
-            // Draw a circle, arg is a radius
-            if (isdigit (operDesc [2])) {
-                auto& oper = instructions.emplace_back ();
-                oper.oper = DrawOperCode::CIRCLE;
-                oper.args.emplace_back (std::atoi (operDesc + 2));
-            }
-        } else if (isOperCode (ST)) {
-            // Pen transparency selection, arg is a number of quarters, so 0 is 0%, 1 is 25% etc.
-            if (isdigit (operDesc [2])) {
-                auto& oper = instructions.emplace_back ();
-                oper.oper = DrawOperCode::SELECT_TRANSP;
-                oper.args.emplace_back ((operDesc [2] - '0') * 25);
-            }
-        } else if (isOperCode (PM)) {
-            // Polygon control command, arg is command id (0/1/2 - enter, new shape, end).
-            DrawOperCode operCode;
-            switch (operDesc [2]) {
-                case '0': operCode = DrawOperCode::NEW_POLYGON; break;
-                case '1': operCode = DrawOperCode::NEW_SHAPE; break;
-                case '2': operCode = DrawOperCode::END_POLYGON; break;
-                default: return;
-            }
-
-            auto& oper = instructions.emplace_back ();
-            oper.oper = operCode;
-        } else if (isOperCode (PU)) {
-            // Pen up command, args are x and y
-            if (isdigit (operDesc [2])) {
-                char *comma = strchr ((char *) operDesc + 2, ',');
-
-                if (comma && isdigit (comma [1])) {
-                    auto& oper = instructions.emplace_back ();
-                    oper.oper = DrawOperCode::PEN_UP;
-                    oper.args.emplace_back (std::atoi (operDesc + 2));
-                    oper.args.emplace_back (std::atoi (comma + 1));
-                }
-            }
-        } else if (isOperCode (SC)) {
-            // Symbol call, args are symbol name and orientation 0/1/2
-            auto& oper = instructions.emplace_back ();
-            oper.oper = DrawOperCode::SYMBOL_CALL;
-            for (size_t i = 0; i < 8; oper.args.emplace_back (operDesc [(i++)+2]));
-            oper.args.emplace_back (operDesc [11] - '0');
-        } else if (isOperCode (FP)) {
-            // Fill polygon, no args
-            auto& oper = instructions.emplace_back ();
-            oper.oper = DrawOperCode::FILL_POLYGON;
-        } else if (isOperCode (EP)) {
-            // Exec polygon, no args
-            auto& oper = instructions.emplace_back ();
-            oper.oper = DrawOperCode::EXEC_POLYGON;
-        } else if (isOperCode (PD)) {
-            // Pen down command, args are x and y pairs (one or more)
-            if (isdigit (operDesc [2])) {
-                auto extractPoint = [] (char *instr) {
-                    if (isdigit (instr [0])) {
-                        char *comma = strchr (instr + 1, ',');
-
-                        if (comma && isdigit (comma [1])) {
-                            char *nextComma = strchr (comma + 1, ',');
-
-                            int x = std::atoi (instr);
-                            int y = std::atoi (comma + 1);
-                            bool morePoints = nextComma && isdigit (nextComma [1]);
-                            char *nextChar = morePoints ? nextComma + 1 : 0;
-
-                            return std::tuple (true, x, y, morePoints, nextChar);
-                        }
-                    }
-
-                    return std::tuple (false, 0, 0, false, (char *) 0);
-                };
-                char *source = (char *) operDesc + 2;
-                while (true) {
-                    auto [isPoint, x, y, morePoints, nextChar] = extractPoint (source);
-
-                    if (isPoint) {
-                        auto& oper = instructions.emplace_back ();
-                        oper.oper = DrawOperCode::PEN_DOWN;
-                        oper.args.emplace_back (x);
-                        oper.args.emplace_back (y);
-                    }
-
-                    if (!morePoints) break;
-
-                    source = nextChar;
-                }
-            }
-        }
-    }
+    void defineOperation (const char *operDesc, Dai& dai);
 };
 
 enum FillType {
@@ -1079,7 +845,7 @@ enum Spacing {
 };
 
 struct DrawableObjDesc {
-    char name [8];
+    std::string name;
     uint32_t pivotPtCol;
     uint32_t pivotPtRow;
     std::string exposition;

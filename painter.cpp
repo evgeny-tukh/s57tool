@@ -55,7 +55,22 @@ void paintArea (
     Polygon (paintDC, vertices.data (), (int) vertices.size ());
 }
 
-void completeDrawProc (HDC paintDC, DrawProcedure& drawProc, int startX, int startY, PaletteIndex paletteIndex, Dai& dai, int pivotPtCol, int pivotPtRow) {
+int absCoordToScreen (int absCoord) {
+    static const double PIXEL_SIZE_IN_MM = 0.264583333;
+    return (int) ((double) absCoord / PIXEL_SIZE_IN_MM * 0.01);
+}
+
+void completeDrawProc (
+    HDC paintDC,
+    DrawProcedure& drawProc,
+    int startX,
+    int startY,
+    PaletteIndex paletteIndex,
+    Dai& dai,
+    int pivotPtCol,
+    int pivotPtRow,
+    bool patternMode = false
+) {
     bool polygonMode = false;
     std::vector<std::vector<POINT>> polyPolygon;
     int curX = 0, curY = 0;
@@ -63,24 +78,32 @@ void completeDrawProc (HDC paintDC, DrawProcedure& drawProc, int startX, int sta
     int penWidth = 1;
     HPEN savedPen = 0;
     HBRUSH savedBrush = 0;
-    auto absCoordToScreen = [] (int absCoord) {
-        static const double PIXEL_SIZE_IN_MM = 0.264583333;
-        return (int) ((double) absCoord / PIXEL_SIZE_IN_MM * 0.01);
+    auto absPosToScreen = [startX, startY, &pivotPtCol, &pivotPtRow, patternMode] (int absX, int absY, int& screenX, int& screenY) {
+        if (!patternMode) {
+            absX -= pivotPtCol;
+            absY -= pivotPtRow;
+        }
+        screenX = absCoordToScreen (absX) + startX;
+        screenY = absCoordToScreen (absY) + startY;
     };
-    auto absPosToScreen = [startX, startY, &absCoordToScreen, &pivotPtCol, &pivotPtRow] (int absX, int absY, int& screenX, int& screenY) {
-        screenX = absCoordToScreen (absX - pivotPtCol) + startX;
-        screenY = absCoordToScreen (absY - pivotPtRow) + startY;
-    };
-    auto selectPen = [&savedPen, &paintDC, &penWidth, &penColorIndex, &paletteIndex, &dai] () {
-        auto& [pensExist, pens] = penColorIndex >= 0 ? dai.palette.basePens [penColorIndex].get (paletteIndex) : std::tuple<bool, Pens&> (false, Pens ());
-        if (pensExist && penWidth > 0) {
-            savedPen = (HPEN) SelectObject (paintDC, (HPEN) pens [penWidth-1]);
+    auto selectPen = [&savedPen, &paintDC, &penWidth, &penColorIndex, &paletteIndex, &dai, patternMode] () {
+        if (patternMode) {
+            savedPen = (HPEN) SelectObject (paintDC, (HPEN) GetStockObject (BLACK_PEN));
+        } else {
+            auto& [pensExist, pens] = penColorIndex >= 0 ? dai.palette.basePens [penColorIndex].get (paletteIndex) : std::tuple<bool, Pens&> (false, Pens ());
+            if (pensExist && penWidth > 0) {
+                savedPen = (HPEN) SelectObject (paintDC, (HPEN) pens [penWidth-1]);
+            }
         }
     };
-    auto selectBrush = [&savedBrush, &paintDC, &penColorIndex, &paletteIndex, &dai] () {
-        auto& [brushExists, brush] = penColorIndex >= 0 ? dai.palette.brushes [penColorIndex].get (paletteIndex) : std::tuple<bool, HBRUSH> (false, 0);
-        if (brushExists) {
-            savedBrush = (HBRUSH) SelectObject (paintDC, (HBRUSH) brush);
+    auto selectBrush = [&savedBrush, &paintDC, &penColorIndex, &paletteIndex, &dai, patternMode] () {
+        if (patternMode) {
+            savedBrush = (HBRUSH) SelectObject (paintDC, (HBRUSH) GetStockObject (WHITE_BRUSH));
+        } else {
+            auto& [brushExists, brush] = penColorIndex >= 0 ? dai.palette.brushes [penColorIndex].get (paletteIndex) : std::tuple<bool, HBRUSH> (false, 0);
+            if (brushExists) {
+                savedBrush = (HBRUSH) SelectObject (paintDC, (HBRUSH) brush);
+            }
         }
     };
     auto restorePen = [&paintDC, &savedPen] () {
@@ -130,7 +153,8 @@ void completeDrawProc (HDC paintDC, DrawProcedure& drawProc, int startX, int sta
                 break;
             }
             case DrawOperCode::SELECT_PEN: {
-                penColorIndex = instr.args [0]; break;
+                penColorIndex = instr.args [0];
+                break;
             }
             case DrawOperCode::SELECT_PEN_WIDTH: {
                 penWidth = instr.args [0]; break;
@@ -290,33 +314,29 @@ int iii=0;
 ++iii;
 --iii;
 }
+            if (feature.classCode >= 300 && feature.classCode <= 402) continue;
             if (feature.primitive != 2 && feature.primitive != 3) continue;
             if (!lookupTables [i]) continue;
             auto lookupTableItem = feature.findBestItem (displayCat, spatialObjTableSet, dai);
             if (!lookupTableItem || lookupTableItem->displayPriority != prty) continue;
 
             if (feature.primitive == 3) {
+                HBRUSH brush = 0;
+                HPEN pen = 0;
                 if (lookupTableItem->brushIndex != LookupTableItem::NOT_EXIST) {
-                    auto& [brushExists, brush] = dai.palette.brushes [lookupTableItem->brushIndex].get (paletteIndex);
-                    if (brushExists) {
-                        paintArea (
-                            client,
-                            paintDC,
-                            nodes,
-                            edges,
-                            feature.edgeRefs,
-                            dai,
-                            north,
-                            west,
-                            zoom,
-                            brush
-                        );
-                    }
+                    auto& [brushExists, solidBrush] = dai.palette.brushes [lookupTableItem->brushIndex].get (paletteIndex);
+                    if (brushExists) brush = solidBrush;
+                } else if (lookupTableItem->patternBrushIndex != LookupTableItem::NOT_EXIST) {
+                    auto& [brushExists, patternBrush] = dai.palette.patternBrushes [lookupTableItem->patternBrushIndex].get (paletteIndex);
+                    if (brushExists) brush = patternBrush;
+                }
+                if (brush) {
+                    paintArea (client, paintDC, nodes, edges, feature.edgeRefs, dai, north, west, zoom, brush);
                 }               
             }
 
             if (feature.primitive == 2 || feature.primitive == 3) {
-                HPEN pen;
+                HPEN pen = 0;
                 if (lookupTableItem->penIndex != LookupTableItem::NOT_EXIST) {
                     auto& [penExists, penHandle] = dai.palette.pens [lookupTableItem->penIndex].get (paletteIndex);
                     pen = penExists ? penHandle : 0;
@@ -342,4 +362,41 @@ int iii=0;
             paintSymbol (client, paintDC, nodes [feature.nodeIndex], dai, north, west, zoom, offset, symbolIndex, paletteIndex);
         }
     }
+}
+
+HBRUSH createPatternBrush (PatternDesc& pattern, PaletteIndex paletteIndex, Dai& dai) {
+    HDC dc = GetDC (HWND_DESKTOP);
+    int fullWidth = absCoordToScreen (pattern.bBoxWidth + pattern.bBoxCol);
+    int fullHeight = absCoordToScreen (pattern.bBoxHeight + pattern.bBoxRow);
+    HBITMAP bmp = CreateBitmap (fullWidth, fullHeight, 1, 1, 0);
+    HDC tempDC = CreateCompatibleDC (dc);
+    RECT brushRect;
+
+    brushRect.left = 0;
+    brushRect.top = 0;
+    brushRect.bottom = fullHeight;
+    brushRect.right = fullWidth;
+ 
+    SelectObject (tempDC, bmp);
+    FillRect (tempDC, & brushRect, (HBRUSH) GetStockObject (WHITE_BRUSH));
+    completeDrawProc (
+        tempDC,
+        pattern.drawProc,
+        0,//absCoordToScreen (pattern.bBoxCol),
+        0,//absCoordToScreen (pattern.bBoxRow),
+        paletteIndex,
+        dai,
+        pattern.pivotPtCol,
+        pattern.pivotPtRow,
+        true
+    );
+    SelectObject (tempDC, (HBITMAP) 0);
+    ReleaseDC (HWND_DESKTOP, dc);
+    DeleteDC (tempDC);
+
+    HBRUSH brush = CreatePatternBrush (bmp);
+    
+    //DeleteObject (bmp);
+
+    return brush;
 }

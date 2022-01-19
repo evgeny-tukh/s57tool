@@ -19,3 +19,5 @@ void paintChart (
     TableSet spatialObjTableSet,
     TableSet pointObjTableSet
 );
+
+HBRUSH createPatternBrush (PatternDesc& pattern, PaletteIndex paletteIndex, Dai& dai);

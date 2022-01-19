@@ -1398,7 +1398,11 @@ void processInstructions (Dai& dai, LookupTableItem& item, std::vector<std::stri
         } else if (instruction [0] == 'A' && instruction [1] == 'C') {
             auto colorName = extractInstr (instruction);
 
-            if (!colorName.empty ()) item.brushIndex = dai.palette.checkSolidBrush (colorName.c_str (), dai.colorTable);
+            if (!colorName.empty ()) item.brushIndex = dai.palette.getSolidBrushIndex (colorName.c_str ());
+        } else if (instruction [0] == 'A' && instruction [1] == 'P') {
+            auto patternName = extractInstr (instruction);
+
+            if (!patternName.empty ()) item.patternBrushIndex = dai.palette.getPatternBrushIndex (patternName.c_str ());
         }
     }
 }
@@ -1642,7 +1646,7 @@ void loadPattern (std::vector<std::string>& module, Dai& dai) {
 
             auto& patternDesc = dai.patterns.back ();
 
-            memcpy (patternDesc.name, name.c_str (), 8);
+            patternDesc.name = name;
             patternDesc.type = type [0];
             patternDesc.bBoxCol = bBoxCol;
             patternDesc.bBoxRow = bBoxRow;
@@ -1714,7 +1718,7 @@ void loadSymbol (std::vector<std::string>& module, Dai& dai) {
             }
 
             auto& symbolDesc = dai.symbols.back ();
-            memcpy (symbolDesc.name, name.c_str (), 8);
+            symbolDesc.name = name.c_str ();
             symbolDesc.type = type [0];
             symbolDesc.bBoxCol = bBoxCol;
             symbolDesc.bBoxRow = bBoxRow;
@@ -1771,9 +1775,8 @@ void loadLine (std::vector<std::string>& module, Dai& dai) {
             }
 
             auto& lineDesc = dai.lines.back ();
-            memcpy (lineDesc.name, name.c_str (), 8);
 
-            memcpy (lineDesc.name, name.c_str (), 8);
+            lineDesc.name = name;
             lineDesc.bBoxCol = bBoxCol;
             lineDesc.bBoxRow = bBoxRow;
             lineDesc.bBoxWidth = bBoxWidth;
@@ -1907,6 +1910,9 @@ void loadDai (const char *path, Dai& dai, ObjectDictionary& objectDictionary, At
             }
         }
     }
+
+    // Create bitmaps
+    dai.composePatternBrushes ();
 
     // Translate instructions
     for (auto& lookupTable: dai.lookupTables) {
