@@ -1,6 +1,103 @@
 #include "painter.h"
 #include "geo.h"
 
+HBRUSH createPatternBrush (PatternDesc& pattern, PaletteIndex paletteIndex, Dai& dai);
+
+inline int absCoordToScreen (int absCoord) {
+    static const double PIXEL_SIZE_IN_MM = 0.264583333;
+    return (int) ((double) absCoord / PIXEL_SIZE_IN_MM * 0.01);
+}
+
+struct PatternTool {
+    HBITMAP andMask;
+    HBITMAP orMask;
+    int width, height;
+
+    PatternTool (PatternDesc& pattern, PaletteIndex paletteIndex, Dai& dai, const char *colorName): andMask (0), orMask (0) {
+        HDC dc = GetDC (HWND_DESKTOP);
+        HDC tempDC = CreateCompatibleDC (dc);
+        width = GetDeviceCaps (dc, HORZRES);
+        height = GetDeviceCaps (dc, VERTRES);
+        HBRUSH brush = createPatternBrush (pattern, paletteIndex, dai);
+        RECT bmpRect;
+        COLORREF color;
+        
+        ColorItem *colorItem = dai.colorTable.getItem (colorName);
+
+        if (colorItem) {
+            ColorDef *colorDef = colorItem->getColorDef (paletteIndex);
+
+            color = RGB (colorDef->red, colorDef->green, colorDef->blue);
+        }
+
+        bmpRect.left = bmpRect.top = 0;
+        bmpRect.bottom = height - 1;
+        bmpRect.right = width - 1;
+
+        andMask = CreateCompatibleBitmap (dc, width, height);
+        orMask = CreateCompatibleBitmap (dc, width, height);
+        
+        SelectObject (tempDC, andMask);
+        FillRect (tempDC, & bmpRect, (HBRUSH) GetStockObject (WHITE_BRUSH));
+        SetTextColor (tempDC, 0);
+        SetBkColor (tempDC, RGB (255, 255, 255));
+        FillRect (tempDC, & bmpRect, brush);
+
+        SelectObject (tempDC, orMask);
+        FillRect (tempDC, & bmpRect, (HBRUSH) GetStockObject (BLACK_BRUSH));
+        SetTextColor (tempDC, color);
+        SetBkColor (tempDC, 0);
+        FillRect (tempDC, & bmpRect, brush);
+
+        DeleteDC (tempDC);
+        DeleteObject (brush);
+        ReleaseDC (HWND_DESKTOP, dc);
+    }
+
+    virtual ~PatternTool () {
+        DeleteObject (andMask);
+        DeleteObject (orMask);
+    }
+
+    void paint (HDC dc, std::vector<std::vector<POINT>>& polyPolygon) {
+        HDC andDC = CreateCompatibleDC (dc);
+        HDC orDC = CreateCompatibleDC (dc);
+        std::vector<POINT> vertices;
+        std::vector<int> sizes;
+        for (auto& contour: polyPolygon) {
+            sizes.emplace_back ((int) contour.size ());
+            vertices.insert (vertices.begin (), contour.begin (), contour.end ());
+        }
+        int minX, minY, maxX, maxY;
+        minX = maxX = vertices.front ().x;
+        minY = maxY = vertices.front ().y;
+
+        for (auto& pt: vertices) {
+            if (pt.x < minX) minX = pt.x;
+            if (pt.x > maxX) maxX = pt.x;
+            if (pt.y < minY) minY = pt.y;
+            if (pt.y > maxY) maxY = pt.y;
+        }
+
+        HRGN region = CreatePolyPolygonRgn (vertices.data (), sizes.data (), sizes.size (), WINDING);
+        SelectClipRgn (dc, region);
+        SelectObject (andDC, andMask);
+        SelectObject (orDC, orMask);
+
+        for (int x = minX; x <= maxX; x += width) {
+            for (int y = minY; y <= maxY; y += height) {
+                BitBlt (dc, x, y, width, height, andDC, 0, 0, SRCAND);
+                BitBlt (dc, x, y, width, height, orDC, 0, 0, SRCPAINT);
+            }
+        }
+
+        SelectClipRgn (dc, 0);
+        DeleteObject (region);
+        DeleteDC (andDC);
+        DeleteDC (orDC);
+    }
+};
+
 void paintArea (
     RECT& client,
     HDC paintDC,
@@ -11,7 +108,8 @@ void paintArea (
     double north,
     double west,
     uint8_t zoom,
-    HBRUSH brush
+    HBRUSH brush,
+    bool patternMode
 ) {
     std::vector<POINT> vertices;
 
@@ -50,14 +148,17 @@ void paintArea (
 
     vertices.push_back (vertices [0]);
 
-    SelectObject (paintDC, (HPEN) GetStockObject (NULL_PEN));
-    SelectObject (paintDC, brush);
-    Polygon (paintDC, vertices.data (), (int) vertices.size ());
-}
-
-int absCoordToScreen (int absCoord) {
-    static const double PIXEL_SIZE_IN_MM = 0.264583333;
-    return (int) ((double) absCoord / PIXEL_SIZE_IN_MM * 0.01);
+    if (patternMode) {
+        std::vector<std::vector<POINT>> polyPolygon;
+        polyPolygon.emplace_back ();
+        polyPolygon.back ().insert (polyPolygon.back ().begin (), vertices.begin (), vertices.end ());
+        PatternTool patternTool (dai.patterns [0], PaletteIndex::Day, dai, "LANDF");
+        patternTool.paint (paintDC, polyPolygon);
+    } else {
+        SelectObject (paintDC, (HPEN) GetStockObject (NULL_PEN));
+        SelectObject (paintDC, brush);
+        Polygon (paintDC, vertices.data (), (int) vertices.size ());
+    }
 }
 
 void completeDrawProc (
@@ -69,6 +170,8 @@ void completeDrawProc (
     Dai& dai,
     int pivotPtCol,
     int pivotPtRow,
+    int bBoxCol,
+    int bBoxRow,
     bool patternMode = false
 ) {
     bool polygonMode = false;
@@ -78,13 +181,13 @@ void completeDrawProc (
     int penWidth = 1;
     HPEN savedPen = 0;
     HBRUSH savedBrush = 0;
-    auto absPosToScreen = [startX, startY, &pivotPtCol, &pivotPtRow, patternMode] (int absX, int absY, int& screenX, int& screenY) {
+    auto absPosToScreen = [startX, startY, &pivotPtCol, &pivotPtRow, patternMode, bBoxCol, bBoxRow] (int absX, int absY, int& screenX, int& screenY) {
         if (!patternMode) {
             absX -= pivotPtCol;
             absY -= pivotPtRow;
         }
-        screenX = absCoordToScreen (absX) + startX;
-        screenY = absCoordToScreen (absY) + startY;
+        screenX = absCoordToScreen (absX /*- bBoxCol*/) + startX;
+        screenY = absCoordToScreen (absY /*- bBoxRow*/) + startY;
     };
     auto selectPen = [&savedPen, &paintDC, &penWidth, &penColorIndex, &paletteIndex, &dai, patternMode] () {
         if (patternMode) {
@@ -239,7 +342,7 @@ void paintSymbol (
     symbolX -= westX;
     symbolY -= northY;
     if (symbolX >= 0 && symbolX <= client.right && symbolY >= 0 && symbolY <= client.bottom) {
-        completeDrawProc (paintDC, symbol.drawProc, symbolX, symbolY, paletteIndex, dai, symbol.pivotPtCol, symbol.pivotPtRow);
+        completeDrawProc (paintDC, symbol.drawProc, symbolX, symbolY, paletteIndex, dai, symbol.pivotPtCol, symbol.pivotPtRow, symbol.bBoxCol, symbol.bBoxRow);
     }
 }
 
@@ -309,12 +412,7 @@ void paintChart (
     for (int prty = 1; prty < 10; ++ prty) {
         for (size_t i = 0; i < features.size (); ++ i) {
             auto& feature = features [i];
-if(feature.fidn==29143965){
-int iii=0;
-++iii;
---iii;
-}
-            if (feature.classCode >= 300 && feature.classCode <= 402) continue;
+            //if (feature.classCode >= 300 && feature.classCode <= 402) continue;
             if (feature.primitive != 2 && feature.primitive != 3) continue;
             if (!lookupTables [i]) continue;
             auto lookupTableItem = feature.findBestItem (displayCat, spatialObjTableSet, dai);
@@ -323,15 +421,17 @@ int iii=0;
             if (feature.primitive == 3) {
                 HBRUSH brush = 0;
                 HPEN pen = 0;
+                bool patternMode = false;
                 if (lookupTableItem->brushIndex != LookupTableItem::NOT_EXIST) {
                     auto& [brushExists, solidBrush] = dai.palette.brushes [lookupTableItem->brushIndex].get (paletteIndex);
                     if (brushExists) brush = solidBrush;
                 } else if (lookupTableItem->patternBrushIndex != LookupTableItem::NOT_EXIST) {
                     auto& [brushExists, patternBrush] = dai.palette.patternBrushes [lookupTableItem->patternBrushIndex].get (paletteIndex);
                     if (brushExists) brush = patternBrush;
+                    patternMode = true;
                 }
                 if (brush) {
-                    paintArea (client, paintDC, nodes, edges, feature.edgeRefs, dai, north, west, zoom, brush);
+                    paintArea (client, paintDC, nodes, edges, feature.edgeRefs, dai, north, west, zoom, brush, patternMode);
                 }               
             }
 
@@ -366,8 +466,8 @@ int iii=0;
 
 HBRUSH createPatternBrush (PatternDesc& pattern, PaletteIndex paletteIndex, Dai& dai) {
     HDC dc = GetDC (HWND_DESKTOP);
-    int fullWidth = absCoordToScreen (pattern.bBoxWidth + pattern.bBoxCol);
-    int fullHeight = absCoordToScreen (pattern.bBoxHeight + pattern.bBoxRow);
+    int fullWidth = /*absCoordToScreen (pattern.bBoxHeight);*/absCoordToScreen (pattern.bBoxWidth + pattern.bBoxCol) + 2;
+    int fullHeight = /*absCoordToScreen (pattern.bBoxWidth);*/absCoordToScreen (pattern.bBoxHeight + pattern.bBoxRow) + 2;
     HBITMAP bmp = CreateBitmap (fullWidth, fullHeight, 1, 1, 0);
     HDC tempDC = CreateCompatibleDC (dc);
     RECT brushRect;
@@ -388,6 +488,8 @@ HBRUSH createPatternBrush (PatternDesc& pattern, PaletteIndex paletteIndex, Dai&
         dai,
         pattern.pivotPtCol,
         pattern.pivotPtRow,
+        pattern.bBoxCol,
+        pattern.bBoxRow,
         true
     );
     SelectObject (tempDC, (HBITMAP) 0);
