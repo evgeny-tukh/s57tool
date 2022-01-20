@@ -494,8 +494,11 @@ void paintChart (
 
 HBRUSH createPatternBrush (PatternDesc& pattern, PaletteIndex paletteIndex, Dai& dai) {
     HDC dc = GetDC (HWND_DESKTOP);
-    int fullWidth = absCoordToScreen (pattern.bBoxWidth + pattern.minDistance);//absCoordToScreen (pattern.bBoxWidth + pattern.bBoxCol) + 2;
-    int fullHeight = absCoordToScreen (pattern.bBoxHeight + pattern.minDistance);//absCoordToScreen (pattern.bBoxHeight + pattern.bBoxRow) + 2;
+    int baseWidth = absCoordToScreen (pattern.bBoxWidth + pattern.minDistance);//absCoordToScreen (pattern.bBoxWidth + pattern.bBoxCol) + 2;
+    int baseHeight = absCoordToScreen (pattern.bBoxHeight + pattern.minDistance);//absCoordToScreen (pattern.bBoxHeight + pattern.bBoxRow) + 2;
+    int minOffset = absCoordToScreen (pattern.minDistance);
+    int fullWidth = baseWidth * 3;
+    int fullHeight = baseHeight * 2;
     HBITMAP bmp = CreateBitmap (fullWidth, fullHeight, 1, 1, 0);
     HDC tempDC = CreateCompatibleDC (dc);
     RECT brushRect;
@@ -507,19 +510,42 @@ HBRUSH createPatternBrush (PatternDesc& pattern, PaletteIndex paletteIndex, Dai&
  
     SelectObject (tempDC, bmp);
     FillRect (tempDC, & brushRect, (HBRUSH) GetStockObject (WHITE_BRUSH));
-    completeDrawProc (
-        tempDC,
-        pattern.drawProc,
-        0,//absCoordToScreen (pattern.bBoxCol),
-        0,//absCoordToScreen (pattern.bBoxRow),
-        paletteIndex,
-        dai,
-        pattern.pivotPtCol,
-        pattern.pivotPtRow,
-        pattern.bBoxCol,
-        pattern.bBoxRow,
-        true
-    );
+
+    std::vector<POINT> drawPos;
+
+    for (int i = 0; i < 2; ++ i) {
+        int vertOffset = i * baseHeight;
+        if (pattern.fillType == FillType::LINEAR || i != 1) {
+            for (int j = 0; j < 3; ++ j) {
+                auto& pos = drawPos.emplace_back ();
+                pos.x = j * baseWidth;
+                pos.y = vertOffset;
+            }
+        } else {
+            for (int j = 0; j < 2; ++ j) {
+                auto& pos = drawPos.emplace_back ();
+                pos.x = baseWidth >> 1;
+                if (j > 0) pos.x += baseWidth;
+                pos.y = vertOffset;
+            }
+        }
+    }
+
+    for (auto& pt: drawPos) {
+        completeDrawProc (
+            tempDC,
+            pattern.drawProc,
+            pt.x,
+            pt.y,
+            paletteIndex,
+            dai,
+            pattern.pivotPtCol,
+            pattern.pivotPtRow,
+            pattern.bBoxCol,
+            pattern.bBoxRow,
+            true
+        );
+    }
     SelectObject (tempDC, (HBITMAP) 0);
     ReleaseDC (HWND_DESKTOP, dc);
     DeleteDC (tempDC);

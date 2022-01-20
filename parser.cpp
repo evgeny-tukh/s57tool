@@ -1664,9 +1664,9 @@ void loadPattern (std::vector<std::string>& module, Dai& dai) {
                 patternDesc.spacing = Spacing::SCALE_DEPENDENT;
             }
 
-            if (fillType.compare ("STG")) {
+            if (fillType.compare ("STG") == 0) {
                 patternDesc.fillType = FillType::STRAGGERED;
-            } else if (fillType.compare ("LIN")) {
+            } else if (fillType.compare ("LIN") == 0) {
                 patternDesc.fillType = FillType::LINEAR;
             }
         } else if (memcmp (source, "PXPO", 4) == 0) {
