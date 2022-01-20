@@ -1400,6 +1400,10 @@ void processInstructions (Dai& dai, LookupTableItem& item, std::vector<std::stri
             auto colorName = extractInstr (instruction);
 
             if (!colorName.empty ()) item.brushIndex = dai.palette.getSolidBrushIndex (colorName.c_str ());
+        } else if (instruction [0] == 'C' && instruction [1] == 'S') {
+            auto procName = extractInstr (instruction);
+
+            if (!procName.empty ()) item.procIndex = dai.getProcIndex (procName.c_str ());
         } else if (instruction [0] == 'A' && instruction [1] == 'P') {
             auto patternName = extractInstr (instruction);
 

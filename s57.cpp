@@ -3,6 +3,7 @@
 #include <map>
 #include <tuple>
 #include "s57defs.h"
+#include "data.h"
 
 Palette::~Palette () {
     for (auto& penItem: pens) {
@@ -300,4 +301,10 @@ void Dai::composePatternBrushes () {
     for (auto& pattern: patterns) {
         palette.checkPatternBrush (pattern, *this);
     }
+}
+
+Attr *FeatureObject::getAttr (const char *acronym, struct AttrDictionary& dic) {
+    auto desc = dic.findByAcronym (acronym);
+
+    return desc ? getAttr (desc->code) : 0;
 }

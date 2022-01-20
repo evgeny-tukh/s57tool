@@ -4,6 +4,19 @@
 #include <Windows.h>
 #include "data.h"
 
+void paintCompoundArc (
+    RECT& client,
+    HDC paintDC,
+    ArcDef& arcDef,
+    Dai& dai,
+    double north,
+    double west,
+    uint8_t zoom,
+    double centerLat,
+    double centerLon,
+    PaletteIndex paletteIndex
+);
+
 void paintChart (
     RECT& client,
     HDC paintDC,

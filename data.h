@@ -63,6 +63,13 @@ struct Attr {
     std::vector<uint8_t> listValue;
 
     Attr (): classCode (0), noValue (true), intValue (0), floatValue (0.0f) {}
+
+    bool listIncludes (uint8_t value) {
+        for (uint8_t byte: listValue) {
+            if (byte == value) return true;
+        }
+        return false;
+    }
 };
 
 struct EdgeRef {
@@ -85,7 +92,15 @@ struct FeatureObject: TopologyObject {
 
     FeatureObject (): TopologyObject (), primitive (PRIM::None), group (1), classCode (0), agency (0), fidn (0), subDiv (0), nodeIndex (-1) {}
 
-    LookupTableItem *findBestItem (DisplayCat displayCat, TableSet tableSet, Dai& dai) {
+    Attr *getAttr (const char *acronym, struct AttrDictionary& dic);
+    Attr *getAttr (size_t classCode) {
+        for (auto& attr: attributes) {
+            if (attr.classCode == classCode) return &attr;
+        }
+        return 0;
+    }
+
+    LookupTableItem *findBestItem (DisplayCat displayCat, TableSet tableSet, Dai& dai, int priority = -1) {
         char objectType;
         
         if (primitive == PRIM::Area) {
@@ -111,6 +126,10 @@ struct FeatureObject: TopologyObject {
                 auto& attrRequired = item->attrCombination [j];
                 bool attrFound = true;
 
+                if (attrRequired.noValue && !attrRequired.strValue.empty ()) {
+                    attrRequired.noValue = false;
+                }
+
                 if (attrRequired.missing) {
                     for (auto& attr: attributes) {
                         if (attr.classCode == attrRequired.classCode) {
@@ -125,6 +144,8 @@ struct FeatureObject: TopologyObject {
                             // The attribute found, just check value (if it is needed)
                             if (attrRequired.noValue) {
                                 attrFound = true;
+                            } else if (attr.noValue) {
+                                attrFound = false;
                             } else {
                                 switch (attrRequired.domain) {
                                     case 'I':
@@ -133,6 +154,7 @@ struct FeatureObject: TopologyObject {
                                     case 'F':
                                         attrFound = attr.floatValue == attrRequired.floatValue; break;
                                     case 'L':
+                                        attrFound = false;
                                         for (uint8_t byte: attr.listValue) {
                                             if (byte == std::atoi (attrRequired.strValue.c_str ())) {
                                                 attrFound = true; break;
@@ -152,10 +174,10 @@ struct FeatureObject: TopologyObject {
                 }
             }
             if (itemOk) {
-                return item;
+                return (priority > 0 && result->displayPriority != priority) ? 0 : new LookupTableItem (item);
             }
         }
-        return result;
+        return (priority > 0 && result->displayPriority != priority) ? 0 : new LookupTableItem (result);
     }
 };
 

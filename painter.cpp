@@ -119,6 +119,20 @@ void PatternTool::paint (HDC dc, std::vector<std::vector<POINT>>& polyPolygon) {
     DeleteDC (orDC);
 }
 
+void closeContour (std::vector<POINT>& contour) {
+    if (contour.front ().x != contour.back ().x || contour.front ().y != contour.back ().y) {
+        contour.push_back (contour.front ());
+    }
+}
+
+void reverseContour (std::vector<POINT>& contour) {
+    size_t mirror = contour.size () - 1;
+    for (size_t i = 0; i < mirror; ++ i, -- mirror) {
+        contour [i].x = contour [mirror].x;
+        contour [i].y = contour [mirror].y;
+    }
+}
+
 void paintArea (
     RECT& client,
     HDC paintDC,
@@ -134,25 +148,41 @@ void paintArea (
     PatternTool *patternTool
 ) {
     std::vector<POINT> vertices;
+    std::vector<std::vector<POINT>> polyPolygon;
 
     int westX, northY;
     geoToXY (north, west, zoom, westX, northY);
 
-    auto addVertex = [&vertices, zoom, westX, northY] (double lat, double lon) {
+    auto addVertex = [&vertices, zoom, westX, northY, &polyPolygon] (double lat, double lon) {
         int x, y;
         geoToXY (lat, lon, zoom, x, y);
-        auto& point = vertices.emplace_back ();
-        point.x = x - westX;
-        point.y = y - northY;
+        x -= westX;
+        y -= northY;
+        if (vertices.size () == 0 || vertices.back ().x != x || vertices.back ().y != y) {
+            auto& point = vertices.emplace_back ();
+            point.x = x;
+            point.y = y;
+            auto& vertex = polyPolygon.back ().emplace_back ();
+            vertex.x = x;
+            vertex.y = y;
+        }
     };
     auto addNode = [addVertex, &nodes] (size_t nodeIndex) {
         auto& pos = nodes [nodeIndex].points [0];
         addVertex (pos.lat, pos.lon);
     };
 
+    polyPolygon.emplace_back ();
+    bool hole = false;
     for (auto& edgeRef: edgeRefs) {
         auto& edge = edges [edgeRef.index];
-        if (edgeRef.hole || edge.hidden) continue;
+        if (edge.hidden) continue;
+        if (edgeRef.hole != hole) {
+            closeContour (polyPolygon.back ());
+            if (hole) reverseContour (polyPolygon.back ());
+            hole = edgeRef.hole;
+            polyPolygon.emplace_back ();
+        }
         if (edgeRef.unclockwise) {
             addNode (edge.endIndex);
             for (auto pos = edge.internalNodes.rbegin (); pos != edge.internalNodes.rend (); ++ pos) {
@@ -167,9 +197,37 @@ void paintArea (
             addNode (edge.endIndex);
         }
     }
+    closeContour (polyPolygon.back ());
+    if (hole) reverseContour (polyPolygon.back ());
 
-    vertices.push_back (vertices [0]);
+    if (vertices.front ().x != vertices.back ().x || vertices.front ().y != vertices.back ().y) {
+        vertices.push_back (vertices.front ());
+    }
 
+    for (size_t i = 1; i < vertices.size () - 1; ++ i) {
+        auto& vertex = vertices [i];
+        if (vertex.x == vertices.front ().x && vertex.y == vertices.front ().y) {
+            int iii = 0;
+            ++ iii;
+            -- iii;
+        }
+    }
+
+    #if 1
+    if (patternTool) {
+        patternTool->paint (paintDC, polyPolygon);
+    } else {
+        SelectObject (paintDC, (HPEN) GetStockObject (NULL_PEN));
+        SelectObject (paintDC, brush);
+        std::vector<POINT> area;
+        std::vector<int> sizes;
+        for (auto& contour: polyPolygon) {
+            sizes.emplace_back ((int) contour.size ());
+            area.insert (area.end (), contour.begin (), contour.end ());
+        }
+        PolyPolygon (paintDC, area.data (), sizes.data (), (int) sizes.size ());
+    }
+    #else
     if (patternTool) {
         std::vector<std::vector<POINT>> polyPolygon;
         polyPolygon.emplace_back ();
@@ -181,6 +239,7 @@ void paintArea (
         SelectObject (paintDC, brush);
         Polygon (paintDC, vertices.data (), (int) vertices.size ());
     }
+    #endif
 }
 
 void completeDrawProc (
@@ -440,8 +499,12 @@ void paintChart (
             //if (feature.classCode >= 300 && feature.classCode <= 402) continue;
             if (feature.primitive != 2 && feature.primitive != 3) continue;
             if (!lookupTables [i]) continue;
-            auto lookupTableItem = feature.findBestItem (displayCat, spatialObjTableSet, dai);
-            if (!lookupTableItem || lookupTableItem->displayPriority != prty) continue;
+            auto lookupTableItem = feature.findBestItem (displayCat, spatialObjTableSet, dai, prty);
+            if (!lookupTableItem) continue;
+
+            if (lookupTableItem->procIndex != LookupTableItem::NOT_EXIST) {
+                dai.runCSP (lookupTableItem, & feature, nodes, edges);
+            }
 
             if (feature.primitive == 3) {
                 HBRUSH brush = 0;
@@ -476,6 +539,8 @@ void paintChart (
                     paintEdge (client, paintDC, nodes, edges [edgeRef.index], dai, north, west, zoom, pen);
                 }
             }
+
+            delete lookupTableItem;
         }
     }
 
@@ -485,10 +550,22 @@ void paintChart (
         if (!lookupTables [i]) continue;
         auto lookupTableItem = feature.findBestItem (displayCat, pointObjTableSet, dai);
         if (!lookupTableItem) continue;
+
+        if (lookupTableItem->procIndex != LookupTableItem::NOT_EXIST) {
+            dai.runCSP (lookupTableItem, & feature, nodes, edges);
+        }
+
         int offset = 0;
         for (auto symbolIndex: lookupTableItem->symbols) {
             paintSymbol (client, paintDC, nodes [feature.nodeIndex], dai, north, west, zoom, offset, symbolIndex, paletteIndex);
         }
+
+        if (lookupTableItem->drawArc) {
+            auto& node = nodes [feature.nodeIndex];
+            paintCompoundArc (client, paintDC, lookupTableItem->arcDef, dai, north, west, zoom, node.points [0].lat, node.points [0].lon, paletteIndex);
+        }
+
+        delete lookupTableItem;
     }
 }
 
@@ -555,4 +632,40 @@ HBRUSH createPatternBrush (PatternDesc& pattern, PaletteIndex paletteIndex, Dai&
     DeleteObject (bmp);
 
     return brush;
+}
+
+void paintCompoundArc (RECT& client, HDC paintDC, ArcDef& arcDef, Dai& dai, double north, double west, uint8_t zoom, double lat, double lon, PaletteIndex paletteIndex) {
+    static size_t outlineColorIndex = LookupTableItem::NOT_EXIST;
+
+    if (outlineColorIndex == LookupTableItem::NOT_EXIST) {
+        outlineColorIndex = dai.colorTable.getColorIndex ("OUTLW");
+    }
+
+    int centerX, centerY, westX, northY;
+
+    auto [outlinePenExists, outlinePens] = dai.palette.basePens [outlineColorIndex].get (paletteIndex);
+
+    geoToXY (north, west, zoom, westX, northY);
+    geoToXY (lat, lon, zoom, centerX, centerY);
+    
+    centerX -= westX;
+    centerY -= northY;
+
+    auto& [penExists, pens] = dai.palette.basePens [arcDef.internalColor].get (paletteIndex);
+    
+    if ((centerX + (int) arcDef.radius) < 0 || (centerY + (int) arcDef.radius) < 0) return;
+    if ((centerX - (int) arcDef.radius) > client.right || (centerY - (int) arcDef.radius) > client.bottom) return;
+
+    auto drawArc = [&paintDC, centerX, centerY] (HPEN pen, int radius, double start, double end) {
+        int startX = centerX + (int) (radius * sin (start * RAD_IN_DEG));
+        int startY = centerY - (int) (radius * cos (start * RAD_IN_DEG));
+
+        SelectObject (paintDC, pen);
+        MoveToEx (paintDC, startX, startY, 0);
+        AngleArc (paintDC, centerX, centerY, (DWORD) radius, (float) start + 90.0f, (float) end);
+    };
+
+    drawArc (outlinePens [1], arcDef.radius + 1, arcDef.start, arcDef.end);
+    drawArc (pens [3], arcDef.radius + 4, arcDef.start, arcDef.end);
+    drawArc (outlinePens [1], arcDef.radius + 6, arcDef.start, arcDef.end);
 }

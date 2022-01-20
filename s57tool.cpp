@@ -1008,6 +1008,7 @@ void onChartWndLeftButtonUp (HWND wnd, uint16_t clientX, uint16_t clientY) {
     Ctx *ctx = (Ctx *) GetWindowLongPtr (wnd, GWLP_USERDATA);
     onChartWndMouseMove (wnd, clientX, clientY);
     ctx->mouseDown = false;
+    InvalidateRect (wnd, 0, 1);
 }
 
 void onChartWndMouseWheel (HWND wnd, int16_t delta) {

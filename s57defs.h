@@ -9,6 +9,7 @@
 #include <Windows.h>
 #include <stdlib.h>
 #include <string.h>
+#include "csp.h"
 
 #pragma pack(1)
 
@@ -606,6 +607,13 @@ enum DrawFlags {
     SET_CSP = 8,
 };
 
+struct ArcDef {
+    double radius, start, end;
+    size_t nodeIndex, internalColor;
+
+    static const int AT_OBJECT_CENTER = 0x7FFFFFFF;
+};
+
 struct LookupTableItem {
     char objectType, radarPriority;
     char acronym [6];
@@ -621,11 +629,21 @@ struct LookupTableItem {
     size_t brushIndex;
     size_t patternBrushIndex;
     size_t centralSymbolIndex;
-    size_t symbProcIndex;
+    size_t procIndex;
     std::vector<size_t> symbols;
+
+    // Lights only, specified in LIGHTS06 procedre
+    ArcDef arcDef;
+    bool drawArc;
 
     static const size_t NOT_EXIST = 0xFFFFFFFFFFFFFFFF;
 
+    LookupTableItem (LookupTableItem &source) {
+        copyFrom (source);
+    }
+    LookupTableItem (LookupTableItem *source) {
+        copyFrom (*source);
+    }
     LookupTableItem () {
         reset ();
     }
@@ -642,7 +660,8 @@ struct LookupTableItem {
         displayPriority = 0;
         tableSet = TableSet::PLAIN_BOUNDARIES;
         displayCat = DisplayCat::STANDARD;
-        penIndex = brushIndex = patternBrushIndex = centralSymbolIndex = symbProcIndex = NOT_EXIST;
+        penIndex = brushIndex = patternBrushIndex = centralSymbolIndex = procIndex = NOT_EXIST;
+        drawArc = false;
     }
 
     // Lookup table index key compose rule:
@@ -674,8 +693,10 @@ struct LookupTableItem {
         brushIndex = source.brushIndex;
         patternBrushIndex = source.patternBrushIndex;
         penIndex = source.penIndex;
-        symbProcIndex = source.symbProcIndex;
+        procIndex = source.procIndex;
         centralSymbolIndex = source.centralSymbolIndex;
+        drawArc = source.drawArc;
+        arcDef = source.arcDef;
     }
 };
 
@@ -767,41 +788,67 @@ struct Palette {
     size_t getSolidBrushIndex (const char *colorName);
 };
 
+typedef void (*CSP) (LookupTableItem *item, struct FeatureObject *object, struct Dai& dai, struct Nodes& nodes, struct Edges& edges);
+
 struct Dai {
     LibraryIdentification libraryId;
     ColorTable colorTable;
     Palette palette;
     StringIndex penIndex;
-    StringIndex basePenIndex;
     StringIndex brushIndex;
     StringIndex patternIndex;
     StringIndex symbolIndex;
     StringIndex lineIndex;
     StringIndex bitmapIndex;
+    StringIndex procIndex;
     std::vector<LookupTable> lookupTables;
     std::map<uint32_t, size_t> lookupTableIndex;
     std::vector<PatternDesc> patterns;
     std::vector<SymbolDesc> symbols;
     std::vector<LineDesc> lines;
+    std::vector<CSP> procedures;
+
+    Dai () {
+        initCSPs (*this);
+    }
 
     LookupTable *findLookupTable (uint16_t code, DisplayCat displayCat, TableSet tableSet, char objectType) {
         auto pos = lookupTableIndex.find (LookupTableItem::composeKey (code, displayCat, tableSet, objectType));
 
         return pos == lookupTableIndex.end () ? 0 : & lookupTables [pos->second];
     }
+    size_t getItemIndex  (const char *name, StringIndex& index) {
+        auto pos = index.find (name);
+        return pos == index.end () ? LookupTableItem::NOT_EXIST : pos->second;
+    }
     size_t getSymbolIndex (const char *name) {
-        auto pos = symbolIndex.find (name);
-        return pos == symbolIndex.end () ? LookupTableItem::NOT_EXIST : pos->second;
+        return getItemIndex (name, symbolIndex);
+    }
+    size_t getProcIndex (const char *name) {
+        return getItemIndex (name, procIndex);
     }
     size_t getLineIndex (const char *name) {
-        auto pos = lineIndex.find (name);
-        return pos == lineIndex.end () ? LookupTableItem::NOT_EXIST : pos->second;
+        return getItemIndex (name, lineIndex);
+    }
+    size_t getPenIndex (const char *name) {
+        return getItemIndex (name, penIndex);
+    }
+    size_t getBasePenIndex (const char *name) {
+        return getItemIndex (name, colorTable.index);
     }
     size_t getPatternIndex (const char *name) {
-        auto pos = patternIndex.find (name);
-        return pos == patternIndex.end () ? LookupTableItem::NOT_EXIST : pos->second;
+        return getItemIndex (name, patternIndex);
     }
     void composePatternBrushes ();
+    void addCSP (const char *name, CSP proc) {
+        procIndex.emplace (name, procedures.size ());
+        procedures.emplace_back (proc);
+    }
+    void runCSP (LookupTableItem *item, struct FeatureObject *object, Nodes& nodes, Edges& edges) {
+        if (item->procIndex >= 0 && item->procIndex < procedures.size ()) {
+            procedures [item->procIndex] (item, object, *this, nodes, edges);
+        }
+    }
 };
 
 struct DrawOper {
