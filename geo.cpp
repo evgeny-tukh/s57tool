@@ -1,5 +1,6 @@
 #include <cstdint>
 #include <math.h>
+#include <Windows.h>
 #include "geo.h"
 
 void geoToXY (double lat, double lon, int zoom, int& x, int& y) {
@@ -48,4 +49,27 @@ void clientToGeo (ClientPos& clientPos, int zoom, double& lat, double& lon) {
     int x, y;
     clientToXY (clientPos, x, y);
     xyToGeo (x, y, zoom, lat, lon);
+}
+
+double getPixelSizeInMm () {
+    static double pixelSizeInMm = 0.0;
+
+    if (pixelSizeInMm == 0.0) {
+        HDC dc = GetDC (HWND_DESKTOP);
+        int horSizeMm = GetDeviceCaps (dc, HORZSIZE);
+        int horSizePix = GetDeviceCaps (dc, HORZRES);
+
+        pixelSizeInMm = (double) horSizeMm / (double) horSizePix;
+    }
+    
+    return pixelSizeInMm;
+}
+
+double zoomToScale (int zoom) {
+    static const double EQUATOR_LENGTH_MM = 360. * 60. * 1852. * 1000.;
+
+    int numOfWorldPixels = (1 << zoom) * 256;
+    double numOfWorldMm = (double) numOfWorldPixels * PIXEL_SIZE_IN_MM;
+
+    return EQUATOR_LENGTH_MM / numOfWorldMm;
 }

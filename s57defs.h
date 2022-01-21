@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "csp.h"
+#include "geo.h"
 
 #pragma pack(1)
 
@@ -614,6 +615,43 @@ struct ArcDef {
     static const int AT_OBJECT_CENTER = 0x7FFFFFFF;
 };
 
+struct SymbolDraw {
+    size_t symbolIndex;
+    double rotAngle;
+
+    SymbolDraw (): symbolIndex (0xFFFFFFFFFFFFFFFF), rotAngle (0.0) {}
+    SymbolDraw (size_t _symbolIndex): symbolIndex (_symbolIndex), rotAngle (0.0) {}
+    SymbolDraw (size_t _symbolIndex, double _rotAngle): symbolIndex (_symbolIndex), rotAngle (_rotAngle) {}
+};
+
+enum LineDrawMode {
+    BETWEEN_TWO_POINTS,
+    USING_BRG_AND_RNG,
+};
+
+struct LineDraw {
+    size_t penIndex; // Non-base pen!
+    LineDrawMode mode;
+    double lat1, lon1, lat2, lon2, brg, lengthMm;
+
+    LineDraw (
+        size_t _penIndex,
+        LineDrawMode _mode,
+        double _lat1,
+        double _lon1,
+        double _arg5,
+        double _arg6
+    ): penIndex (_penIndex), mode (_mode), lat1 (_lat1), lon1 (_lon1), lat2 (0.0), lon2 (0.0), lengthMm (0.0), brg (0.0) {
+        if (mode == LineDrawMode::BETWEEN_TWO_POINTS) {
+            lat2 = _arg5;
+            lon2 = _arg6;
+        } else {
+            brg = _arg5;
+            lengthMm = _arg6;
+        }
+    }
+};
+
 struct LookupTableItem {
     char objectType, radarPriority;
     char acronym [6];
@@ -630,7 +668,8 @@ struct LookupTableItem {
     size_t patternBrushIndex;
     size_t centralSymbolIndex;
     size_t procIndex;
-    std::vector<size_t> symbols;
+    std::vector<SymbolDraw> symbols;
+    std::vector<LineDraw> lines;
 
     // Lights only, specified in LIGHTS06 procedre
     ArcDef arcDef;
@@ -646,6 +685,10 @@ struct LookupTableItem {
     }
     LookupTableItem () {
         reset ();
+    }
+
+    void addSymbol (size_t index, double rotAngle) {
+        symbols.emplace_back (index, rotAngle);
     }
 
     void reset () {
@@ -788,7 +831,7 @@ struct Palette {
     size_t getSolidBrushIndex (const char *colorName);
 };
 
-typedef void (*CSP) (LookupTableItem *item, struct FeatureObject *object, struct Dai& dai, struct Nodes& nodes, struct Edges& edges);
+typedef void (*CSP) (LookupTableItem *item, struct FeatureObject *object, struct Dai& dai, struct Nodes& nodes, struct Edges& edges, int zoon);
 
 struct Dai {
     LibraryIdentification libraryId;
@@ -831,7 +874,7 @@ struct Dai {
         return getItemIndex (name, lineIndex);
     }
     size_t getPenIndex (const char *name) {
-        return getItemIndex (name, penIndex);
+        return getItemIndex (name, palette.penIndex);
     }
     size_t getBasePenIndex (const char *name) {
         return getItemIndex (name, colorTable.index);
@@ -844,9 +887,9 @@ struct Dai {
         procIndex.emplace (name, procedures.size ());
         procedures.emplace_back (proc);
     }
-    void runCSP (LookupTableItem *item, struct FeatureObject *object, Nodes& nodes, Edges& edges) {
+    void runCSP (LookupTableItem *item, struct FeatureObject *object, Nodes& nodes, Edges& edges, int zoom) {
         if (item->procIndex >= 0 && item->procIndex < procedures.size ()) {
-            procedures [item->procIndex] (item, object, *this, nodes, edges);
+            procedures [item->procIndex] (item, object, *this, nodes, edges, zoom);
         }
     }
 };

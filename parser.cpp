@@ -1394,7 +1394,7 @@ void processInstructions (Dai& dai, LookupTableItem& item, std::vector<std::stri
 
             if (!symbolName.empty ()) {
                 size_t index = dai.getSymbolIndex (symbolName.c_str ());
-                if (index != LookupTableItem::NOT_EXIST) item.symbols.emplace_back (index);
+                if (index != LookupTableItem::NOT_EXIST) item.symbols.emplace_back (index, 0.0);
             }
         } else if (instruction [0] == 'A' && instruction [1] == 'C') {
             auto colorName = extractInstr (instruction);

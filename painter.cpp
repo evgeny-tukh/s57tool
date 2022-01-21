@@ -2,6 +2,7 @@
 #include "geo.h"
 
 HBRUSH createPatternBrush (PatternDesc& pattern, PaletteIndex paletteIndex, Dai& dai);
+void paintLine (HDC paintDC, Dai& dai, double north, double west, uint8_t zoom, LineDraw& line, PaletteIndex paletteIndex);
 
 std::vector<DrawToolItem <PatternTool>> patternTools;
 
@@ -26,7 +27,6 @@ void deletePatternTools () {
 }
 
 inline int absCoordToScreen (int absCoord) {
-    static const double PIXEL_SIZE_IN_MM = 0.264583333;
     return (int) ((double) absCoord / PIXEL_SIZE_IN_MM * 0.01);
 }
 
@@ -253,6 +253,7 @@ void completeDrawProc (
     int pivotPtRow,
     int bBoxCol,
     int bBoxRow,
+    double rotAngleDeg,
     bool patternMode = false
 ) {
     bool polygonMode = false;
@@ -260,6 +261,7 @@ void completeDrawProc (
     int curX = 0, curY = 0;
     int penColorIndex = -1;
     int penWidth = 1;
+    int pivotPtX, pivotPtY;
     HPEN savedPen = 0;
     HBRUSH savedBrush = 0;
     auto absPosToScreen = [startX, startY, &pivotPtCol, &pivotPtRow, patternMode, bBoxCol, bBoxRow] (int absX, int absY, int& screenX, int& screenY) {
@@ -299,6 +301,34 @@ void completeDrawProc (
     auto restoreBrush = [&paintDC, &savedBrush] () {
         if (savedBrush) SelectObject (paintDC, savedBrush);
     };
+    auto transformXY = [&pivotPtX, &pivotPtY, rotAngleDeg] (int& x, int& y) {
+        if (x != pivotPtX || y != pivotPtY) {
+            double dx = (double) (x - pivotPtX);
+            double dy = (double) (pivotPtY - y);
+            double brg = atan (fabs (dx / dy));
+            if (dx < 0) {
+                if (dy < 0) {
+                    brg += PI;
+                } else {
+                    brg = PI + PI - brg;
+                }
+            } else if (dy < 0) {
+                brg = PI - brg;
+            }
+            double radius = sqrt (dx * dx + dy * dy);
+            brg += rotAngleDeg * RAD_IN_DEG;
+            x = pivotPtX + radius * sin (brg);
+            y = pivotPtY - radius * cos (brg);
+        }
+    };
+    auto transformPoint = [transformXY] (POINT& pt) {
+        int x = pt.x;
+        int y = pt.y;
+        transformXY (x, y);
+        pt.x = x;
+        pt.y = y;
+    };
+    absPosToScreen (pivotPtCol, pivotPtRow, pivotPtX, pivotPtY);
     for (auto& instr: drawProc.instructions) {
         switch (instr.oper) {
             case DrawOperCode::NEW_POLYGON: {
@@ -348,6 +378,7 @@ void completeDrawProc (
             }
             case DrawOperCode::PEN_UP: {
                 absPosToScreen (instr.args [0], instr.args [1], curX, curY);
+                if (rotAngleDeg != 0.0) transformXY (curX, curY);
                 MoveToEx (paintDC, curX, curY, 0);
                 break;
             }
@@ -355,6 +386,7 @@ void completeDrawProc (
                 if (!polygonMode) selectPen ();
                 for (size_t i = 0; i < instr.args.size (); i += 2) {
                     absPosToScreen (instr.args [i], instr.args [i+1], curX, curY);
+                    if (rotAngleDeg != 0.0) transformXY (curX, curY);
                     if (polygonMode) {
                         auto& vertex = polyPolygon.back ().emplace_back ();
                         vertex.x = curX;
@@ -415,18 +447,18 @@ void paintSymbol (
     double west,
     uint8_t zoom,
     int& offset,
-    size_t symbolIndex,
+    SymbolDraw& symbolDraw,
     PaletteIndex paletteIndex
 ) {
     int symbolX, symbolY;
-    auto& symbol = dai.symbols [symbolIndex];
+    auto& symbol = dai.symbols [symbolDraw.symbolIndex];
     int westX, northY;
     geoToXY (north, west, zoom, westX, northY);
     geoToXY (node.points.front ().lat, node.points.front ().lon, zoom, symbolX, symbolY);
     symbolX -= westX;
     symbolY -= northY;
     if (symbolX >= 0 && symbolX <= client.right && symbolY >= 0 && symbolY <= client.bottom) {
-        completeDrawProc (paintDC, symbol.drawProc, symbolX, symbolY, paletteIndex, dai, symbol.pivotPtCol, symbol.pivotPtRow, symbol.bBoxCol, symbol.bBoxRow);
+        completeDrawProc (paintDC, symbol.drawProc, symbolX, symbolY, paletteIndex, dai, symbol.pivotPtCol, symbol.pivotPtRow, symbol.bBoxCol, symbol.bBoxRow, symbolDraw.rotAngle);
     }
 }
 
@@ -503,7 +535,7 @@ void paintChart (
             if (!lookupTableItem) continue;
 
             if (lookupTableItem->procIndex != LookupTableItem::NOT_EXIST) {
-                dai.runCSP (lookupTableItem, & feature, nodes, edges);
+                dai.runCSP (lookupTableItem, & feature, nodes, edges, zoom);
             }
 
             if (feature.primitive == 3) {
@@ -552,17 +584,21 @@ void paintChart (
         if (!lookupTableItem) continue;
 
         if (lookupTableItem->procIndex != LookupTableItem::NOT_EXIST) {
-            dai.runCSP (lookupTableItem, & feature, nodes, edges);
+            dai.runCSP (lookupTableItem, & feature, nodes, edges, zoom);
         }
 
         int offset = 0;
-        for (auto symbolIndex: lookupTableItem->symbols) {
-            paintSymbol (client, paintDC, nodes [feature.nodeIndex], dai, north, west, zoom, offset, symbolIndex, paletteIndex);
+        for (auto& symbolDraw: lookupTableItem->symbols) {
+            paintSymbol (client, paintDC, nodes [feature.nodeIndex], dai, north, west, zoom, offset, symbolDraw, paletteIndex);
         }
 
         if (lookupTableItem->drawArc) {
             auto& node = nodes [feature.nodeIndex];
             paintCompoundArc (client, paintDC, lookupTableItem->arcDef, dai, north, west, zoom, node.points [0].lat, node.points [0].lon, paletteIndex);
+        }
+
+        for (auto& line: lookupTableItem->lines) {
+            paintLine (paintDC, dai, north, west, zoom, line, paletteIndex);
         }
 
         delete lookupTableItem;
@@ -620,6 +656,7 @@ HBRUSH createPatternBrush (PatternDesc& pattern, PaletteIndex paletteIndex, Dai&
             pattern.pivotPtRow,
             pattern.bBoxCol,
             pattern.bBoxRow,
+            0.0,
             true
         );
     }
@@ -632,6 +669,34 @@ HBRUSH createPatternBrush (PatternDesc& pattern, PaletteIndex paletteIndex, Dai&
     DeleteObject (bmp);
 
     return brush;
+}
+
+void paintLine (HDC paintDC, Dai& dai, double north, double west, uint8_t zoom, LineDraw& line, PaletteIndex paletteIndex) {
+    int x1, y1, x2, y2, westX, northY;
+
+    geoToXY (north, west, zoom, westX, northY);
+    geoToXY (line.lat1, line.lon1, zoom, x1, y1);
+
+    x1 -= westX;
+    y1 -= northY;
+
+    if (line.mode == LineDrawMode::BETWEEN_TWO_POINTS) {
+        geoToXY (line.lat1, line.lon1, zoom, x2, y2);
+
+        x2 -= westX;
+        y2 -= northY;
+    } else {
+        double brgRad = line.brg * RAD_IN_DEG;
+        x2 = x1 + (int) (line.lengthMm / PIXEL_SIZE_IN_MM * sin (brgRad));
+        y2 = y1 - (int) (line.lengthMm / PIXEL_SIZE_IN_MM * cos (brgRad));
+    }
+
+    auto [penExists, pen] = dai.palette.pens [line.penIndex].get (paletteIndex);
+
+    HPEN lastPen = (HPEN) SelectObject (paintDC, pen);
+    MoveToEx (paintDC, x1, y1, 0);
+    LineTo (paintDC, x2, y2);
+    SelectObject (paintDC, lastPen);
 }
 
 void paintCompoundArc (RECT& client, HDC paintDC, ArcDef& arcDef, Dai& dai, double north, double west, uint8_t zoom, double lat, double lon, PaletteIndex paletteIndex) {

@@ -5,12 +5,12 @@
 #include "s57defs.h"
 #include "classes.h"
 #include "data.h"
+#include "settings.h"
 
-static const double PIXEL_SIZE_IN_MM = 0.264583333;
-
-void lights06 (LookupTableItem *item, FeatureObject *object, Dai& dai, Nodes& nodes, Edges& edges) {
+void lights06 (LookupTableItem *item, FeatureObject *object, Dai& dai, Nodes& nodes, Edges& edges, int zoom) {
     auto valnmr = object->getAttr (ATTRS::VALNMR);
     Attr *orient = 0;
+    auto position = nodes [object->nodeIndex].points.front ();
 
     double nominalRange = (valnmr && !valnmr->noValue) ? valnmr->floatValue : 9.0;
 
@@ -21,12 +21,12 @@ void lights06 (LookupTableItem *item, FeatureObject *object, Dai& dai, Nodes& no
             case 11:
             case 8: {
                 item->symbols.clear ();
-                item->symbols.push_back (dai.getSymbolIndex ("LIGHTS82"));
+                item->symbols.emplace_back (dai.getSymbolIndex ("LIGHTS82"));
                 return;
             }
             case 9: {
                 item->symbols.clear ();
-                item->symbols.push_back (dai.getSymbolIndex ("LIGHTS81"));
+                item->symbols.emplace_back (dai.getSymbolIndex ("LIGHTS81"));
                 return;
             }
             case 1:
@@ -123,20 +123,31 @@ void lights06 (LookupTableItem *item, FeatureObject *object, Dai& dai, Nodes& no
             if (catlit && !catlit->noValue && (catlit->intValue == 1 || catlit->intValue == 16)) {
                 if (orient && !orient->noValue) {
                     // +/- 180
-                    item->symbols.push_back (dai.getSymbolIndex (symbolName.c_str ()));
+                    item->symbols.emplace_back (dai.getSymbolIndex (symbolName.c_str ()), 180.0);
                 } else {
                     item->symbols.push_back (dai.getSymbolIndex ("QUESMRK1"));
                 }
             } else if (flareAt45Deg) {
                 // 45
-                item->symbols.push_back (dai.getSymbolIndex (symbolName.c_str ()));
+                item->symbols.emplace_back (dai.getSymbolIndex (symbolName.c_str ()), 45);
             } else {
                 // 135
-                item->symbols.push_back (dai.getSymbolIndex (symbolName.c_str ()));
+                item->symbols.emplace_back (dai.getSymbolIndex (symbolName.c_str ()), 135);
             }
         }
     } else {
         // Continuation
+        double sector1Value = sectr1->floatValue;
+        double sector2Value = sectr2->floatValue;
+ 
+        if (sector2Value <= sector1Value) sector2Value += 360.0;
+
+        double legLengthMm = settings.fullSectorLength ? nominalRange * 1852000.0 / zoomToScale (zoom) : 25.0;
+
+        size_t penIndex = dai.getPenIndex ("LS(DASH,1,CHBLK)");
+
+        item->lines.emplace_back (penIndex, LineDrawMode::USING_BRG_AND_RNG, position.lat, position.lon, sector1Value + 180.0, legLengthMm);
+        item->lines.emplace_back (penIndex, LineDrawMode::USING_BRG_AND_RNG, position.lat, position.lon, sector2Value + 180.0, legLengthMm);
     }
 }
 
