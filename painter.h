@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <Windows.h>
 #include "data.h"
+#include "geo.h"
 
 void paintCompoundArc (
     RECT& client,
@@ -74,6 +75,18 @@ void paintArc (
     double start,
     double end,
     double radiusInMm,
+    double north,
+    double west,
+    int zoom,
+    PaletteIndex paletteIndex,
+    Palette& palette
+);
+void paintPolyPolyline (
+    HDC paintDC,
+    int style,
+    int width,
+    size_t colorIndex,
+    Contours& contours,
     double north,
     double west,
     int zoom,

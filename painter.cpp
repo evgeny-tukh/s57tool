@@ -574,7 +574,7 @@ void paintChart (
                 }
             }
 
-            if (feature.primitive == 2 || feature.primitive == 3) {
+            if ((feature.primitive == 2 || feature.primitive == 3) && lookupTableItem->edgePenIndex != LookupTableItem::NOT_EXIST) {
                 HPEN pen = 0;
                 if (lookupTableItem->penIndex != LookupTableItem::NOT_EXIST) {
                     auto& [penExists, penHandle] = dai.palette.pens [lookupTableItem->penIndex].get (paletteIndex);
@@ -582,9 +582,11 @@ void paintChart (
                 } else {
                     pen = (HPEN) GetStockObject (BLACK_PEN);
                 }
+                drawQueue.addEdgeChain (lookupTableItem->edgePenIndex, lookupTableItem->edgePenStyle, lookupTableItem->edgePenWidth, nodes);
                 for (auto& edgeRef: feature.edgeRefs) {
                     if (edgeRef.hidden) continue;
-                    paintEdge (client, paintDC, nodes, edges [edgeRef.index], dai, north, west, zoom, pen);
+                    //paintEdge (client, paintDC, nodes, edges [edgeRef.index], dai, north, west, zoom, pen);
+                    drawQueue.addEdge (edges [edgeRef.index]);
                 }
             }
 
@@ -877,6 +879,52 @@ void paintArc (
         PenTool tool;
 
         tool.composeArc (style, centerLat, centerLon, start, end, radiusInMm, north, west, zoom, polyPolygon);
+
+        HPEN lastPen = (HPEN) SelectObject (paintDC, pen);
+
+        if (style == PS_SOLID) {
+            Polyline (paintDC, polyPolygon.front ().data (), polyPolygon.front ().size ());
+        } else {
+            std::vector<POINT> vertices;
+            std::vector<DWORD> sizes;
+
+            tool.translatePolyPolygon<DWORD> (polyPolygon, vertices, sizes);
+
+            PolyPolyline (paintDC, vertices.data (), sizes.data (), sizes.size ());
+        }
+        SelectObject (paintDC, lastPen);
+    }
+}
+
+void paintPolyPolyline (
+    HDC paintDC,
+    int style,
+    int width,
+    size_t colorIndex,
+    Contours& contours,
+    double north,
+    double west,
+    int zoom,
+    PaletteIndex paletteIndex,
+    Palette& palette
+){
+    auto pen = getBasePen (colorIndex, width, paletteIndex, palette);
+
+    if (pen) {
+        PenTool::PolyPolygon polyPolygon;
+        PenTool tool;
+
+        for (auto& contour: contours) {
+            polyPolygon.emplace_back ();
+
+            for (auto& vertex: contour) {
+                int x, y;
+                tool.geo2screen (vertex.lat, vertex.lon, north, west, zoom, x, y);
+                polyPolygon.back ().emplace_back ();
+                polyPolygon.back ().back ().x = x;
+                polyPolygon.back ().back ().y = y;
+            }
+        }
 
         HPEN lastPen = (HPEN) SelectObject (paintDC, pen);
 

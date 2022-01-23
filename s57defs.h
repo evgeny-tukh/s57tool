@@ -684,6 +684,9 @@ struct LookupTableItem {
     size_t patternBrushIndex;
     size_t centralSymbolIndex;
     size_t procIndex;
+    size_t edgePenIndex;
+    int edgePenStyle;
+    int edgePenWidth;
     std::vector<SymbolDraw> symbols;
     std::vector<LineDraw> lines;
 
@@ -719,7 +722,9 @@ struct LookupTableItem {
         displayPriority = 0;
         tableSet = TableSet::PLAIN_BOUNDARIES;
         displayCat = DisplayCat::STANDARD;
-        penIndex = brushIndex = patternBrushIndex = centralSymbolIndex = procIndex = NOT_EXIST;
+        edgePenIndex = penIndex = brushIndex = patternBrushIndex = centralSymbolIndex = procIndex = NOT_EXIST;
+        edgePenStyle = PS_SOLID;
+        edgePenWidth = 1;
         drawArc = false;
     }
 
@@ -756,6 +761,9 @@ struct LookupTableItem {
         centralSymbolIndex = source.centralSymbolIndex;
         drawArc = source.drawArc;
         arcDef = source.arcDef;
+        edgePenIndex = source.edgePenIndex;
+        edgePenStyle = source.edgePenStyle;
+        edgePenWidth = source.edgePenWidth;
     }
 };
 

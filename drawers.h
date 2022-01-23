@@ -67,6 +67,31 @@ struct ArcDrawer: Drawer {
     virtual void run (HDC paintDC, PaletteIndex paletteIndex, Palette& palette);
 };
 
+struct PolyPolylineDrawer: Drawer {
+    Contours polyPolyline;
+    Nodes& nodes;
+
+    PolyPolylineDrawer (
+        int _penIndex,
+        int _penStyle,
+        int _penWidth,
+        double _north,
+        double _west,
+        int _zoom,
+        Nodes& _nodes
+    ): Drawer (_penIndex, _penStyle, _penWidth, _north, _west, 0.0, 0.0, 0.0, _zoom), nodes (_nodes) {
+    }
+
+    void addContour () {
+        polyPolyline.emplace_back ();
+    }
+    void addVertex (double lat, double lon) {
+        polyPolyline.back ().emplace_back (lat, lon);
+    }
+
+    virtual void run (HDC paintDC, PaletteIndex paletteIndex, Palette& palette);
+};
+
 struct DrawQueue {
     std::vector<Drawer *> container;
     double north, west;
@@ -110,4 +135,6 @@ struct DrawQueue {
         double start,
         double end
     );
+    void DrawQueue::addEdgeChain (int penIndex, int penStyle, int penWidth, Nodes& nodes);
+    void DrawQueue::addEdge (struct GeoEdge& edge);
 };

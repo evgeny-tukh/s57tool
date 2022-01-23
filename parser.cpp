@@ -1379,6 +1379,30 @@ void loadColorTable (std::vector<std::string>& module, ColorTable& colorTable) {
     }
 }
 */
+void parseLineStyle (const char *instruction, int& penStyle, int& penWidth, size_t& penIndex, Dai& dai) {
+    char *comma1 = strchr ((char *) instruction + 3, ',');
+    char *comma2 = comma1 ? strchr (comma1 + 1, ',') : 0;
+
+    if (comma1 && comma2) {
+        if (memcmp (instruction + 3, "SOLD", 4) == 0) {
+            penStyle = PS_SOLID;
+        } else if (memcmp (instruction + 3, "DASH", 4) == 0) {
+            penStyle = PS_DASH;
+        } else if (memcmp (instruction + 3, "DOTT", 4) == 0) {
+            penStyle = PS_DOT;
+        } else {
+            penStyle = PS_SOLID;
+        }
+
+        penWidth = isdigit (comma1 [1]) ? comma1 [1] - '0' : 1;
+        penIndex = dai.getBasePenIndex (std::string (comma2 + 1, 5).c_str ());
+    } else {
+        penStyle = PS_SOLID;
+        penWidth = 1;
+        penIndex = dai.getBasePenIndex ("CHBLK");
+    }
+}
+
 void processInstructions (Dai& dai, LookupTableItem& item, std::vector<std::string>& instructions) {
     auto extractInstr = [] (std::string& instruction) {
         size_t leftBracketPos = instruction.find ('(', 2);
@@ -1389,6 +1413,7 @@ void processInstructions (Dai& dai, LookupTableItem& item, std::vector<std::stri
     for (auto& instruction: instructions) {
         if (instruction [0] == 'L' && instruction [1] == 'S') {
             item.penIndex = dai.palette.checkPen (instruction.data (), dai.colorTable);
+            parseLineStyle (instruction.c_str (), item.edgePenStyle, item.edgePenWidth, item.edgePenIndex, dai);
         } else if (instruction [0] == 'S' && instruction [1] == 'Y') {
             auto symbolName = extractInstr (instruction);
 

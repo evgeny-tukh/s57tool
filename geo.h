@@ -1,5 +1,7 @@
 #pragma once
 
+#include <vector>
+
 const double PI = 3.1415926535897932384626433832795;
 const double TWO_PI = PI + PI;
 const double RAD_IN_DEG = PI / 180.0;
@@ -12,6 +14,14 @@ struct ClientPos {
     int tileXOffs;
     int tileYOffs; 
 };
+
+struct Vertex {
+    double lat, lon;
+    Vertex (double _lat, double _lon): lat (_lat), lon (_lon) {}
+};
+
+typedef std::vector<Vertex> Contour;
+typedef std::vector<Contour> Contours;
 
 void geoToXY (double lat, double lon, int zoom, int& x, int& y);
 void xyToGeo (int x, int y, int zoom, double& lat, double& lon);
