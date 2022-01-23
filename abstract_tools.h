@@ -20,7 +20,7 @@ struct PenTool {
     void geo2screen (double lat, double lon, double north, double west, int zoom, int& x, int& y);
 
     template<typename TYPE>
-    void translatePolyPolygon (PolyPolygon &polyPolygon, std::vector<POINT> vertices, std::vector<TYPE>sizes) {
+    void translatePolyPolygon (PolyPolygon& polyPolygon, std::vector<POINT>& vertices, std::vector<TYPE>& sizes) {
         vertices.clear ();
         sizes.clear ();
         for (auto& contour: polyPolygon) {

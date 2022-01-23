@@ -148,10 +148,13 @@ void lights06 (LookupTableItem *item, FeatureObject *object, Dai& dai, Nodes& no
 
         double legLengthMm = settings.fullSectorLength ? nominalRange * 1852000.0 / zoomToScale (zoom) : 25.0;
 
-        size_t penIndex = dai.getPenIndex ("LS(DASH,1,CHBLK)");
-
-        item->lines.emplace_back (penIndex, LineDrawMode::USING_BRG_AND_RNG, position.lat, position.lon, sector1Value + 180.0, legLengthMm);
-        item->lines.emplace_back (penIndex, LineDrawMode::USING_BRG_AND_RNG, position.lat, position.lon, sector2Value + 180.0, legLengthMm);
+        //size_t penIndex = dai.getPenIndex ("LS(DASH,1,CHBLK)");
+        //
+        //item->lines.emplace_back (penIndex, LineDrawMode::USING_BRG_AND_RNG, position.lat, position.lon, sector1Value + 180.0, legLengthMm);
+        //item->lines.emplace_back (penIndex, LineDrawMode::USING_BRG_AND_RNG, position.lat, position.lon, sector2Value + 180.0, legLengthMm);
+        size_t penIndex = dai.getBasePenIndex ("CHBLK");
+        drawQueue.addLine (penIndex, PS_DASH, 1, position.lat, position.lon, sector1Value + 180.0, legLengthMm);
+        drawQueue.addLine (penIndex, PS_DASH, 1, position.lat, position.lon, sector2Value + 180.0, legLengthMm);
 
         bool extendedArcRadius = false;
 

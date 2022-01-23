@@ -49,7 +49,7 @@ void PenTool::composeLine (
         double numOfSteps = lengthInMm / (strokeLength + gapLength);
         int numOfStepsInt = (int) numOfSteps;
 
-        for (double offset = 0.0; offset < lengthInPix; offset = min (lengthInPix - 1.0e-8, offset + (strokeLengthPix + gapLengthPix))) {
+        for (double offset = 0.0; offset <= lengthInPix; offset = min (lengthInPix, offset + (strokeLengthPix + gapLengthPix))) {
             double coef1 = offset / lengthInPix;
             double endOfStroke = min (lengthInPix, offset + strokeLengthPix);
             double coef2 = endOfStroke / lengthInPix;
@@ -68,6 +68,8 @@ void PenTool::composeLine (
             contour.emplace_back ();
             contour.back ().x = (int) endX;
             contour.back ().y = (int) endY;
+
+            if (offset == lengthInPix) break;
         }
     }
 }
