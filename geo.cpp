@@ -73,3 +73,60 @@ double zoomToScale (int zoom) {
 
     return EQUATOR_LENGTH_MM / numOfWorldMm;
 }
+
+double mmToMiles (double distMm, int zoom) {
+    double scale = zoomToScale (zoom);
+    return distMm * scale / 1852000.0;
+}
+
+double calcSphericalRng (const double lat1, const double lon1, const double lat2, const double lon2) {
+    double latRad1 = lat1 * RAD_IN_DEG;
+    double latRad2 = lat2 * RAD_IN_DEG;
+    double lonRad1 = lon1 * RAD_IN_DEG;
+    double lonRad2 = lon2 * RAD_IN_DEG;
+
+    return acos (sin (latRad1) * sin (latRad2) + cos (latRad1) * cos (latRad2) * cos (lonRad1 - lonRad2)) * EARTH_RADIUS;
+}
+
+double calcSphericalRngNm (const double lat1, const double lon1, const double lat2, const double lon2) {
+    return calcSphericalRng (lat1, lon1, lat2, lon2) / 1852.0;
+}
+
+double calcSphericalBrg (const double lat1, const double lon1, const double lat2, const double lon2) {
+    double latRad1 = lat1 * RAD_IN_DEG;
+    double latRad2 = lat2 * RAD_IN_DEG;
+    double lonRad1 = lon1 * RAD_IN_DEG;
+    double lonRad2 = lon2 * RAD_IN_DEG;
+    double deltaLonW = fmod (lonRad1 - lonRad2, TWO_PI);
+    double deltaLonE = fmod (lonRad2 - lonRad1, TWO_PI);
+    double bearing;
+
+    if (fabs (latRad1 - latRad2) < 1.0E-8) {
+        // Same latitude, bearing is 90 or 270 deg
+        bearing = (deltaLonW > deltaLonE) ? PI * 1.5 : PI * 0.5;
+    } else {
+        double tanRatio  = tan (latRad2 * 0.5 + PI * 0.25) / tan (latRad1 * 0.5 + PI * 0.25);
+        double deltaLat  = log (tanRatio);
+
+        bearing = (deltaLonW < deltaLonE) ? fmod (atan2 (- deltaLonW, deltaLat), TWO_PI) : fmod (atan2 (deltaLonE, deltaLat), TWO_PI);
+    }
+
+    return bearing * RAD_IN_DEG;
+}
+
+void calcSphericalPos (double lat, double lon, double bearing, double range, double& destLat, double& destLon) {
+    double latRad = lat * RAD_IN_DEG;
+    double lonRad = lon * RAD_IN_DEG;
+    double brgRad = bearing * RAD_IN_DEG;
+    double arcAngle = range * 1852.0 / EARTH_RADIUS;
+    double arcSin = sin (arcAngle);
+    double arcCos = cos (arcAngle);
+    double latSin = sin (latRad);
+    double latCos = cos (latRad);
+
+    destLat = asin (latSin * arcCos + latCos * arcSin * cos (brgRad));
+    destLon = lonRad + atan2 (sin (brgRad) * arcSin * latCos, arcCos - latSin * sin (destLat));
+
+    destLat /= RAD_IN_DEG;
+    destLon /= RAD_IN_DEG;
+}

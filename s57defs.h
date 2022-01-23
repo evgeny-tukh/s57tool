@@ -627,13 +627,29 @@ struct SymbolDraw {
 enum LineDrawMode {
     BETWEEN_TWO_POINTS,
     USING_BRG_AND_RNG,
+    ARC,
 };
 
 struct LineDraw {
     size_t penIndex; // Non-base pen!
     LineDrawMode mode;
-    double lat1, lon1, lat2, lon2, brg, lengthMm;
+    double lat1, lon1, lat2, lon2, brg, endBrg, lengthMm;
 
+    LineDraw (
+        size_t _penIndex,
+        LineDrawMode _mode,
+        double _centerLat,
+        double _centerLon,
+        double _brg1,
+        double _brg2,
+        double _radiusMm
+    ): penIndex (_penIndex), mode (_mode), lat1 (_centerLat), lon1 (_centerLon), lat2 (0.0), lon2 (0.0), lengthMm (0.0), brg (0.0), endBrg (0.0) {
+        if (mode == LineDrawMode::ARC) {
+            brg = _brg1;
+            endBrg = _brg2;
+            lengthMm = _radiusMm;
+        }
+    }
     LineDraw (
         size_t _penIndex,
         LineDrawMode _mode,
@@ -641,11 +657,11 @@ struct LineDraw {
         double _lon1,
         double _arg5,
         double _arg6
-    ): penIndex (_penIndex), mode (_mode), lat1 (_lat1), lon1 (_lon1), lat2 (0.0), lon2 (0.0), lengthMm (0.0), brg (0.0) {
+    ): penIndex (_penIndex), mode (_mode), lat1 (_lat1), lon1 (_lon1), lat2 (0.0), lon2 (0.0), lengthMm (0.0), brg (0.0), endBrg (0.0) {
         if (mode == LineDrawMode::BETWEEN_TWO_POINTS) {
             lat2 = _arg5;
             lon2 = _arg6;
-        } else {
+        } else if (mode == LineDrawMode::USING_BRG_AND_RNG) {
             brg = _arg5;
             lengthMm = _arg6;
         }
@@ -831,7 +847,16 @@ struct Palette {
     size_t getSolidBrushIndex (const char *colorName);
 };
 
-typedef void (*CSP) (LookupTableItem *item, struct FeatureObject *object, struct Dai& dai, struct Nodes& nodes, struct Edges& edges, int zoon);
+typedef void (*CSP) (
+    LookupTableItem *item,
+    struct FeatureObject *object,
+    struct Dai& dai,
+    struct Nodes& nodes,
+    struct Edges& edges,
+    struct Features& features,
+    int zoom,
+    struct DrawQueue& drawQueue
+);
 
 struct Dai {
     LibraryIdentification libraryId;
@@ -887,9 +912,9 @@ struct Dai {
         procIndex.emplace (name, procedures.size ());
         procedures.emplace_back (proc);
     }
-    void runCSP (LookupTableItem *item, struct FeatureObject *object, Nodes& nodes, Edges& edges, int zoom) {
+    void runCSP (LookupTableItem *item, struct FeatureObject *object, Nodes& nodes, Edges& edges, Features& features, int zoom, struct DrawQueue& drawQueue) {
         if (item->procIndex >= 0 && item->procIndex < procedures.size ()) {
-            procedures [item->procIndex] (item, object, *this, nodes, edges, zoom);
+            procedures [item->procIndex] (item, object, *this, nodes, edges, features, zoom, drawQueue);
         }
     }
 };

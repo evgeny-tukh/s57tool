@@ -48,3 +48,35 @@ struct PatternTool {
 
 void createPatternTools (Dai& dai);
 void deletePatternTools ();
+
+void paintLine (
+    HDC paintDC,
+    int style,
+    int width,
+    size_t colorIndex,
+    double lat,
+    double lon,
+    double brg,
+    double lengthInMm,
+    double north,
+    double west,
+    int zoom,
+    PaletteIndex paletteIndex,
+    Palette& palette
+);
+void paintArc (
+    HDC paintDC,
+    int style,
+    int width,
+    size_t colorIndex,
+    double centerLat,
+    double centerLon,
+    double start,
+    double end,
+    double radiusInMm,
+    double north,
+    double west,
+    int zoom,
+    PaletteIndex paletteIndex,
+    Palette& palette
+);

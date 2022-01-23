@@ -8,4 +8,9 @@ enum ATTRS {
     SECTR1 = 136,
     SECTR2 = 137,
     LITCHR = 107,
+    LITVIS = 108,
+};
+
+enum OBJ_CLASSES {
+    LIGHTS = 75,
 };

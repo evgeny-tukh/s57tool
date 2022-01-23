@@ -1,10 +1,22 @@
 #include "painter.h"
 #include "geo.h"
+#include "abstract_tools.h"
+#include "drawers.h"
 
 HBRUSH createPatternBrush (PatternDesc& pattern, PaletteIndex paletteIndex, Dai& dai);
-void paintLine (HDC paintDC, Dai& dai, double north, double west, uint8_t zoom, LineDraw& line, PaletteIndex paletteIndex);
+void paintLine (RECT& client, HDC paintDC, Dai& dai, double north, double west, uint8_t zoom, LineDraw& line, PaletteIndex paletteIndex);
 
 std::vector<DrawToolItem <PatternTool>> patternTools;
+
+HPEN getBasePen (size_t colorIndex, int width, PaletteIndex paletteIndex, Palette& palette) {
+    if (width > 0 && width < 6) {
+        auto [penExists, pens] = palette.basePens [colorIndex].get (paletteIndex);
+
+        return penExists ? pens [width-1] : 0;
+    } else {
+        return 0;
+    }
+}
 
 void createPatternTools (Dai& dai) {
     for (auto& pattern: dai.patterns) {
@@ -525,7 +537,11 @@ void paintChart (
         lookupTables.emplace_back (lookupTable);
     }
 
+    DrawQueue drawQueue (paintDC, paletteIndex, dai, north, west, zoom);
+
     for (int prty = 1; prty < 10; ++ prty) {
+        drawQueue.clear ();
+        
         for (size_t i = 0; i < features.size (); ++ i) {
             auto& feature = features [i];
             //if (feature.classCode >= 300 && feature.classCode <= 402) continue;
@@ -535,7 +551,7 @@ void paintChart (
             if (!lookupTableItem) continue;
 
             if (lookupTableItem->procIndex != LookupTableItem::NOT_EXIST) {
-                dai.runCSP (lookupTableItem, & feature, nodes, edges, zoom);
+                dai.runCSP (lookupTableItem, & feature, nodes, edges, features, zoom, drawQueue);
             }
 
             if (feature.primitive == 3) {
@@ -574,6 +590,8 @@ void paintChart (
 
             delete lookupTableItem;
         }
+
+        drawQueue.run ();
     }
 
     for (size_t i = 0; i < features.size (); ++ i) {
@@ -583,8 +601,10 @@ void paintChart (
         auto lookupTableItem = feature.findBestItem (displayCat, pointObjTableSet, dai);
         if (!lookupTableItem) continue;
 
+        drawQueue.clear ();
+
         if (lookupTableItem->procIndex != LookupTableItem::NOT_EXIST) {
-            dai.runCSP (lookupTableItem, & feature, nodes, edges, zoom);
+            dai.runCSP (lookupTableItem, & feature, nodes, edges, features, zoom, drawQueue);
         }
 
         int offset = 0;
@@ -592,14 +612,16 @@ void paintChart (
             paintSymbol (client, paintDC, nodes [feature.nodeIndex], dai, north, west, zoom, offset, symbolDraw, paletteIndex);
         }
 
-        if (lookupTableItem->drawArc) {
+        /*if (lookupTableItem->drawArc) {
             auto& node = nodes [feature.nodeIndex];
             paintCompoundArc (client, paintDC, lookupTableItem->arcDef, dai, north, west, zoom, node.points [0].lat, node.points [0].lon, paletteIndex);
-        }
+        }*/
 
         for (auto& line: lookupTableItem->lines) {
-            paintLine (paintDC, dai, north, west, zoom, line, paletteIndex);
+            paintLine (client, paintDC, dai, north, west, zoom, line, paletteIndex);
         }
+
+        drawQueue.run ();
 
         delete lookupTableItem;
     }
@@ -671,32 +693,90 @@ HBRUSH createPatternBrush (PatternDesc& pattern, PaletteIndex paletteIndex, Dai&
     return brush;
 }
 
-void paintLine (HDC paintDC, Dai& dai, double north, double west, uint8_t zoom, LineDraw& line, PaletteIndex paletteIndex) {
-    int x1, y1, x2, y2, westX, northY;
+void paintArc (
+    RECT& client,
+    HDC paintDC,
+    size_t penIndex,
+    Dai& dai,
+    double north,
+    double west,
+    uint8_t zoom,
+    double centerLat,
+    double centerLon,
+    double radiusMm,
+    double start,
+    double end,
+    PaletteIndex paletteIndex
+) {
+    int centerX, centerY, westX, northY;
+    double radius = radiusMm / PIXEL_SIZE_IN_MM;
+
+    auto [penExists, pen] = dai.palette.pens [penIndex].get (paletteIndex);
 
     geoToXY (north, west, zoom, westX, northY);
-    geoToXY (line.lat1, line.lon1, zoom, x1, y1);
+    geoToXY (centerLat, centerLon, zoom, centerX, centerY);
+    
+    centerX -= westX;
+    centerY -= northY;
 
-    x1 -= westX;
-    y1 -= northY;
+    std::vector<POINT> curve;
+    bool inScreen = false;
 
-    if (line.mode == LineDrawMode::BETWEEN_TWO_POINTS) {
-        geoToXY (line.lat1, line.lon1, zoom, x2, y2);
+    auto addSector = [centerX, centerY, radius, &client, &inScreen, &curve] (double brg) {
+        double brgRad = (brg + 180.0) * RAD_IN_DEG;
+        double x = centerX + radius * sin (brgRad);
+        double y = centerY - radius * cos (brgRad);
 
-        x2 -= westX;
-        y2 -= northY;
-    } else {
-        double brgRad = line.brg * RAD_IN_DEG;
-        x2 = x1 + (int) (line.lengthMm / PIXEL_SIZE_IN_MM * sin (brgRad));
-        y2 = y1 - (int) (line.lengthMm / PIXEL_SIZE_IN_MM * cos (brgRad));
+        if (!inScreen && x >= 0 && x <= client.right && y >= 0 && y <= client.bottom) inScreen = true;
+
+        curve.emplace_back ();
+        curve.back ().x = (int) x;
+        curve.back ().y = (int) y;
+    };
+
+    double brg;
+    for (brg = start; brg <= end; brg += 5) {
+        addSector (brg);
     }
+    if (brg < end) addSector (end);
 
-    auto [penExists, pen] = dai.palette.pens [line.penIndex].get (paletteIndex);
+    if (inScreen) {
+        HPEN lastPen = (HPEN) SelectObject (paintDC, pen);
+        Polyline (paintDC, curve.data (), curve.size ());
+        SelectObject (paintDC, lastPen);
+    }
+}
 
-    HPEN lastPen = (HPEN) SelectObject (paintDC, pen);
-    MoveToEx (paintDC, x1, y1, 0);
-    LineTo (paintDC, x2, y2);
-    SelectObject (paintDC, lastPen);
+void paintLine (RECT& client, HDC paintDC, Dai& dai, double north, double west, uint8_t zoom, LineDraw& line, PaletteIndex paletteIndex) {
+    if (line.mode == LineDrawMode::ARC) {
+        paintArc (client, paintDC, line.penIndex, dai, north, west, zoom, line.lat1, line.lon1, line.lengthMm, line.brg, line.endBrg, paletteIndex);
+    } else {
+        int x1, y1, x2, y2, westX, northY;
+
+        geoToXY (north, west, zoom, westX, northY);
+        geoToXY (line.lat1, line.lon1, zoom, x1, y1);
+
+        x1 -= westX;
+        y1 -= northY;
+
+        if (line.mode == LineDrawMode::BETWEEN_TWO_POINTS) {
+            geoToXY (line.lat1, line.lon1, zoom, x2, y2);
+
+            x2 -= westX;
+            y2 -= northY;
+        } else {
+            double brgRad = line.brg * RAD_IN_DEG;
+            x2 = x1 + (int) (line.lengthMm / PIXEL_SIZE_IN_MM * sin (brgRad));
+            y2 = y1 - (int) (line.lengthMm / PIXEL_SIZE_IN_MM * cos (brgRad));
+        }
+
+        auto [penExists, pen] = dai.palette.pens [line.penIndex].get (paletteIndex);
+
+        HPEN lastPen = (HPEN) SelectObject (paintDC, pen);
+        MoveToEx (paintDC, x1, y1, 0);
+        LineTo (paintDC, x2, y2);
+        SelectObject (paintDC, lastPen);
+    }
 }
 
 void paintCompoundArc (RECT& client, HDC paintDC, ArcDef& arcDef, Dai& dai, double north, double west, uint8_t zoom, double lat, double lon, PaletteIndex paletteIndex) {
@@ -733,4 +813,83 @@ void paintCompoundArc (RECT& client, HDC paintDC, ArcDef& arcDef, Dai& dai, doub
     drawArc (outlinePens [1], arcDef.radius + 1, arcDef.start, arcDef.end);
     drawArc (pens [3], arcDef.radius + 4, arcDef.start, arcDef.end);
     drawArc (outlinePens [1], arcDef.radius + 6, arcDef.start, arcDef.end);
+}
+
+void paintLine (
+    HDC paintDC,
+    int style,
+    int width,
+    size_t colorIndex,
+    double lat,
+    double lon,
+    double brg,
+    double lengthInMm,
+    double north,
+    double west,
+    int zoom,
+    PaletteIndex paletteIndex,
+    Palette& palette
+){
+    auto pen = getBasePen (colorIndex, width, paletteIndex, palette);
+
+    if (pen) {
+        PenTool::PolyPolygon polyPolygon;
+        PenTool tool;
+
+        tool.composeLine (style, lat, lon, brg, lengthInMm, north, west, zoom, polyPolygon);
+
+        HPEN lastPen = (HPEN) SelectObject (paintDC, pen);
+
+        if (style == PS_SOLID) {
+            Polyline (paintDC, polyPolygon.front ().data (), polyPolygon.front ().size ());
+        } else {
+            std::vector<POINT> vertices;
+            std::vector<DWORD> sizes;
+
+            tool.translatePolyPolygon<DWORD> (polyPolygon, vertices, sizes);
+
+            PolyPolyline (paintDC, vertices.data (), sizes.data (), sizes.size ());
+        }
+        SelectObject (paintDC, lastPen);
+    }
+}
+
+void paintArc (
+    HDC paintDC,
+    int style,
+    int width,
+    size_t colorIndex,
+    double centerLat,
+    double centerLon,
+    double start,
+    double end,
+    double radiusInMm,
+    double north,
+    double west,
+    int zoom,
+    PaletteIndex paletteIndex,
+    Palette& palette
+) {
+    auto pen = getBasePen (colorIndex, width, paletteIndex, palette);
+
+    if (pen) {
+        PenTool::PolyPolygon polyPolygon;
+        PenTool tool;
+
+        tool.composeArc (style, centerLat, centerLon, start, end, radiusInMm, north, west, zoom, polyPolygon);
+
+        HPEN lastPen = (HPEN) SelectObject (paintDC, pen);
+
+        if (style == PS_SOLID) {
+            Polyline (paintDC, polyPolygon.front ().data (), polyPolygon.front ().size ());
+        } else {
+            std::vector<POINT> vertices;
+            std::vector<DWORD> sizes;
+
+            tool.translatePolyPolygon<DWORD> (polyPolygon, vertices, sizes);
+
+            PolyPolyline (paintDC, vertices.data (), sizes.data (), sizes.size ());
+        }
+        SelectObject (paintDC, lastPen);
+    }
 }
