@@ -199,10 +199,15 @@ void lights06 (LookupTableItem *item, FeatureObject *object, Dai& dai, Nodes& no
 
         auto litvis = object->getAttr (ATTRS::LITVIS);
 
+        int lineStyle, lineWidth;
+        std::string arcColorName;
         if (litvis && !litvis->noValue && (litvis->intValue == 3 || litvis->intValue == 7 || litvis->intValue == 8)) {
+            lineStyle = PS_DASH;
+            lineWidth = 1;
+            arcColorName = "CHBLK";
             arcPenName = "LS(DASH,1,CHBLK)";
         } else {
-            std::string arcColorName = "CHMGD";
+            arcColorName = "CHMGD";
             if (colour && !colour->noValue) {
                 if (colour->listIncludes (1) && colour->listIncludes (3)) {
                     arcColorName = "LITRD";
@@ -221,9 +226,21 @@ void lights06 (LookupTableItem *item, FeatureObject *object, Dai& dai, Nodes& no
                 }
             }
             arcPenName = "LS(SOLD,2," + arcColorName + ")";
+            lineStyle = PS_SOLID;
+            lineWidth = 2;
         }
-        arcPenIndex = dai.palette.checkPen (arcPenName.data (), dai.colorTable); //dai.getPenIndex (arcPenName.c_str ());
-        item->lines.emplace_back (arcPenIndex, LineDrawMode::ARC, position.lat, position.lon, sector1Value, sector2Value, arcRadiusMm);
+        /*arcPenIndex = dai.palette.checkPen (arcPenName.data (), dai.colorTable); //dai.getPenIndex (arcPenName.c_str ());
+        item->lines.emplace_back (arcPenIndex, LineDrawMode::ARC, position.lat, position.lon, sector1Value, sector2Value, arcRadiusMm);*/
+        drawQueue.addCompoundLightArc (
+            dai.getBasePenIndex (arcColorName.c_str ()),
+            lineStyle,
+            lineWidth,
+            position.lat,
+            position.lon,
+            arcRadiusMm,
+            sector1Value + 180.0,
+            sector2Value + 180.0
+        );
     }
 }
 
