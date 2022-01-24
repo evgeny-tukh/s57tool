@@ -8,6 +8,13 @@
 #include "settings.h"
 #include "drawers.h"
 
+void depcnt03 (LookupTableItem *item, FeatureObject *object, Dai& dai, Nodes& nodes, Edges& edges, Features& features, int zoom, DrawQueue& drawQueue) {
+    // TO BE DONE!!!!
+    item->edgePenIndex = dai.getBasePenIndex ("DEPCN");
+    item->edgePenStyle = PS_SOLID;
+    item->edgePenWidth = 1;
+}
+
 void lights06 (LookupTableItem *item, FeatureObject *object, Dai& dai, Nodes& nodes, Edges& edges, Features& features, int zoom, DrawQueue& drawQueue) {
     auto valnmr = object->getAttr (ATTRS::VALNMR);
     Attr *orient = 0;
@@ -249,4 +256,5 @@ void lights06 (LookupTableItem *item, FeatureObject *object, Dai& dai, Nodes& no
 
 void initCSPs (Dai& dai) {
     dai.addCSP ("LIGHTS06", lights06);
+    dai.addCSP ("DEPCNT03", depcnt03);
 }

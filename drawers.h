@@ -25,7 +25,7 @@ struct Drawer {
         int _zoom
     ): penIndex (_penIndex), penStyle (_penStyle), penWidth (_penWidth), north (_north), west (_west), lat (_lat), lon (_lon), zoom (_zoom), rangeMm (_rangeMm) {}
 
-    virtual void run (HDC paintDC, PaletteIndex paletteIndex, Palette& palette) {}
+    virtual void run (RECT& client, HDC paintDC, PaletteIndex paletteIndex, Palette& palette) {}
 };
 
 struct LineDrawer: Drawer {
@@ -44,7 +44,7 @@ struct LineDrawer: Drawer {
         int _zoom
     ): Drawer (_penIndex, _penStyle, _penWidth, _north, _west, _lat, _lon, _rangeMm, _zoom), brg (_brg) {}
 
-    virtual void run (HDC paintDC, PaletteIndex paletteIndex, Palette& palette);
+    virtual void run (RECT& client, HDC paintDC, PaletteIndex paletteIndex, Palette& palette);
 };
 
 struct ArcDrawer: Drawer {
@@ -64,7 +64,7 @@ struct ArcDrawer: Drawer {
         int _zoom
     ): Drawer (_penIndex, _penStyle, _penWidth, _north, _west, _centerLat, _centerLon, _radiusMm, _zoom), start (_start), end (_end) {}
 
-    virtual void run (HDC paintDC, PaletteIndex paletteIndex, Palette& palette);
+    virtual void run (RECT& client, HDC paintDC, PaletteIndex paletteIndex, Palette& palette);
 };
 
 struct PolyPolylineDrawer: Drawer {
@@ -89,7 +89,7 @@ struct PolyPolylineDrawer: Drawer {
         polyPolyline.back ().emplace_back (lat, lon);
     }
 
-    virtual void run (HDC paintDC, PaletteIndex paletteIndex, Palette& palette);
+    virtual void run (RECT& client, HDC paintDC, PaletteIndex paletteIndex, Palette& palette);
 };
 
 struct DrawQueue {
@@ -99,15 +99,17 @@ struct DrawQueue {
     int zoom;
     PaletteIndex paletteIndex;
     Dai& dai;
+    RECT& client;
 
     DrawQueue (
+        RECT& _client, 
         HDC _paintDC,
         PaletteIndex _paletteIndex,
         Dai& _dai,
         double _north,
         double _west,
         int _zoom
-    ): paintDC (_paintDC), paletteIndex (_paletteIndex), dai (_dai), north (_north), west (_west), zoom (_zoom) {}
+    ): paintDC (_paintDC), paletteIndex (_paletteIndex), dai (_dai), north (_north), west (_west), zoom (_zoom), client (_client) {}
 
     virtual ~DrawQueue () {
         clear ();
@@ -117,7 +119,7 @@ struct DrawQueue {
         container.clear ();
     }
     void run () {
-        for (auto drawer: container) drawer->run (paintDC, paletteIndex, dai.palette);
+        for (auto drawer: container) drawer->run (client, paintDC, paletteIndex, dai.palette);
     }
     void addLine (int penIndex, int penStyle, int penWidth, double lat, double lon, double brg, double rangeMm) {
         container.push_back (new LineDrawer (penIndex, penStyle, penWidth, north, west, lat, lon, brg, rangeMm, zoom));

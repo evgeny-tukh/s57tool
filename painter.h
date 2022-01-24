@@ -51,6 +51,7 @@ void createPatternTools (Dai& dai);
 void deletePatternTools ();
 
 void paintLine (
+    RECT& client,
     HDC paintDC,
     int style,
     int width,
@@ -66,6 +67,7 @@ void paintLine (
     Palette& palette
 );
 void paintArc (
+    RECT& client,
     HDC paintDC,
     int style,
     int width,
@@ -82,6 +84,7 @@ void paintArc (
     Palette& palette
 );
 void paintPolyPolyline (
+    RECT& client,
     HDC paintDC,
     int style,
     int width,

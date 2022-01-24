@@ -593,6 +593,7 @@ enum TableSet {
     SIMPLIFIED,
     PAPER_CHARTS,
     LINES,
+    UNKNOWN_DATASET,
 };
 
 enum DisplayCat {

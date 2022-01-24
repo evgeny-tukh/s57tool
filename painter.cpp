@@ -530,14 +530,32 @@ void paintChart (
     static char *objectTypes { "PLA" };
     std::vector<LookupTable *> lookupTables;
 
-    for (auto& feature: features) {
-        auto tableSet = (feature.primitive == 1 || feature.primitive == 4) ? pointObjTableSet : spatialObjTableSet;
-        auto lookupTable = dai.findLookupTable (feature.classCode, displayCat, tableSet, objectTypes [feature.primitive-1]);
+    auto getTableSet = [pointObjTableSet, spatialObjTableSet] (FeatureObject& feature) {
+        switch (feature.primitive) {
+            case 1: case 4: return pointObjTableSet;
+            case 2: return TableSet::LINES;
+            case 3: return spatialObjTableSet;
+            default: return TableSet::UNKNOWN_DATASET;
+        }
+    };
 
+    for (auto& feature: features) {
+        TableSet tableSet = getTableSet (feature);
+        auto lookupTable = dai.findLookupTable (feature.classCode, displayCat, tableSet, objectTypes [feature.primitive-1]);
+if(feature.fidn==29143526){
+int iii=0;
+++iii;
+--iii;
+}
+if(!lookupTable){
+int iii=0;
+++iii;
+--iii;
+}
         lookupTables.emplace_back (lookupTable);
     }
 
-    DrawQueue drawQueue (paintDC, paletteIndex, dai, north, west, zoom);
+    DrawQueue drawQueue (client, paintDC, paletteIndex, dai, north, west, zoom);
 
     for (int prty = 1; prty < 10; ++ prty) {
         drawQueue.clear ();
@@ -545,11 +563,17 @@ void paintChart (
         for (size_t i = 0; i < features.size (); ++ i) {
             auto& feature = features [i];
             //if (feature.classCode >= 300 && feature.classCode <= 402) continue;
+
             if (feature.primitive != 2 && feature.primitive != 3) continue;
             if (!lookupTables [i]) continue;
-            auto lookupTableItem = feature.findBestItem (displayCat, spatialObjTableSet, dai, prty);
-            if (!lookupTableItem) continue;
 
+            auto lookupTableItem = feature.findBestItem (displayCat, getTableSet (feature), dai, prty);
+            if (!lookupTableItem) continue;
+if(feature.fidn==29144108){
+int iii=0;
+++iii;
+--iii;
+}
             if (lookupTableItem->procIndex != LookupTableItem::NOT_EXIST) {
                 dai.runCSP (lookupTableItem, & feature, nodes, edges, features, zoom, drawQueue);
             }
@@ -818,6 +842,7 @@ void paintCompoundArc (RECT& client, HDC paintDC, ArcDef& arcDef, Dai& dai, doub
 }
 
 void paintLine (
+    RECT& client,
     HDC paintDC,
     int style,
     int width,
@@ -838,7 +863,7 @@ void paintLine (
         PenTool::PolyPolygon polyPolygon;
         PenTool tool;
 
-        tool.composeLine (style, lat, lon, brg, lengthInMm, north, west, zoom, polyPolygon);
+        tool.composeLine (style, lat, lon, brg, lengthInMm, north, west, zoom, polyPolygon, true);
 
         HPEN lastPen = (HPEN) SelectObject (paintDC, pen);
 
@@ -848,15 +873,20 @@ void paintLine (
             std::vector<POINT> vertices;
             std::vector<DWORD> sizes;
 
-            tool.translatePolyPolygon<DWORD> (polyPolygon, vertices, sizes);
+            tool.removeOutOfScreenContours (client, polyPolygon);
 
-            PolyPolyline (paintDC, vertices.data (), sizes.data (), sizes.size ());
+            if (polyPolygon.size () > 0) {
+                tool.translatePolyPolygon<DWORD> (polyPolygon, vertices, sizes);
+
+                PolyPolyline (paintDC, vertices.data (), sizes.data (), sizes.size ());
+            }
         }
         SelectObject (paintDC, lastPen);
     }
 }
 
 void paintArc (
+    RECT& client,
     HDC paintDC,
     int style,
     int width,
@@ -882,21 +912,27 @@ void paintArc (
 
         HPEN lastPen = (HPEN) SelectObject (paintDC, pen);
 
-        if (style == PS_SOLID) {
-            Polyline (paintDC, polyPolygon.front ().data (), polyPolygon.front ().size ());
-        } else {
-            std::vector<POINT> vertices;
-            std::vector<DWORD> sizes;
+        tool.removeOutOfScreenContours (client, polyPolygon);
 
-            tool.translatePolyPolygon<DWORD> (polyPolygon, vertices, sizes);
+        if (polyPolygon.size () > 0) {
+            if (style == PS_SOLID) {
+                Polyline (paintDC, polyPolygon.front ().data (), polyPolygon.front ().size ());
+            } else {
+                std::vector<POINT> vertices;
+                std::vector<DWORD> sizes;
 
-            PolyPolyline (paintDC, vertices.data (), sizes.data (), sizes.size ());
+                tool.translatePolyPolygon<DWORD> (polyPolygon, vertices, sizes);
+
+                PolyPolyline (paintDC, vertices.data (), sizes.data (), sizes.size ());
+            }
         }
+
         SelectObject (paintDC, lastPen);
     }
 }
 
 void paintPolyPolyline (
+    RECT& client,
     HDC paintDC,
     int style,
     int width,
@@ -917,20 +953,25 @@ void paintPolyPolyline (
         for (auto& contour: contours) {
             polyPolygon.emplace_back ();
 
-            for (auto& vertex: contour) {
-                int x, y;
-                tool.geo2screen (vertex.lat, vertex.lon, north, west, zoom, x, y);
-                polyPolygon.back ().emplace_back ();
-                polyPolygon.back ().back ().x = x;
-                polyPolygon.back ().back ().y = y;
+            if (style == PS_SOLID) {
+                for (auto& vertex: contour) {
+                    tool.appendToLastLeg (vertex.lat, vertex.lon, north, west, zoom, polyPolygon);
+                }
+            } else {
+                for (size_t i = 1; i < contour.size (); ++ i) {
+                    auto& origin = contour [i-1];
+                    auto& dest = contour [i];
+
+                    tool.composeLeg (style, origin.lat, origin.lon, dest.lat, dest.lon, north, west, zoom, polyPolygon, true);
+                }
             }
         }
 
         HPEN lastPen = (HPEN) SelectObject (paintDC, pen);
 
-        if (style == PS_SOLID) {
-            Polyline (paintDC, polyPolygon.front ().data (), polyPolygon.front ().size ());
-        } else {
+        //tool.removeOutOfScreenContours (client, polyPolygon);
+
+        if (polyPolygon.size () > 0) {
             std::vector<POINT> vertices;
             std::vector<DWORD> sizes;
 
@@ -938,6 +979,7 @@ void paintPolyPolyline (
 
             PolyPolyline (paintDC, vertices.data (), sizes.data (), sizes.size ());
         }
+
         SelectObject (paintDC, lastPen);
     }
 }

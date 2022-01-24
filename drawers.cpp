@@ -2,19 +2,20 @@
 #include <vector>
 #include "drawers.h"
 #include "painter.h"
+#include "abstract_tools.h"
 
 PenTool Drawer::penTool;
 
-void LineDrawer::run (HDC paintDC, PaletteIndex paletteIndex, Palette& palette) {
-    paintLine (paintDC, penStyle, penWidth, penIndex, lat, lon, brg, rangeMm, north, west, zoom, paletteIndex, palette);
+void LineDrawer::run (RECT& client, HDC paintDC, PaletteIndex paletteIndex, Palette& palette) {
+    paintLine (client, paintDC, penStyle, penWidth, penIndex, lat, lon, brg, rangeMm, north, west, zoom, paletteIndex, palette);
 }
 
-void ArcDrawer::run (HDC paintDC, PaletteIndex paletteIndex, Palette& palette) {
-    paintArc (paintDC, penStyle, penWidth, penIndex, lat, lon, start, end, rangeMm, north, west, zoom, paletteIndex, palette);
+void ArcDrawer::run (RECT& client, HDC paintDC, PaletteIndex paletteIndex, Palette& palette) {
+    paintArc (client, paintDC, penStyle, penWidth, penIndex, lat, lon, start, end, rangeMm, north, west, zoom, paletteIndex, palette);
 }
 
-void PolyPolylineDrawer::run (HDC paintDC, PaletteIndex paletteIndex, Palette& palette) {
-    paintPolyPolyline (paintDC, penStyle, penWidth, penIndex, polyPolyline, north, west, zoom, paletteIndex, palette);
+void PolyPolylineDrawer::run (RECT& client, HDC paintDC, PaletteIndex paletteIndex, Palette& palette) {
+    paintPolyPolyline (client, paintDC, penStyle, penWidth, penIndex, polyPolyline, north, west, zoom, paletteIndex, palette);
 }
 
 void DrawQueue::addCompoundLightArc (
