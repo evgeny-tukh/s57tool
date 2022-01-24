@@ -2,11 +2,163 @@
 #include <vector>
 #include <map>
 #include <tuple>
+#include <optional>
 #include "s57defs.h"
 #include "classes.h"
 #include "data.h"
 #include "settings.h"
 #include "drawers.h"
+
+bool isEdgeSharedWithTg1Object (FeatureObject *thisObject, size_t edgeIndex, Features& features) {
+    for (size_t i = 0; i < features.size (); ++ i) {
+        auto& object = features [i];
+        if (object.fidn != thisObject->fidn && object.group == 1) return true;
+    }
+    return false;
+}
+
+std::tuple<bool, size_t> getEdgeSharedWith (
+    FeatureObject *thisObject,
+    size_t edgeIndex,
+    Features& features,
+    uint16_t classCode,
+    uint16_t classCode2 = 0,
+    uint16_t classCode3 = 0,
+    uint16_t classCode4 = 0,
+    uint16_t classCode5 = 0,
+    uint16_t classCode6 = 0
+) {
+    for (size_t i = 0; i < features.size (); ++ i) {
+        auto& object = features [i];
+        if (object.fidn == thisObject->fidn) continue;
+        if (
+            object.classCode == classCode ||
+            object.classCode == classCode2 ||
+            object.classCode == classCode3 ||
+            object.classCode == classCode4 ||
+            object.classCode == classCode5 ||
+            object.classCode == classCode6
+        ) {
+            for (auto& edgeRef: object.edgeRefs) {
+                if (edgeRef.index == edgeIndex) return std::tuple<bool, size_t> (true, i);
+            }
+        }
+    }
+    return std::tuple<bool, size_t> (false, -1);
+}
+
+bool isEdgeSharedWith (
+    FeatureObject *thisObject,
+    size_t edgeIndex,
+    Features& features,
+    uint16_t classCode,
+    uint16_t classCode2 = 0,
+    uint16_t classCode3 = 0,
+    uint16_t classCode4 = 0,
+    uint16_t classCode5 = 0,
+    uint16_t classCode6 = 0
+) {
+    auto [shared, index] = getEdgeSharedWith (thisObject, edgeIndex, features, classCode, classCode2, classCode3, classCode4, classCode5, classCode6);
+    return shared;
+}
+
+bool isEdgeSharedWithLinerStructure (FeatureObject *thisObject, size_t edgeIndex, Features& features) {
+    if (isEdgeSharedWith (thisObject, edgeIndex, features, OBJ_CLASSES::LNDARE, OBJ_CLASSES::GATCON, OBJ_CLASSES::DAMCON)) return true;
+
+    auto [shared, index] = getEdgeSharedWith (thisObject, edgeIndex, features, OBJ_CLASSES::SLCONS, OBJ_CLASSES::CAUSWY);
+
+    if (!shared) return false;
+
+    auto watlev = features [index].getAttr (ATTRS::WATLEV);
+
+    return watlev && (watlev->noValue || watlev->intValue == 1 || watlev->intValue == 2 || watlev->intValue == 6);
+}
+
+
+void depare03 (LookupTableItem *item, FeatureObject *object, Dai& dai, Nodes& nodes, Edges& edges, Features& features, int zoom, DrawQueue& drawQueue) {
+    auto drval1 = object->getAttr (ATTRS::DRVAL1);
+    auto drval2 = object->getAttr (ATTRS::DRVAL2);
+    double depthRangeVal1 = (drval1 && !drval1->noValue) ? drval1->floatValue : -1.0;
+    double depthRangeVal2 = (drval2 && !drval2->noValue) ? drval1->floatValue : (depthRangeVal1 + 0.01);
+
+    // SEADBED01 call here
+
+    if (object->classCode == OBJ_CLASSES::DRGARE) {
+        item->edgePenIndex = dai.getBasePenIndex ("CHGRF");
+        item->edgePenStyle = PS_DASH;
+        item->edgePenWidth = 1;
+        item->patternBrushIndex = dai.palette.getPatternBrushIndex ("DRGARE01");
+
+        auto restrn = object->getAttr (ATTRS::RESTRN);
+
+        if (restrn && !restrn->noValue) {
+            // RESCSP03 call here
+        }
+
+        for (auto& edgeRef: object->edgeRefs) {
+            bool safe = false, unsafe = false, locSafety = false;
+            std::optional<double> locValdco;
+            if (depthRangeVal1 < settings.safetyContour) {
+                safe = true;
+            } else {
+                unsafe = true;
+            }
+            auto [sharedWithDeepContour, deepContourIndex] = getEdgeSharedWith (object, edgeRef.index, features, OBJ_CLASSES::DEPCNT);
+            if (sharedWithDeepContour) {
+                auto valdco = features [deepContourIndex].getAttr (ATTRS::VALDCO);
+
+                if (valdco && !valdco->noValue) {
+                    locValdco = valdco->floatValue;
+                } else {
+                    locValdco = 0.0;
+                }
+            }
+            if (locValdco.has_value () && locValdco.value () == settings.safetyContour) {
+                locSafety = true;
+            } else {
+                auto [sharedWithDrgOrDepArea, areaIndex] = getEdgeSharedWith (object, edgeRef.index, features, OBJ_CLASSES::DEPARE, OBJ_CLASSES::DRGARE);
+
+                if (sharedWithDrgOrDepArea) {
+                    auto locDrval1 = features [areaIndex].getAttr (ATTRS::DRVAL1);
+                    double locDepthRangeValue = (locDrval1 && !locDrval1->noValue) ? locDrval1->floatValue : -1.0;
+
+                    if (locDepthRangeValue < settings.safetyContour) {
+                        unsafe = true;
+                    } else {
+                        safe = true;
+                    }
+                } else {
+                    if (
+                        isEdgeSharedWithTg1Object (object, edgeRef.index, features) &&
+                        isEdgeSharedWith (object, edgeRef.index, features, OBJ_CLASSES::LNDARE, OBJ_CLASSES::UNSARE) &&
+                        isEdgeSharedWith (
+                            object,
+                            edgeRef.index,
+                            features,
+                            OBJ_CLASSES::RIVERS,
+                            OBJ_CLASSES::LAKARE,
+                            OBJ_CLASSES::CANALS,
+                            OBJ_CLASSES::LOKBSN,
+                            OBJ_CLASSES::DOCARE
+                        ) &&
+                        !isEdgeSharedWithLinerStructure (object, edgeRef.index, features)
+                    ) {
+                        unsafe = true;
+                    }
+
+                }
+            }
+
+            if (!locSafety && (!safe || !unsafe)) continue;
+
+
+            item->displayPriority = 8;
+            item->radarPriority = 'O';
+            item->displayCat = DisplayCat::DISPLAY_BASE;
+            item->viewingGroup = 13010;
+        }
+    }
+}
 
 void depcnt03 (LookupTableItem *item, FeatureObject *object, Dai& dai, Nodes& nodes, Edges& edges, Features& features, int zoom, DrawQueue& drawQueue) {
     // TO BE DONE!!!!
@@ -257,4 +409,5 @@ void lights06 (LookupTableItem *item, FeatureObject *object, Dai& dai, Nodes& no
 void initCSPs (Dai& dai) {
     dai.addCSP ("LIGHTS06", lights06);
     dai.addCSP ("DEPCNT03", depcnt03);
+    dai.addCSP ("DEPARE03", depare03);
 }

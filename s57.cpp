@@ -308,3 +308,19 @@ Attr *FeatureObject::getAttr (const char *acronym, struct AttrDictionary& dic) {
 
     return desc ? getAttr (desc->code) : 0;
 }
+
+Attr *FeatureObject::getEdgeAttr (EdgeRef& edgeRef, const char *acronym, struct AttrDictionary& dic, Edges& edges) {
+    auto& edge = edges [edgeRef.index];
+    for (auto& attr: edge.attributes) {
+        if (attr.classCode == classCode) return &attr;
+    }
+    return 0;
+}
+
+Attr *FeatureObject::getEdgeAttr (EdgeRef& edgeRef, size_t classCode, Edges& edges) {
+    auto& edge = edges.container [edgeRef.index];
+    for (auto& attr: edge.attributes) {
+        if (attr.classCode == classCode) return &attr;
+    }
+    return 0;
+}

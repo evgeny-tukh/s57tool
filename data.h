@@ -42,17 +42,6 @@ struct EdgeNode: Position {
     EdgeNode (): Position (), hidden (false), hole (false) {}
 };
 
-struct GeoEdge: TopologyObject {
-    Orient orientation;
-    size_t beginIndex;
-    size_t endIndex;
-    std::vector<Position> internalNodes;
-    bool hidden;
-    bool hole;
-
-    GeoEdge (): TopologyObject (), orientation (Orient::UNKNOWN), beginIndex (-1), endIndex (-1), hidden (false), hole (false) {}
-};
-
 struct Attr {
     uint16_t classCode;
     std::string acronym;
@@ -70,6 +59,18 @@ struct Attr {
         }
         return false;
     }
+};
+
+struct GeoEdge: TopologyObject {
+    Orient orientation;
+    size_t beginIndex;
+    size_t endIndex;
+    std::vector<Position> internalNodes;
+    bool hidden;
+    bool hole;
+    std::vector<Attr> attributes;
+
+    GeoEdge (): TopologyObject (), orientation (Orient::UNKNOWN), beginIndex (-1), endIndex (-1), hidden (false), hole (false) {}
 };
 
 struct EdgeRef {
@@ -99,6 +100,9 @@ struct FeatureObject: TopologyObject {
         }
         return 0;
     }
+
+    Attr *getEdgeAttr (EdgeRef& edgeRef, const char *acronym, struct AttrDictionary& dic, Edges& edges);
+    Attr *getEdgeAttr (EdgeRef& edgeRef, size_t classCode, struct Edges& edges);
 
     LookupTableItem *findBestItem (DisplayCat displayCat, TableSet tableSet, Dai& dai, int priority = -1) {
         char objectType;

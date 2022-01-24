@@ -688,6 +688,7 @@ struct LookupTableItem {
     size_t edgePenIndex;
     int edgePenStyle;
     int edgePenWidth;
+    int viewingGroup;
     std::vector<SymbolDraw> symbols;
     std::vector<LineDraw> lines;
 
@@ -727,6 +728,7 @@ struct LookupTableItem {
         edgePenStyle = PS_SOLID;
         edgePenWidth = 1;
         drawArc = false;
+        viewingGroup = 0;
     }
 
     // Lookup table index key compose rule:
@@ -765,6 +767,7 @@ struct LookupTableItem {
         edgePenIndex = source.edgePenIndex;
         edgePenStyle = source.edgePenStyle;
         edgePenWidth = source.edgePenWidth;
+        viewingGroup = source.viewingGroup;
     }
 };
 

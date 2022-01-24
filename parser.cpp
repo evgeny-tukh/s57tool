@@ -15,7 +15,7 @@ size_t splitString (std::string source, std::vector<std::string>& parts, char se
     if (source.empty ()) return 0;
 
     parts.emplace_back ();
-    
+
     for (char chr: source) {
         if (chr == separator) {
             parts.emplace_back ();
@@ -542,6 +542,34 @@ void extractEdges (std::vector<std::vector<FieldInstance>>& records, Edges& edge
                     edge.recordName = recName;
                     edge.updateInstruction = updateInstr;
                     edge.version = version;
+                }
+            } else if (field.tag.compare ("ATTV") == 0) {
+                for (auto& instanceValue: field.instanceValues) {
+                    for (auto& subField: instanceValue) {
+                        if (subField.first.compare ("*ATTL") == 0) {
+                            if (subField.second.intValue.has_value ()) {
+                                edges.back ().attributes.emplace_back ().classCode = subField.second.intValue.value ();
+                            }
+                        } else if (subField.first.compare ("ATVL") == 0) {
+                            auto& attr = edges.back ().attributes.back ();
+                            attr.noValue = false;
+                            if (subField.second.intValue.has_value ()) {
+                                attr.intValue = subField.second.intValue.value ();
+                            } else if (subField.second.floatValue.has_value ()) {
+                                attr.floatValue = subField.second.floatValue.value ();
+                            } else if (subField.second.stringValue.has_value ()) {
+                                attr.strValue = subField.second.stringValue.value ();
+                            } else if (subField.second.binaryValue.size () > 0) {
+                                attr.listValue.insert (
+                                    attr.listValue.end (),
+                                    subField.second.binaryValue.begin (),
+                                    subField.second.binaryValue.end ()
+                                );
+                            } else {
+                                attr.noValue = true;
+                            }
+                        }
+                    }
                 }
             } else if (field.tag.compare ("SG2D") == 0) {
                 // New internal node
