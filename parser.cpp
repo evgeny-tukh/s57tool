@@ -15,7 +15,7 @@ size_t splitString (std::string source, std::vector<std::string>& parts, char se
     if (source.empty ()) return 0;
 
     parts.emplace_back ();
-
+    
     for (char chr: source) {
         if (chr == separator) {
             parts.emplace_back ();
@@ -1878,7 +1878,7 @@ void loadColorTable (const char *path, Dai& dai) {
 
         dai.palette.colorIndex.emplace (colorName, i);
 
-        for (int j = 0; j < 5; ++ j) {
+        for (int j = 0; j < 6; ++ j) {
             dai.palette.basePens [i].day [j] = CreatePen (PS_SOLID, j + 1, RGB (colorDesc->day.red, colorDesc->day.green, colorDesc->day.blue));
             dai.palette.basePens [i].dusk [j] = CreatePen (PS_SOLID, j + 1, RGB (colorDesc->dusk.red, colorDesc->dusk.green, colorDesc->dusk.blue));
             dai.palette.basePens [i].night [j] = CreatePen (PS_SOLID, j + 1, RGB (colorDesc->night.red, colorDesc->night.green, colorDesc->night.blue));

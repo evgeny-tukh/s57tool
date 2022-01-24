@@ -786,13 +786,13 @@ enum DrawOperCode {
 };
 
 struct Pens {
-    HPEN container [5];
+    HPEN container [6];
     HPEN *handles () { return container; }
     HPEN& operator[] (const size_t index) { return container [index]; }
     Pens () { memset (container, 0, sizeof (container)); }
     Pens (int): Pens () {}
     virtual ~Pens () {
-        for (size_t i = 0; i < 5; ++ i) {
+        for (size_t i = 0; i <= 6; ++ i) {
             if (container [i]) DeleteObject (container [i]);
         }
     }

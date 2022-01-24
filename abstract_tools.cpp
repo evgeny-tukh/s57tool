@@ -13,8 +13,8 @@ std::tuple<bool, double, double> PenTool::getStrokeProps (int style) {
     double strokeLengthPix = 0.0, gapLengthPix = 0.0;
     bool ok = style == PS_DASH || style == PS_DOT;
     if (ok) {
-        double strokeLength = style == PS_DASH ? 3.6 : 1.8;
-        double gapLength = style == PS_DASH ? 0.6 : 1.2;
+        double strokeLength = style == PS_DASH ? 3.6 : 0.6;
+        double gapLength = style == PS_DASH ? 1.8 : 1.2;
         strokeLengthPix = strokeLength / PIXEL_SIZE_IN_MM;
         gapLengthPix = gapLength / PIXEL_SIZE_IN_MM;
     }

@@ -9,7 +9,7 @@ void paintLine (RECT& client, HDC paintDC, Dai& dai, double north, double west, 
 std::vector<DrawToolItem <PatternTool>> patternTools;
 
 HPEN getBasePen (size_t colorIndex, int width, PaletteIndex paletteIndex, Palette& palette) {
-    if (width > 0 && width < 6) {
+    if (width > 0 && width <= 6) {
         auto [penExists, pens] = palette.basePens [colorIndex].get (paletteIndex);
 
         return penExists ? pens [width-1] : 0;
@@ -569,7 +569,7 @@ int iii=0;
 
             auto lookupTableItem = feature.findBestItem (displayCat, getTableSet (feature), dai, prty);
             if (!lookupTableItem) continue;
-if(feature.fidn==29144108){
+if(feature.fidn==29142158){
 int iii=0;
 ++iii;
 --iii;
