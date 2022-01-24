@@ -1,8 +1,8 @@
 #pragma once
 
 struct Settings {
-    bool fullSectorLength;
-    double safetyContour = 30.0;
+    bool fullSectorLength, safetyContourLabels, twoShades, shallowPattern;
+    double safetyContour, shallowContour, deepContour;
 };
 
 extern Settings settings;

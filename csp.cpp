@@ -74,6 +74,41 @@ bool isEdgeSharedWithLinerStructure (FeatureObject *thisObject, size_t edgeIndex
     return watlev && (watlev->noValue || watlev->intValue == 1 || watlev->intValue == 2 || watlev->intValue == 6);
 }
 
+void seabed01 (double depthRangeVal1, double depthRangeVal2, LookupTableItem *item, Dai& dai) {
+    std::string colorName { "DEPIT" };
+    bool shallow = true;
+
+    if (settings.twoShades) {
+        if (depthRangeVal1 >= 0 && depthRangeVal2 > 0) {
+            colorName = "DEPVS";
+        }
+        if (depthRangeVal1 >= settings.safetyContour && depthRangeVal2 > settings.safetyContour) {
+            colorName = "DEPDW";
+            shallow = false;
+        }
+    } else {
+        if (depthRangeVal1 >= 0 && depthRangeVal2 > 0) {
+            colorName = "DEPVS";
+        }
+        if (depthRangeVal1 >= settings.shallowContour && depthRangeVal2 > settings.shallowContour) {
+            colorName = "DEPMS";
+        }
+        if (depthRangeVal1 >= settings.safetyContour && depthRangeVal2 > settings.safetyContour) {
+            colorName = "DEPMD";
+            shallow = false;
+        }
+        if (depthRangeVal1 >= settings.deepContour && depthRangeVal2 > settings.deepContour) {
+            colorName = "DEPDW";
+            shallow = false;
+        }
+    }
+    
+    item->brushIndex = dai.getBasePenIndex (colorName.c_str ());
+
+    if (settings.shallowPattern && shallow) {
+        item->patternBrushIndex = dai.getPatternIndex ("DIAMOND1");
+    }
+}
 
 void depare03 (LookupTableItem *item, FeatureObject *object, Dai& dai, Nodes& nodes, Edges& edges, Features& features, int zoom, DrawQueue& drawQueue) {
     auto drval1 = object->getAttr (ATTRS::DRVAL1);
@@ -81,7 +116,7 @@ void depare03 (LookupTableItem *item, FeatureObject *object, Dai& dai, Nodes& no
     double depthRangeVal1 = (drval1 && !drval1->noValue) ? drval1->floatValue : -1.0;
     double depthRangeVal2 = (drval2 && !drval2->noValue) ? drval1->floatValue : (depthRangeVal1 + 0.01);
 
-    // SEADBED01 call here
+    seabed01 (depthRangeVal1, depthRangeVal2, item, dai);
 
     if (object->classCode == OBJ_CLASSES::DRGARE) {
         item->edgePenIndex = dai.getBasePenIndex ("CHGRF");
@@ -94,68 +129,82 @@ void depare03 (LookupTableItem *item, FeatureObject *object, Dai& dai, Nodes& no
         if (restrn && !restrn->noValue) {
             // RESCSP03 call here
         }
+    }
 
-        for (auto& edgeRef: object->edgeRefs) {
-            bool safe = false, unsafe = false, locSafety = false;
-            std::optional<double> locValdco;
-            if (depthRangeVal1 < settings.safetyContour) {
-                safe = true;
+    for (auto& edgeRef: object->edgeRefs) {
+        bool safe = false, unsafe = false, locSafety = false;
+        std::optional<double> locValdco;
+        if (depthRangeVal1 < settings.safetyContour) {
+            safe = true;
+        } else {
+            unsafe = true;
+        }
+        auto [sharedWithDeepContour, deepContourIndex] = getEdgeSharedWith (object, edgeRef.index, features, OBJ_CLASSES::DEPCNT);
+        if (sharedWithDeepContour) {
+            auto valdco = features [deepContourIndex].getAttr (ATTRS::VALDCO);
+
+            if (valdco && !valdco->noValue) {
+                locValdco = valdco->floatValue;
             } else {
-                unsafe = true;
+                locValdco = 0.0;
             }
-            auto [sharedWithDeepContour, deepContourIndex] = getEdgeSharedWith (object, edgeRef.index, features, OBJ_CLASSES::DEPCNT);
-            if (sharedWithDeepContour) {
-                auto valdco = features [deepContourIndex].getAttr (ATTRS::VALDCO);
+        }
+        if (locValdco.has_value () && locValdco.value () == settings.safetyContour) {
+            locSafety = true;
+        } else {
+            auto [sharedWithDrgOrDepArea, areaIndex] = getEdgeSharedWith (object, edgeRef.index, features, OBJ_CLASSES::DEPARE, OBJ_CLASSES::DRGARE);
 
-                if (valdco && !valdco->noValue) {
-                    locValdco = valdco->floatValue;
+            if (sharedWithDrgOrDepArea) {
+                auto locDrval1 = features [areaIndex].getAttr (ATTRS::DRVAL1);
+                double locDepthRangeValue = (locDrval1 && !locDrval1->noValue) ? locDrval1->floatValue : -1.0;
+
+                if (locDepthRangeValue < settings.safetyContour) {
+                    unsafe = true;
                 } else {
-                    locValdco = 0.0;
+                    safe = true;
                 }
-            }
-            if (locValdco.has_value () && locValdco.value () == settings.safetyContour) {
-                locSafety = true;
             } else {
-                auto [sharedWithDrgOrDepArea, areaIndex] = getEdgeSharedWith (object, edgeRef.index, features, OBJ_CLASSES::DEPARE, OBJ_CLASSES::DRGARE);
-
-                if (sharedWithDrgOrDepArea) {
-                    auto locDrval1 = features [areaIndex].getAttr (ATTRS::DRVAL1);
-                    double locDepthRangeValue = (locDrval1 && !locDrval1->noValue) ? locDrval1->floatValue : -1.0;
-
-                    if (locDepthRangeValue < settings.safetyContour) {
-                        unsafe = true;
-                    } else {
-                        safe = true;
-                    }
-                } else {
-                    if (
-                        isEdgeSharedWithTg1Object (object, edgeRef.index, features) &&
-                        isEdgeSharedWith (object, edgeRef.index, features, OBJ_CLASSES::LNDARE, OBJ_CLASSES::UNSARE) &&
-                        isEdgeSharedWith (
-                            object,
-                            edgeRef.index,
-                            features,
-                            OBJ_CLASSES::RIVERS,
-                            OBJ_CLASSES::LAKARE,
-                            OBJ_CLASSES::CANALS,
-                            OBJ_CLASSES::LOKBSN,
-                            OBJ_CLASSES::DOCARE
-                        ) &&
-                        !isEdgeSharedWithLinerStructure (object, edgeRef.index, features)
-                    ) {
-                        unsafe = true;
-                    }
-
+                if (
+                    isEdgeSharedWithTg1Object (object, edgeRef.index, features) &&
+                    isEdgeSharedWith (object, edgeRef.index, features, OBJ_CLASSES::LNDARE, OBJ_CLASSES::UNSARE) &&
+                    isEdgeSharedWith (
+                        object,
+                        edgeRef.index,
+                        features,
+                        OBJ_CLASSES::RIVERS,
+                        OBJ_CLASSES::LAKARE,
+                        OBJ_CLASSES::CANALS,
+                        OBJ_CLASSES::LOKBSN,
+                        OBJ_CLASSES::DOCARE
+                    ) &&
+                    !isEdgeSharedWithLinerStructure (object, edgeRef.index, features)
+                ) {
+                    unsafe = true;
                 }
+
             }
+        }
 
-            if (!locSafety && (!safe || !unsafe)) continue;
+        if (!locSafety && (!safe || !unsafe)) continue;
 
 
-            item->displayPriority = 8;
-            item->radarPriority = 'O';
-            item->displayCat = DisplayCat::DISPLAY_BASE;
-            item->viewingGroup = 13010;
+        // For the edge!
+        //item->displayPriority = 8;
+        //item->radarPriority = 'O';
+        //item->displayCat = DisplayCat::DISPLAY_BASE;
+        //item->viewingGroup = 13010;
+
+        auto locQuapos = object->getEdgeAttr (edgeRef, ATTRS::VALDCO, edges);
+
+        if (!locQuapos || locQuapos->noValue || locQuapos->intValue != 1 && locQuapos->intValue != 10 && locQuapos->intValue != 11) {
+            // Edge pres: LS(DASH,2,DEPSC)
+        } else {
+            // Edge pres: LS(SOLD,2,DEPSC)
+        }
+
+        if (settings.safetyContourLabels && locValdco.has_value ()) {
+            // 1. SAFCON02 (locValdco.value ())
+            // 2. Draw Selected Symbols from 'SAFCON02'
         }
     }
 }

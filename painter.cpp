@@ -569,7 +569,7 @@ int iii=0;
 
             auto lookupTableItem = feature.findBestItem (displayCat, getTableSet (feature), dai, prty);
             if (!lookupTableItem) continue;
-if(feature.fidn==29142158){
+if(feature.fidn==29141937){
 int iii=0;
 ++iii;
 --iii;
@@ -587,7 +587,8 @@ int iii=0;
                     if (brushExists) {
                         paintArea (client, paintDC, nodes, edges, feature.edgeRefs, dai, north, west, zoom, solidBrush, 0);
                     }
-                } else if (lookupTableItem->patternBrushIndex != LookupTableItem::NOT_EXIST) {
+                }
+                if (lookupTableItem->patternBrushIndex != LookupTableItem::NOT_EXIST) {
                     //auto& [brushExists, patternBrush] = dai.palette.patternBrushes [lookupTableItem->patternBrushIndex].get (paletteIndex);
                     //if (brushExists) brush = patternBrush;
                     //patternMode = true;
