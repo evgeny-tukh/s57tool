@@ -85,21 +85,21 @@ TextDrawer::TextDrawer (
     int _zoom,
     const char *instr,
     FeatureObject *object,
-    Dai& dai,
+    Dai& _dai,
     AttrDictionary& attrDic
-) : Drawer (LookupTableItem::NOT_EXIST, PS_SOLID, 1, _north, _west, lat, lon, 0.0, zoom) {
+) : Drawer (LookupTableItem::NOT_EXIST, PS_SOLID, 1, _north, _west, _lat, _lon, 0.0, _zoom), dai (_dai) {
     if (instr [0] == 'T') {
         if (instr [1] == 'E') {
             parseExtendedInstr (instr, object, dai, attrDic);
         } else {
-            parseRegularInstr (instr, dai);
+            parseRegularInstr (instr, object, dai, attrDic);
         }
     }
 }
 
 bool TextDrawer::parseInstr (const char *instr, std::vector<std::string>& parts) {
     char *leftBracket = strchr ((char *) instr, '(');
-    char *rightBracket = leftBracket ? strchr (leftBracket + 1, '(') : 0;
+    char *rightBracket = leftBracket ? strchr (leftBracket + 1, ')') : 0;
     bool result = false;
 
     if (rightBracket) {
@@ -158,10 +158,28 @@ std::string s57format (const char *format, std::vector<std::string>& args, Featu
 }
 
 inline std::string unquote (std::string& source) {
+    if (source.empty ()) return std::string ();
     std::string result { source.c_str () };
-    if (result.front () == '\'') result.erase (0);
-    if (result.back () == '\'') result.erase (result.length () - 1);
+    if (result.front () == '\'' && result.back () == '\'') {
+        result = result.substr (1, result.length () - 2);
+    }
     return result;
+}
+
+void TextDrawer::parseInstrCommon (std::vector<std::string>& parts, FeatureObject *object, Dai& dai, AttrDictionary& attrDic, int start) {
+    int fld = start;
+    horJust = (HorJust) (parts.size () > fld ? parts [fld].front () - '0' : 3); ++ fld;
+    verJust = (VerJust) (parts.size () > fld ? parts [fld].front () - '0' : 1); ++ fld;
+    spacing = (Spacing) (parts.size () > fld ? parts [fld].front () - '0' : 2); ++ fld;
+    auto chars = parts.size () > fld ? unquote (parts [fld]) : "3121510"; ++ fld;
+    fontType = (FontType) (chars [0] - '0');
+    fontWeight = (FontWeight) (chars [1] - '0');
+    fontStyle = (FontStyle) (chars [2] - '0');
+    fontSize = (double) ((chars [3] - '0') * 10 + chars [4] - '0') / PIXEL_SIZE_IN_MM;
+    horOffset = parts.size () > fld ? std::atoi (parts [fld].c_str ()) : 0; ++ fld;
+    verOffset = parts.size () > fld ? std::atoi (parts [fld].c_str ()) : 0; ++ fld;
+    penIndex = dai.getBasePenIndex (parts.size () > fld ? parts [fld].c_str () : "CHBLK"); ++ fld;
+    if (penIndex == LookupTableItem::NOT_EXIST) penIndex = dai.getBasePenIndex ("CHBLK"); ++ fld;
 }
 
 bool TextDrawer::parseExtendedInstr (const char *instr, FeatureObject *object, Dai& dai, AttrDictionary& attrDic) {
@@ -179,46 +197,42 @@ bool TextDrawer::parseExtendedInstr (const char *instr, FeatureObject *object, D
         std::vector<std::string> args;
         splitString (argsStr, args, ',');
         text = s57format (format.c_str (), args, object, dai, attrDic);
-        horJust = (HorJust) (parts [2].front () - '0');
-        verJust = (VerJust) (parts [3].front () - '0');
-        spacing = (Spacing) (parts [4].front () - '0');
-        auto chars = unquote (parts [5]);
-        fontType = (FontType) (chars [0] - '0');
-        fontWeight = (FontWeight) (chars [1] - '0');
-        fontStyle = (FontStyle) (chars [2] - '0');
-        fontSize = (double) ((chars [3] - '0') * 10 + chars [4] - '0') / PIXEL_SIZE_IN_MM;
-        horOffset = std::atoi (parts [6].c_str ());
-        verOffset = std::atoi (parts [7].c_str ());
-        penIndex = dai.getPenIndex (parts [8].c_str ());
+        parseInstrCommon (parts, object, dai, attrDic, 2);
         result = true;
     }
     return result;
 }
 
-bool TextDrawer::parseRegularInstr (const char *instr, Dai& dai) {
+bool TextDrawer::parseRegularInstr (const char *instr, FeatureObject *object, Dai& dai, AttrDictionary& attrDic) {
     std::vector<std::string> parts;
     bool result = false;
 
     if (parseInstr (instr, parts)) {
-        text = unquote (parts [0]);
-        horJust = (HorJust) (parts [1].front () - '0');
-        verJust = (VerJust) (parts [2].front () - '0');
-        spacing = (Spacing) (parts [3].front () - '0');
-        auto chars = unquote (parts [4]);
-        fontType = (FontType) (chars [0] - '0');
-        fontWeight = (FontWeight) (chars [1] - '0');
-        fontStyle = (FontStyle) (chars [2] - '0');
-        fontSize = (double) ((chars [3] - '0') * 10 + chars [4] - '0') / PIXEL_SIZE_IN_MM;
-        horOffset = std::atoi (parts [5].c_str ());
-        verOffset = std::atoi (parts [6].c_str ());
-        penIndex = dai.getPenIndex (parts [7].c_str ());
+        auto attrName = unquote (parts [0]);
+        auto attr = object->getAttr (attrName.c_str (), attrDic);
+        text = (attr && !attr->noValue) ? attr->strValue.c_str () : "";
+        parseInstrCommon (parts, object, dai, attrDic, 1);
         result = true;
     }
     return result;
 }
 
 void TextDrawer::run (RECT& client, HDC paintDC, PaletteIndex paletteIndex, Palette& palette) {
+    if (text.empty ()) return;
 
+    unsigned int format = 0;
+
+    switch (horJust) {
+        case HorJust::CENTER: format |= DT_CENTER; break;
+        case HorJust::LEFT: format |= DT_LEFT; break;
+        case HorJust::RIGHT: format |= DT_RIGHT; break;
+    }
+    switch (verJust) {
+        case VerJust::CENT: format |= DT_VCENTER; break;
+        case VerJust::BOTTOM: format |= DT_BOTTOM; break;
+        case VerJust::TOP: format |= DT_TOP; break;
+    }
+    paintText (client, paintDC, text.data (), format, lat, lon, horOffset, verOffset, penIndex, north, west, zoom, paletteIndex, dai);
 };
 
 void DrawQueue::addCompoundLightArc (

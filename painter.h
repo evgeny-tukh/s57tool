@@ -25,6 +25,7 @@ void paintChart (
     Edges& edges,
     Features& features,
     Dai& dai,
+    AttrDictionary &attrDic,
     double north,
     double west,
     uint8_t zoom,
@@ -107,4 +108,20 @@ void paintPolyPolygon (
     int zoom,
     PaletteIndex paletteIndex,
     Palette& palette
+);
+void paintText (
+    RECT& client,
+    HDC paintDC,
+    char *text,
+    unsigned int format,
+    double lat,
+    double lon,
+    int xOffset,
+    int yOffset,
+    size_t colorIndex,
+    double north,
+    double west,
+    int zoom,
+    PaletteIndex paletteIndex,
+    Dai& dai
 );

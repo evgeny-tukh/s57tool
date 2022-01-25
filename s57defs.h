@@ -691,6 +691,7 @@ struct LookupTableItem {
     int viewingGroup;
     std::vector<SymbolDraw> symbols;
     std::vector<LineDraw> lines;
+    std::vector<std::string> textInstructions;
     bool customEdgePres;
 
     // Lights only, specified in LIGHTS06 procedre
@@ -718,6 +719,7 @@ struct LookupTableItem {
         symbols.clear ();
         comment.clear ();
         attrCombination.clear ();
+        textInstructions.clear ();
         instruction.clear ();
         objectType = '\0';
         radarPriority = '\0';
@@ -750,6 +752,7 @@ struct LookupTableItem {
         attrCombination.insert (attrCombination.begin (), source.attrCombination.begin (), source.attrCombination.end ());
         instruction.insert (instruction.begin (), source.instruction.begin (), source.instruction.end ());
         symbols.insert (symbols.begin (), source.symbols.begin (), source.symbols.end ());
+        textInstructions.insert (textInstructions.begin (), source.textInstructions.begin (), source.textInstructions.end ());
         comment = source.comment.c_str ();
         classCode = source.classCode;
         comment = source.comment;

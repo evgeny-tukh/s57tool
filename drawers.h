@@ -67,6 +67,7 @@ struct TextDrawer: Drawer {
     int fontSize;
     int horOffset;
     int verOffset;
+    Dai& dai;
 
     TextDrawer (
         double _north,
@@ -82,7 +83,8 @@ struct TextDrawer: Drawer {
 
     virtual void run (RECT& client, HDC paintDC, PaletteIndex paletteIndex, Palette& palette);
     bool parseExtendedInstr (const char *instr, FeatureObject *object, Dai& dai, AttrDictionary& attrDic);
-    bool parseRegularInstr (const char *instr, Dai& dai);
+    bool parseRegularInstr (const char *instr, FeatureObject *object, Dai& dai, AttrDictionary& attrDic);
+    void parseInstrCommon (std::vector<std::string>& parts, FeatureObject *object, Dai& dai, AttrDictionary& attrDic, int start);
     bool parseInstr (const char *instr, std::vector<std::string>& parts);
 };
 
@@ -191,16 +193,18 @@ struct DrawQueue {
     PaletteIndex paletteIndex;
     Dai& dai;
     RECT& client;
+    AttrDictionary& attrDic;
 
     DrawQueue (
         RECT& _client, 
         HDC _paintDC,
         PaletteIndex _paletteIndex,
         Dai& _dai,
+        AttrDictionary& _attrDic,
         double _north,
         double _west,
         int _zoom
-    ): paintDC (_paintDC), paletteIndex (_paletteIndex), dai (_dai), north (_north), west (_west), zoom (_zoom), client (_client) {}
+    ): paintDC (_paintDC), paletteIndex (_paletteIndex), dai (_dai), north (_north), west (_west), zoom (_zoom), client (_client), attrDic (_attrDic) {}
 
     virtual ~DrawQueue () {
         clear ();
@@ -217,6 +221,9 @@ struct DrawQueue {
     }
     void addArc (int penIndex, int penStyle, int penWidth, double centerLat, double centerLon, double radiusMm, double start, double end) {
         container.push_back (new ArcDrawer (penIndex, penStyle, penWidth, north, west, centerLat, centerLon, radiusMm, start, end, zoom));
+    }
+    void addText (double lat, double lon, const char *instr, FeatureObject *object) {
+        container.push_back (new TextDrawer (north, west, lat, lon, zoom, instr, object, dai, attrDic)); 
     }
     void addCompoundLightArc (
         int penIndex,

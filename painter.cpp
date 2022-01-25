@@ -1,3 +1,4 @@
+
 #include "painter.h"
 #include "geo.h"
 #include "abstract_tools.h"
@@ -7,6 +8,28 @@ HBRUSH createPatternBrush (PatternDesc& pattern, PaletteIndex paletteIndex, Dai&
 void paintLine (RECT& client, HDC paintDC, Dai& dai, double north, double west, uint8_t zoom, LineDraw& line, PaletteIndex paletteIndex);
 
 std::vector<DrawToolItem <PatternTool>> patternTools;
+
+void getCenterPos (FeatureObject& object, Edges& edges, Nodes& nodes, double& lat, double& lon) {
+    double sumLat = 0.0;
+    double sumLon = 0.0;
+    size_t count = 0;
+    for (auto& edgeRef: object.edgeRefs) {
+        auto& edge = edges.container [edgeRef.index];
+        auto& begin = nodes.container [edge.beginIndex].points [0];
+        auto& end = nodes.container [edge.endIndex].points [0];
+        sumLat += begin.lat + end.lat;
+        sumLon += begin.lon + end.lon;
+
+        for (auto& pos: edge.internalNodes) {
+            sumLat += pos.lat;
+            sumLon += pos.lon;
+        }
+
+        count += 2 + edge.internalNodes.size ();
+    }
+    lat = sumLat / (double) count;
+    lon = sumLon / (double) count;
+}
 
 bool isPolyPolylineOverlappingScreen (std::vector<POINT>& polyPolyline, RECT& client) {
     for (auto& pt: polyPolyline) {
@@ -558,6 +581,7 @@ void paintChart (
     Edges& edges,
     Features& features,
     Dai& dai,
+    AttrDictionary &attrDic,
     double north,
     double west,
     uint8_t zoom,
@@ -584,15 +608,14 @@ void paintChart (
         lookupTables.emplace_back (lookupTable);
     }
 
-    DrawQueue drawQueue (client, paintDC, paletteIndex, dai, north, west, zoom);
+    DrawQueue drawQueue (client, paintDC, paletteIndex, dai, attrDic, north, west, zoom);
+    DrawQueue textDrawQueue (client, paintDC, paletteIndex, dai, attrDic, north, west, zoom);
 
     for (int prty = 1; prty < 10; ++ prty) {
         drawQueue.clear ();
         
         for (size_t i = 0; i < features.size (); ++ i) {
             auto& feature = features [i];
-            //if (feature.classCode >= 300 && feature.classCode <= 402) continue;
-
             if (feature.primitive != 2 && feature.primitive != 3) continue;
             if (!lookupTables [i]) continue;
 
@@ -610,23 +633,6 @@ void paintChart (
                     if (edgeRef.hidden) continue;
                     drawQueue.addEdge (edgeRef);
                 }
-                #if 0
-                if (lookupTableItem->brushIndex != LookupTableItem::NOT_EXIST) {
-                    auto& [brushExists, solidBrush] = dai.palette.brushes [lookupTableItem->brushIndex].get (paletteIndex);
-                    if (brushExists) {
-                        paintArea (client, paintDC, nodes, edges, feature.edgeRefs, dai, north, west, zoom, solidBrush, 0);
-                    }
-                }
-                if (lookupTableItem->patternBrushIndex != LookupTableItem::NOT_EXIST) {
-                    //auto& [brushExists, patternBrush] = dai.palette.patternBrushes [lookupTableItem->patternBrushIndex].get (paletteIndex);
-                    //if (brushExists) brush = patternBrush;
-                    //patternMode = true;
-                    auto& [toolExists, tool] = patternTools [lookupTableItem->patternBrushIndex].get (paletteIndex);
-                    if (toolExists) {
-                        paintArea (client, paintDC, nodes, edges, feature.edgeRefs, dai, north, west, zoom, 0, & tool);
-                    }
-                }
-                #endif
             }
 
             if ((feature.primitive == 2 || feature.primitive == 3) && lookupTableItem->edgePenIndex != LookupTableItem::NOT_EXIST) {
@@ -644,12 +650,6 @@ void paintChart (
                     }
 
                 } else {
-                    /*if (lookupTableItem->penIndex != LookupTableItem::NOT_EXIST) {
-                        auto& [penExists, penHandle] = dai.palette.pens [lookupTableItem->penIndex].get (paletteIndex);
-                        pen = penExists ? penHandle : 0;
-                    } else {
-                        pen = (HPEN) GetStockObject (BLACK_PEN);
-                    }*/
                     drawQueue.addEdgeChain (lookupTableItem->edgePenIndex, lookupTableItem->edgePenStyle, lookupTableItem->edgePenWidth, nodes, edges);
                     for (auto& edgeRef: feature.edgeRefs) {
                         if (edgeRef.hidden) continue;
@@ -657,6 +657,12 @@ void paintChart (
                         drawQueue.addEdge (edgeRef);
                     }
                 }
+            }
+
+            for (auto& instr: lookupTableItem->textInstructions) {
+                double lat, lon;
+                getCenterPos (feature, edges, nodes, lat, lon);
+                textDrawQueue.addText (lat, lon, instr.c_str (), & feature);
             }
 
             delete lookupTableItem;
@@ -686,16 +692,17 @@ void paintChart (
         /*if (lookupTableItem->drawArc) {
             auto& node = nodes [feature.nodeIndex];
             paintCompoundArc (client, paintDC, lookupTableItem->arcDef, dai, north, west, zoom, node.points [0].lat, node.points [0].lon, paletteIndex);
-        }*/
+        }
 
         for (auto& line: lookupTableItem->lines) {
             paintLine (client, paintDC, dai, north, west, zoom, line, paletteIndex);
-        }
-
+        }*/
         drawQueue.run ();
 
         delete lookupTableItem;
     }
+
+    textDrawQueue.run ();
 }
 
 HBRUSH createPatternBrush (PatternDesc& pattern, PaletteIndex paletteIndex, Dai& dai) {
@@ -1081,4 +1088,46 @@ void paintPolyPolyline (
 
         SelectObject (paintDC, lastPen);
     }
+}
+
+void paintText (
+    RECT& client,
+    HDC paintDC,
+    char *text,
+    unsigned int format,
+    double lat,
+    double lon,
+    int xOffset,
+    int yOffset,
+    size_t colorIndex,
+    double north,
+    double west,
+    int zoom,
+    PaletteIndex paletteIndex,
+    Dai& dai
+){
+    int x, y, westX, northY;
+
+    geoToXY (north, west, zoom, westX, northY);
+    geoToXY (lat, lon, zoom, x, y);
+    
+    x += xOffset - westX;
+    y += yOffset - northY;
+
+    if (x > client.right || y > client.bottom) return;
+
+    RECT textRect;
+    textRect.left = x;
+    textRect.top = y;
+
+    DrawText (paintDC, text, -1, & textRect, format | DT_CALCRECT);
+
+    if (textRect.right < 0 || textRect.top < 0) return;
+
+    auto lastBkMode = SetBkMode (paintDC, TRANSPARENT);
+    DrawText (paintDC, text, -1, & textRect, format);
+
+    SetBkMode (paintDC, lastBkMode);
+
+    auto colorDef = dai.colorTable.container [colorIndex].getColorDef (paletteIndex);
 }
