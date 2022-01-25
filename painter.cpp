@@ -574,6 +574,14 @@ void paintEdge (
     Polyline (paintDC, vertices.data (), (int) vertices.size ());
 }
 
+void addAllTextDraws (FeatureObject& feature, LookupTableItem *lookupTableItem, DrawQueue& drawQueue, Edges& edges, Nodes& nodes) {
+    for (auto& instr: lookupTableItem->textInstructions) {
+        double lat, lon;
+        getCenterPos (feature, edges, nodes, lat, lon);
+        drawQueue.addText (lat, lon, instr.c_str (), & feature);
+    }
+}
+
 void paintChart (
     RECT& client,
     HDC paintDC,
@@ -659,11 +667,7 @@ void paintChart (
                 }
             }
 
-            for (auto& instr: lookupTableItem->textInstructions) {
-                double lat, lon;
-                getCenterPos (feature, edges, nodes, lat, lon);
-                textDrawQueue.addText (lat, lon, instr.c_str (), & feature);
-            }
+            addAllTextDraws (feature, lookupTableItem, textDrawQueue, edges, nodes);
 
             delete lookupTableItem;
         }
@@ -688,16 +692,9 @@ void paintChart (
         for (auto& symbolDraw: lookupTableItem->symbols) {
             paintSymbol (client, paintDC, nodes [feature.nodeIndex], dai, north, west, zoom, offset, symbolDraw, paletteIndex);
         }
-
-        /*if (lookupTableItem->drawArc) {
-            auto& node = nodes [feature.nodeIndex];
-            paintCompoundArc (client, paintDC, lookupTableItem->arcDef, dai, north, west, zoom, node.points [0].lat, node.points [0].lon, paletteIndex);
-        }
-
-        for (auto& line: lookupTableItem->lines) {
-            paintLine (client, paintDC, dai, north, west, zoom, line, paletteIndex);
-        }*/
         drawQueue.run ();
+
+        addAllTextDraws (feature, lookupTableItem, textDrawQueue, edges, nodes);
 
         delete lookupTableItem;
     }
