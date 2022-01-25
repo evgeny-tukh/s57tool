@@ -96,3 +96,15 @@ void paintPolyPolyline (
     PaletteIndex paletteIndex,
     Palette& palette
 );
+void paintPolyPolygon (
+    RECT& client,
+    HDC paintDC,
+    size_t fillBrushIndex,
+    size_t patternBrushIndex,
+    Contours& contours,
+    double north,
+    double west,
+    int zoom,
+    PaletteIndex paletteIndex,
+    Palette& palette
+);

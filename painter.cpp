@@ -8,6 +8,13 @@ void paintLine (RECT& client, HDC paintDC, Dai& dai, double north, double west, 
 
 std::vector<DrawToolItem <PatternTool>> patternTools;
 
+bool isPolyPolylineOverlappingScreen (std::vector<POINT>& polyPolyline, RECT& client) {
+    for (auto& pt: polyPolyline) {
+        if (pt.x >= 0 & pt.x <= client.right && pt.y >= 0 && pt.y <= client.bottom) return true;
+    }
+    return false;
+}
+
 HPEN getBasePen (size_t colorIndex, int width, PaletteIndex paletteIndex, Palette& palette) {
     if (width > 0 && width <= 6) {
         auto [penExists, pens] = palette.basePens [colorIndex].get (paletteIndex);
@@ -16,6 +23,18 @@ HPEN getBasePen (size_t colorIndex, int width, PaletteIndex paletteIndex, Palett
     } else {
         return 0;
     }
+}
+
+HBRUSH getFillBrush (size_t colorIndex, PaletteIndex paletteIndex, Palette& palette) {
+    auto [brushExists, brush] = palette.brushes [colorIndex].get (paletteIndex);
+
+    return brushExists ? brush : 0;
+}
+
+HBRUSH getPatternBrush (size_t patternIndex, PaletteIndex paletteIndex, Palette& palette) {
+    auto [brushExists, brush] = palette.patternBrushes [patternIndex].get (paletteIndex);
+
+    return brushExists ? brush : 0;
 }
 
 void createPatternTools (Dai& dai) {
@@ -186,13 +205,23 @@ void paintArea (
 
     polyPolygon.emplace_back ();
     bool hole = false;
+    auto isContourClosed = [&polyPolygon] () {
+        auto& lastContour = polyPolygon.back ();
+        if (lastContour.size () > 1) {
+            return lastContour.front ().x == lastContour.back ().x && lastContour.front ().y == lastContour.back ().y;
+        } else {
+            return false;
+        }
+    };
     for (auto& edgeRef: edgeRefs) {
         auto& edge = edges [edgeRef.index];
         if (edge.hidden) continue;
         if (edgeRef.hole != hole) {
-            closeContour (polyPolygon.back ());
-            if (hole) reverseContour (polyPolygon.back ());
+            //closeContour (polyPolygon.back ());
+            //if (hole) reverseContour (polyPolygon.back ());
             hole = edgeRef.hole;
+            polyPolygon.emplace_back ();
+        } else if (hole && isContourClosed ()) {
             polyPolygon.emplace_back ();
         }
         if (edgeRef.unclockwise) {
@@ -209,8 +238,8 @@ void paintArea (
             addNode (edge.endIndex);
         }
     }
-    closeContour (polyPolygon.back ());
-    if (hole) reverseContour (polyPolygon.back ());
+    //closeContour (polyPolygon.back ());
+    //if (hole) reverseContour (polyPolygon.back ());
 
     if (vertices.front ().x != vertices.back ().x || vertices.front ().y != vertices.back ().y) {
         vertices.push_back (vertices.front ());
@@ -237,7 +266,11 @@ void paintArea (
             sizes.emplace_back ((int) contour.size ());
             area.insert (area.end (), contour.begin (), contour.end ());
         }
-        PolyPolygon (paintDC, area.data (), sizes.data (), (int) sizes.size ());
+        if (isPolyPolylineOverlappingScreen (area, client)) {
+            int lastMode = SetPolyFillMode (paintDC, ALTERNATE);
+            PolyPolygon (paintDC, area.data (), sizes.data (), (int) sizes.size ());
+            SetPolyFillMode (paintDC, lastMode);
+        }
     }
     #else
     if (patternTool) {
@@ -542,16 +575,6 @@ void paintChart (
     for (auto& feature: features) {
         TableSet tableSet = getTableSet (feature);
         auto lookupTable = dai.findLookupTable (feature.classCode, displayCat, tableSet, objectTypes [feature.primitive-1]);
-if(feature.fidn==29143526){
-int iii=0;
-++iii;
---iii;
-}
-if(!lookupTable){
-int iii=0;
-++iii;
---iii;
-}
         lookupTables.emplace_back (lookupTable);
     }
 
@@ -569,11 +592,6 @@ int iii=0;
 
             auto lookupTableItem = feature.findBestItem (displayCat, getTableSet (feature), dai, prty);
             if (!lookupTableItem) continue;
-if(feature.fidn==29141937){
-int iii=0;
-++iii;
---iii;
-}
             if (lookupTableItem->procIndex != LookupTableItem::NOT_EXIST) {
                 dai.runCSP (lookupTableItem, & feature, nodes, edges, features, zoom, drawQueue);
             }
@@ -874,7 +892,7 @@ void paintLine (
             std::vector<POINT> vertices;
             std::vector<DWORD> sizes;
 
-            tool.removeOutOfScreenContours (client, polyPolygon);
+            //tool.removeOutOfScreenContours (client, polyPolygon);
 
             if (polyPolygon.size () > 0) {
                 tool.translatePolyPolygon<DWORD> (polyPolygon, vertices, sizes);
@@ -913,7 +931,7 @@ void paintArc (
 
         HPEN lastPen = (HPEN) SelectObject (paintDC, pen);
 
-        tool.removeOutOfScreenContours (client, polyPolygon);
+        //tool.removeOutOfScreenContours (client, polyPolygon);
 
         if (polyPolygon.size () > 0) {
             if (style == PS_SOLID) {
@@ -929,6 +947,60 @@ void paintArc (
         }
 
         SelectObject (paintDC, lastPen);
+    }
+}
+
+void paintPolyPolygon (
+    RECT& client,
+    HDC paintDC,
+    size_t fillBrushIndex,
+    size_t patternBrushIndex,
+    Contours& contours,
+    double north,
+    double west,
+    int zoom,
+    PaletteIndex paletteIndex,
+    Palette& palette
+){
+    auto fillBrush = fillBrushIndex == LookupTableItem::NOT_EXIST ? 0 : getFillBrush (fillBrushIndex, paletteIndex, palette);
+    auto patternBrush = patternBrushIndex == LookupTableItem::NOT_EXIST ? 0 : getPatternBrush (patternBrushIndex, paletteIndex, palette);
+
+    if (fillBrush || patternBrush) {
+        PenTool::PolyPolygon polyPolygon;
+        PenTool tool;
+
+        for (auto& contour: contours) {
+            polyPolygon.emplace_back ();
+
+            for (auto& vertex: contour) {
+                tool.appendToLastLeg (vertex.lat, vertex.lon, north, west, zoom, polyPolygon);
+            }
+        }
+
+        //tool.removeOutOfScreenContours (client, polyPolygon);
+        
+        if (polyPolygon.size () > 0) {
+            std::vector<POINT> vertices;
+            std::vector<INT> sizes;
+            tool.translatePolyPolygon<INT> (polyPolygon, vertices, sizes);
+
+            if (isPolyPolylineOverlappingScreen (vertices, client)) {
+                HPEN lastPen = (HPEN) SelectObject (paintDC, GetStockObject (NULL_BRUSH));
+
+                if (fillBrush) {
+                    HBRUSH lastBrush = (HBRUSH) SelectObject (paintDC, fillBrush);
+                    PolyPolygon (paintDC, vertices.data (), sizes.data (), sizes.size ());
+                    SelectObject (paintDC, lastBrush);
+                }
+                if (patternBrush) {
+                    HBRUSH lastBrush = (HBRUSH) SelectObject (paintDC, patternBrush);
+                    PolyPolygon (paintDC, vertices.data (), sizes.data (), sizes.size ());
+                    SelectObject (paintDC, lastBrush);
+                }
+
+                SelectObject (paintDC, lastPen);
+            }
+        }
     }
 }
 
@@ -978,7 +1050,9 @@ void paintPolyPolyline (
 
             tool.translatePolyPolygon<DWORD> (polyPolygon, vertices, sizes);
 
-            PolyPolyline (paintDC, vertices.data (), sizes.data (), sizes.size ());
+            if (isPolyPolylineOverlappingScreen (vertices, client)) {
+                PolyPolyline (paintDC, vertices.data (), sizes.data (), sizes.size ());
+            }
         }
 
         SelectObject (paintDC, lastPen);

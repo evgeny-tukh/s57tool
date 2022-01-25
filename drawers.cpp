@@ -18,6 +18,10 @@ void PolyPolylineDrawer::run (RECT& client, HDC paintDC, PaletteIndex paletteInd
     paintPolyPolyline (client, paintDC, penStyle, penWidth, penIndex, polyPolyline, north, west, zoom, paletteIndex, palette);
 }
 
+void PolyPolygonDrawer::run (RECT& client, HDC paintDC, PaletteIndex paletteIndex, Palette& palette) {
+    paintPolyPolygon (client, paintDC, fillBrushIndex, patternBrushIndex, polyPolyline, north, west, zoom, paletteIndex, palette);
+}
+
 void DrawQueue::addCompoundLightArc (
     int penIndex,
     int penStyle,

@@ -14,7 +14,7 @@ struct Drawer {
     static PenTool penTool;
 
     Drawer (
-        int _penIndex,
+        size_t _penIndex,
         int _penStyle,
         int _penWidth,
         double _north,
@@ -32,7 +32,7 @@ struct LineDrawer: Drawer {
     double brg;
 
     LineDrawer (
-        int _penIndex,
+        size_t _penIndex,
         int _penStyle,
         int _penWidth,
         double _north,
@@ -51,7 +51,7 @@ struct ArcDrawer: Drawer {
     double start, end;
 
     ArcDrawer (
-        int _penIndex,
+        size_t _penIndex,
         int _penStyle,
         int _penWidth,
         double _north,
@@ -72,7 +72,7 @@ struct PolyPolylineDrawer: Drawer {
     Nodes& nodes;
 
     PolyPolylineDrawer (
-        int _penIndex,
+        size_t _penIndex,
         int _penStyle,
         int _penWidth,
         double _north,
@@ -87,6 +87,23 @@ struct PolyPolylineDrawer: Drawer {
     }
     void addVertex (double lat, double lon) {
         polyPolyline.back ().emplace_back (lat, lon);
+    }
+
+    virtual void run (RECT& client, HDC paintDC, PaletteIndex paletteIndex, Palette& palette);
+};
+
+struct PolyPolygonDrawer: PolyPolylineDrawer {
+    size_t fillBrushIndex;
+    size_t patternBrushIndex;
+
+    PolyPolygonDrawer (
+        size_t _fillBrushIndex,
+        size_t _patternBrushIndex,
+        double _north,
+        double _west,
+        int _zoom,
+        Nodes& _nodes
+    ): PolyPolylineDrawer (-1, PS_SOLID, 0, _north, _west, _zoom, _nodes), fillBrushIndex (_fillBrushIndex), patternBrushIndex (_patternBrushIndex) {
     }
 
     virtual void run (RECT& client, HDC paintDC, PaletteIndex paletteIndex, Palette& palette);
