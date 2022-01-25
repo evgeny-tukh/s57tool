@@ -1,6 +1,7 @@
 #pragma once
 
 #include <vector>
+#include <string>
 #include <Windows.h>
 #include "abstract_tools.h"
 #include "s57defs.h"
@@ -26,6 +27,63 @@ struct Drawer {
     ): penIndex (_penIndex), penStyle (_penStyle), penWidth (_penWidth), north (_north), west (_west), lat (_lat), lon (_lon), zoom (_zoom), rangeMm (_rangeMm) {}
 
     virtual void run (RECT& client, HDC paintDC, PaletteIndex paletteIndex, Palette& palette) {}
+};
+
+struct TextDrawer: Drawer {
+    enum HorJust {
+        CENTER = 1,
+        RIGHT = 2,
+        LEFT = 3,
+    };
+    enum VerJust {
+        BOTTOM = 1,
+        CENT = 2,
+        TOP = 3,
+    };
+    enum Spacing {
+        FIT = 1,
+        STD = 2,
+        WORD_WRAP = 3,
+    };
+    enum FontType {
+        SERIF = 1,
+    };
+    enum FontWeight {
+        LIGHT = 4,
+        MEDIUM = 5,
+        BOLD = 6,
+    };
+    enum FontStyle {
+        REGULAR = 1,
+    };
+
+    std::string text;
+    HorJust horJust;
+    VerJust verJust;
+    Spacing spacing;
+    FontType fontType;
+    FontWeight fontWeight;
+    FontStyle fontStyle;
+    int fontSize;
+    int horOffset;
+    int verOffset;
+
+    TextDrawer (
+        double _north,
+        double _west,
+        double _lat,
+        double _lon,
+        int _zoom,
+        const char *instr,
+        FeatureObject *object,
+        Dai& dai,
+        AttrDictionary& attrDic
+    );
+
+    virtual void run (RECT& client, HDC paintDC, PaletteIndex paletteIndex, Palette& palette);
+    bool parseExtendedInstr (const char *instr, FeatureObject *object, Dai& dai, AttrDictionary& attrDic);
+    bool parseRegularInstr (const char *instr, Dai& dai);
+    bool parseInstr (const char *instr, std::vector<std::string>& parts);
 };
 
 struct LineDrawer: Drawer {
