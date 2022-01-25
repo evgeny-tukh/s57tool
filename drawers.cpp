@@ -217,6 +217,68 @@ bool TextDrawer::parseRegularInstr (const char *instr, FeatureObject *object, Da
     return result;
 }
 
+void TextDrawer::parseInstrCommon (std::vector<std::string>& parts, FeatureObject *object, Dai& dai, AttrDictionary& attrDic, int start, TextDesc& desc) {
+    int fld = start;
+    desc.horJust = (HorJust) (parts.size () > fld ? parts [fld].front () - '0' : 3); ++ fld;
+    desc.verJust = (VerJust) (parts.size () > fld ? parts [fld].front () - '0' : 1); ++ fld;
+    desc.spacing = (Spacing) (parts.size () > fld ? parts [fld].front () - '0' : 2); ++ fld;
+    auto chars = parts.size () > fld ? unquote (parts [fld]) : "3121510"; ++ fld;
+    desc.fontType = (FontType) (chars [0] - '0');
+    desc.fontWeight = (FontWeight) (chars [1] - '0');
+    desc.fontStyle = (FontStyle) (chars [2] - '0');
+    desc.fontSize = (double) ((chars [3] - '0') * 10 + chars [4] - '0') / PIXEL_SIZE_IN_MM;
+    desc.horOffset = parts.size () > fld ? std::atoi (parts [fld].c_str ()) : 0; ++ fld;
+    desc.verOffset = parts.size () > fld ? std::atoi (parts [fld].c_str ()) : 0; ++ fld;
+    desc.penIndex = dai.getBasePenIndex (parts.size () > fld ? parts [fld].c_str () : "CHBLK"); ++ fld;
+    if (desc.penIndex == LookupTableItem::NOT_EXIST) penIndex = dai.getBasePenIndex ("CHBLK"); ++ fld;
+}
+
+bool TextDrawer::parseExtendedInstr (const char *instr, FeatureObject *object, Dai& dai, AttrDictionary& attrDic, TextDesc& desc) {
+    std::vector<std::string> parts;
+    bool result = false;
+
+    auto getArgValue = [object, &attrDic] (const char *arg) {
+        auto attr = object->getAttr (arg, attrDic);
+        return (attr && !attr->noValue) ? attr->strValue : "";
+    };
+
+    if (parseInstr (instr, parts)) {
+        auto format = unquote (parts [0]);
+        auto argsStr = unquote (parts [1]);
+        std::vector<std::string> args;
+        splitString (argsStr, args, ',');
+        text = s57format (format.c_str (), args, object, dai, attrDic);
+        parseInstrCommon (parts, object, dai, attrDic, 2);
+        result = true;
+    }
+    return result;
+}
+
+bool TextDrawer::parseRegularInstr (const char *instr, FeatureObject *object, Dai& dai, AttrDictionary& attrDic) {
+    std::vector<std::string> parts;
+    bool result = false;
+
+    if (parseInstr (instr, parts)) {
+        auto attrName = unquote (parts [0]);
+        auto attr = object->getAttr (attrName.c_str (), attrDic);
+        text = (attr && !attr->noValue) ? attr->strValue.c_str () : "";
+        parseInstrCommon (parts, object, dai, attrDic, 1);
+        result = true;
+    }
+    return result;
+}
+
+void parseTextInstruction (const char *instr, FeatureObject *object, Dai& dai, AttrDictionary& attrDic, TextDesc& desc) {
+    if (instr [0] == 'T') {
+        if (instr [1] == 'E') {
+            parseExtendedInstr (instr, object, dai, attrDic);
+        } else {
+            parseRegularInstr (instr, object, dai, attrDic);
+        }
+    }
+
+}
+
 void TextDrawer::run (RECT& client, HDC paintDC, PaletteIndex paletteIndex, Palette& palette) {
     if (text.empty ()) return;
 

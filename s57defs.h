@@ -692,6 +692,7 @@ struct LookupTableItem {
     std::vector<SymbolDraw> symbols;
     std::vector<LineDraw> lines;
     std::vector<std::string> textInstructions;
+    std::vector<TextDesc> textDescriptions;
     bool customEdgePres;
 
     // Lights only, specified in LIGHTS06 procedre
@@ -1008,5 +1009,44 @@ struct SymbolDesc: DrawableObjDesc {
     std::string bitmap;
 };
 
+struct TextDesc {
+    enum HorJust {
+        CENTER = 1,
+        RIGHT = 2,
+        LEFT = 3,
+    };
+    enum VerJust {
+        BOTTOM = 1,
+        CENT = 2,
+        TOP = 3,
+    };
+    enum Spacing {
+        FIT = 1,
+        STD = 2,
+        WORD_WRAP = 3,
+    };
+    enum FontType {
+        SERIF = 1,
+    };
+    enum FontWeight {
+        LIGHT = 4,
+        MEDIUM = 5,
+        BOLD = 6,
+    };
+    enum FontStyle {
+        REGULAR = 1,
+    };
+
+    std::string text;
+    HorJust horJust;
+    VerJust verJust;
+    Spacing spacing;
+    FontType fontType;
+    FontWeight fontWeight;
+    FontStyle fontStyle;
+    int fontSize;
+    int horOffset;
+    int verOffset;
+};
 
 #pragma pack()
