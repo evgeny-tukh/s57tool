@@ -187,19 +187,22 @@ void depare03 (LookupTableItem *item, FeatureObject *object, Dai& dai, Nodes& no
 
         if (!locSafety && (!safe || !unsafe)) continue;
 
-
-        // For the edge!
-        //item->displayPriority = 8;
-        //item->radarPriority = 'O';
-        //item->displayCat = DisplayCat::DISPLAY_BASE;
-        //item->viewingGroup = 13010;
+        // Edge customization
+        item->customEdgePres = true;
+        
+        edgeRef.displayPriority = 8;
+        //edgeRef.radarPriority = 'O';
+        edgeRef.dispCat = DisplayCat::DISPLAY_BASE;
+        edgeRef.viewingGroup = 13010;
+        edgeRef.penIndex = dai.getPenIndex ("DEPSC");
+        edgeRef.penWidth = 2;
 
         auto locQuapos = object->getEdgeAttr (edgeRef, ATTRS::VALDCO, edges);
 
         if (!locQuapos || locQuapos->noValue || locQuapos->intValue != 1 && locQuapos->intValue != 10 && locQuapos->intValue != 11) {
-            // Edge pres: LS(DASH,2,DEPSC)
+            edgeRef.penStyle = PS_DASH;
         } else {
-            // Edge pres: LS(SOLD,2,DEPSC)
+            edgeRef.penStyle = PS_SOLID;
         }
 
         if (settings.safetyContourLabels && locValdco.has_value ()) {

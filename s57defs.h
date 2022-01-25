@@ -691,6 +691,7 @@ struct LookupTableItem {
     int viewingGroup;
     std::vector<SymbolDraw> symbols;
     std::vector<LineDraw> lines;
+    bool customEdgePres;
 
     // Lights only, specified in LIGHTS06 procedre
     ArcDef arcDef;
@@ -729,6 +730,7 @@ struct LookupTableItem {
         edgePenWidth = 1;
         drawArc = false;
         viewingGroup = 0;
+        customEdgePres = false;
     }
 
     // Lookup table index key compose rule:
@@ -768,6 +770,7 @@ struct LookupTableItem {
         edgePenStyle = source.edgePenStyle;
         edgePenWidth = source.edgePenWidth;
         viewingGroup = source.viewingGroup;
+        customEdgePres = source.customEdgePres;
     }
 };
 

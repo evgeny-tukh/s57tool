@@ -631,17 +631,31 @@ void paintChart (
 
             if ((feature.primitive == 2 || feature.primitive == 3) && lookupTableItem->edgePenIndex != LookupTableItem::NOT_EXIST) {
                 HPEN pen = 0;
-                if (lookupTableItem->penIndex != LookupTableItem::NOT_EXIST) {
-                    auto& [penExists, penHandle] = dai.palette.pens [lookupTableItem->penIndex].get (paletteIndex);
-                    pen = penExists ? penHandle : 0;
+                if (lookupTableItem->customEdgePres) {
+                    for (auto& edgeRef: feature.edgeRefs) {
+                        if (edgeRef.hidden) continue;
+                        drawQueue.addEdgeChain (
+                            edgeRef.customPres ? edgeRef.penIndex : lookupTableItem->edgePenIndex,
+                            edgeRef.customPres ? edgeRef.penStyle : lookupTableItem->edgePenStyle,
+                            edgeRef.customPres ? edgeRef.penWidth : lookupTableItem->edgePenWidth,
+                            nodes,
+                        edges);
+                        drawQueue.addEdge (edgeRef);
+                    }
+
                 } else {
-                    pen = (HPEN) GetStockObject (BLACK_PEN);
-                }
-                drawQueue.addEdgeChain (lookupTableItem->edgePenIndex, lookupTableItem->edgePenStyle, lookupTableItem->edgePenWidth, nodes, edges);
-                for (auto& edgeRef: feature.edgeRefs) {
-                    if (edgeRef.hidden) continue;
-                    //paintEdge (client, paintDC, nodes, edges [edgeRef.index], dai, north, west, zoom, pen);
-                    drawQueue.addEdge (edgeRef);
+                    /*if (lookupTableItem->penIndex != LookupTableItem::NOT_EXIST) {
+                        auto& [penExists, penHandle] = dai.palette.pens [lookupTableItem->penIndex].get (paletteIndex);
+                        pen = penExists ? penHandle : 0;
+                    } else {
+                        pen = (HPEN) GetStockObject (BLACK_PEN);
+                    }*/
+                    drawQueue.addEdgeChain (lookupTableItem->edgePenIndex, lookupTableItem->edgePenStyle, lookupTableItem->edgePenWidth, nodes, edges);
+                    for (auto& edgeRef: feature.edgeRefs) {
+                        if (edgeRef.hidden) continue;
+                        //paintEdge (client, paintDC, nodes, edges [edgeRef.index], dai, north, west, zoom, pen);
+                        drawQueue.addEdge (edgeRef);
+                    }
                 }
             }
 

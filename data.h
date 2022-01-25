@@ -78,6 +78,26 @@ struct EdgeRef {
     bool hidden;
     bool hole;
     bool unclockwise;
+    bool customPres;
+    size_t penIndex;
+    int penStyle;
+    int penWidth;
+    int viewingGroup;
+    int displayPriority;
+    DisplayCat dispCat;
+
+    EdgeRef ():
+        customPres (false),
+        hidden (false),
+        hole (false),
+        unclockwise (false),
+        penIndex (-1),
+        penStyle (0),
+        penWidth (0),
+        viewingGroup (0),
+        dispCat (DisplayCat::DISPLAY_BASE),
+        displayPriority (0) {
+    }
 };
 
 struct FeatureObject: TopologyObject {
@@ -89,7 +109,7 @@ struct FeatureObject: TopologyObject {
     uint16_t subDiv;
     std::vector<Attr> attributes;
     std::vector<EdgeRef> edgeRefs;    // Lines and areas
-    size_t nodeIndex;                   // Point and sounding array
+    size_t nodeIndex;                 // Point and sounding array
 
     FeatureObject (): TopologyObject (), primitive (PRIM::None), group (1), classCode (0), agency (0), fidn (0), subDiv (0), nodeIndex (-1) {}
 
