@@ -48,6 +48,34 @@ void PolyPolygonDrawer::run (RECT& client, HDC paintDC, PaletteIndex paletteInde
     paintPolyPolygon (client, paintDC, fillBrushIndex, patternBrushIndex, polyPolyline, north, west, zoom, paletteIndex, palette);
 }
 
+void PolyPolygonDrawer::addEdge (EdgeRef& edgeRef) {
+    if (edgeRef.hidden) return;
+
+    auto& edge = edges.container [edgeRef.index];
+
+    if (polyPolyline.empty ()) polyPolyline.emplace_back ();
+    
+    if (edgeRef.hole != hole) {
+        hole = edgeRef.hole;
+        polyPolyline.emplace_back ();
+    } else if (hole && isLastContourClosed ()) {
+        polyPolyline.emplace_back ();
+    }
+    if (edgeRef.unclockwise) {
+        addNode (edge.endIndex);
+        for (auto pos = edge.internalNodes.rbegin (); pos != edge.internalNodes.rend (); ++ pos) {
+            addVertex (pos->lat, pos->lon);
+        }
+        addNode (edge.beginIndex);
+    } else {
+        addNode (edge.beginIndex);
+        for (auto pos: edge.internalNodes) {
+            addVertex (pos.lat, pos.lon);
+        }
+        addNode (edge.endIndex);
+    }
+}
+
 void DrawQueue::addCompoundLightArc (
     int penIndex,
     int penStyle,
@@ -64,6 +92,10 @@ void DrawQueue::addCompoundLightArc (
 
 void DrawQueue::addEdgeChain (int penIndex, int penStyle, int penWidth, Nodes& nodes, Edges& edges) {
     container.push_back (new PolyPolylineDrawer (penIndex, penStyle, penWidth, north, west, zoom, nodes, edges));
+}
+
+void DrawQueue::addArea (size_t fillBrushIndex, size_t patternBrushIndex, Nodes& nodes, Edges& edges) {
+    container.push_back (new PolyPolygonDrawer (fillBrushIndex, patternBrushIndex, north, west, zoom, nodes, edges));
 }
 
 void DrawQueue::addEdge (EdgeRef& edgeRef) {

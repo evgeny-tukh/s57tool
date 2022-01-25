@@ -99,6 +99,7 @@ struct PolyPolylineDrawer: Drawer {
 struct PolyPolygonDrawer: PolyPolylineDrawer {
     size_t fillBrushIndex;
     size_t patternBrushIndex;
+    bool hole;
 
     PolyPolygonDrawer (
         size_t _fillBrushIndex,
@@ -108,10 +109,20 @@ struct PolyPolygonDrawer: PolyPolylineDrawer {
         int _zoom,
         Nodes& _nodes,
         Edges& _edges
-    ): PolyPolylineDrawer (-1, PS_SOLID, 0, _north, _west, _zoom, _nodes, _edges), fillBrushIndex (_fillBrushIndex), patternBrushIndex (_patternBrushIndex) {
+    ): PolyPolylineDrawer (-1, PS_SOLID, 0, _north, _west, _zoom, _nodes, _edges), fillBrushIndex (_fillBrushIndex), patternBrushIndex (_patternBrushIndex), hole (false) {
     }
 
     virtual void run (RECT& client, HDC paintDC, PaletteIndex paletteIndex, Palette& palette);
+    virtual void addEdge (struct EdgeRef& edgeRef);
+
+    bool isLastContourClosed () {
+        auto& lastContour = polyPolyline.back ();
+        if (lastContour.size () > 1) {
+            return lastContour.front ().lat == lastContour.back ().lat && lastContour.front ().lon == lastContour.back ().lon;
+        } else {
+            return false;
+        }
+    }
 };
 
 struct DrawQueue {
@@ -159,6 +170,7 @@ struct DrawQueue {
         double start,
         double end
     );
-    void DrawQueue::addEdgeChain (int penIndex, int penStyle, int penWidth, Nodes& nodes, Edges& edges);
-    void DrawQueue::addEdge (struct EdgeRef& edgeRef);
+    void addEdgeChain (int penIndex, int penStyle, int penWidth, Nodes& nodes, Edges& edges);
+    void addEdge (struct EdgeRef& edgeRef);
+    void addArea (size_t fillBrushIndex, size_t patternBrushIndex, Nodes& nodes, Edges& edges);
 };

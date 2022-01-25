@@ -37,6 +37,12 @@ HBRUSH getPatternBrush (size_t patternIndex, PaletteIndex paletteIndex, Palette&
     return brushExists ? brush : 0;
 }
 
+PatternTool *getPatternTool (size_t patternBrushIndex, PaletteIndex paletteIndex, Palette& palette) {
+    auto& [toolExists, tool] = patternTools [patternBrushIndex].get (paletteIndex);
+
+    return toolExists ? & tool : 0;
+}
+
 void createPatternTools (Dai& dai) {
     for (auto& pattern: dai.patterns) {
         patternTools.emplace_back (
@@ -599,7 +605,12 @@ void paintChart (
             if (feature.primitive == 3) {
                 HBRUSH brush = 0;
                 HPEN pen = 0;
-                //bool patternMode = false;
+                drawQueue.addArea (lookupTableItem->brushIndex, lookupTableItem->patternBrushIndex, nodes, edges);
+                for (auto& edgeRef: feature.edgeRefs) {
+                    if (edgeRef.hidden) continue;
+                    drawQueue.addEdge (edgeRef);
+                }
+                #if 0
                 if (lookupTableItem->brushIndex != LookupTableItem::NOT_EXIST) {
                     auto& [brushExists, solidBrush] = dai.palette.brushes [lookupTableItem->brushIndex].get (paletteIndex);
                     if (brushExists) {
@@ -615,6 +626,7 @@ void paintChart (
                         paintArea (client, paintDC, nodes, edges, feature.edgeRefs, dai, north, west, zoom, 0, & tool);
                     }
                 }
+                #endif
             }
 
             if ((feature.primitive == 2 || feature.primitive == 3) && lookupTableItem->edgePenIndex != LookupTableItem::NOT_EXIST) {
@@ -963,9 +975,9 @@ void paintPolyPolygon (
     Palette& palette
 ){
     auto fillBrush = fillBrushIndex == LookupTableItem::NOT_EXIST ? 0 : getFillBrush (fillBrushIndex, paletteIndex, palette);
-    auto patternBrush = patternBrushIndex == LookupTableItem::NOT_EXIST ? 0 : getPatternBrush (patternBrushIndex, paletteIndex, palette);
+    auto patternTool = patternBrushIndex ==  LookupTableItem::NOT_EXIST ? 0 : getPatternTool (patternBrushIndex, paletteIndex, palette);
 
-    if (fillBrush || patternBrush) {
+    if (fillBrush || patternTool) {
         PenTool::PolyPolygon polyPolygon;
         PenTool tool;
 
@@ -992,10 +1004,8 @@ void paintPolyPolygon (
                     PolyPolygon (paintDC, vertices.data (), sizes.data (), sizes.size ());
                     SelectObject (paintDC, lastBrush);
                 }
-                if (patternBrush) {
-                    HBRUSH lastBrush = (HBRUSH) SelectObject (paintDC, patternBrush);
-                    PolyPolygon (paintDC, vertices.data (), sizes.data (), sizes.size ());
-                    SelectObject (paintDC, lastBrush);
+                if (patternTool) {
+                    patternTool->paint (paintDC, polyPolygon);
                 }
 
                 SelectObject (paintDC, lastPen);
