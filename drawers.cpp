@@ -18,6 +18,32 @@ void PolyPolylineDrawer::run (RECT& client, HDC paintDC, PaletteIndex paletteInd
     paintPolyPolyline (client, paintDC, penStyle, penWidth, penIndex, polyPolyline, north, west, zoom, paletteIndex, palette);
 }
 
+void PolyPolylineDrawer::addNode (size_t nodeIndex) {
+    auto& pos = nodes [nodeIndex].points [0];
+    addVertex (pos.lat, pos.lon);
+}
+
+void PolyPolylineDrawer::addEdge (EdgeRef& edgeRef) {
+    if (edgeRef.hidden) return;
+
+    auto& edge = edges.container [edgeRef.index];
+
+    addContour ();
+    if (edgeRef.unclockwise) {
+        addNode (edge.endIndex);
+        for (auto pos = edge.internalNodes.rbegin (); pos != edge.internalNodes.rend (); ++ pos) {
+            addVertex (pos->lat, pos->lon);
+        }
+        addNode (edge.beginIndex);
+    } else {
+        addNode (edge.beginIndex);
+        for (auto pos: edge.internalNodes) {
+            addVertex (pos.lat, pos.lon);
+        }
+        addNode (edge.endIndex);
+    }
+}
+
 void PolyPolygonDrawer::run (RECT& client, HDC paintDC, PaletteIndex paletteIndex, Palette& palette) {
     paintPolyPolygon (client, paintDC, fillBrushIndex, patternBrushIndex, polyPolyline, north, west, zoom, paletteIndex, palette);
 }
@@ -36,26 +62,15 @@ void DrawQueue::addCompoundLightArc (
     addArc (penIndex, PS_SOLID, 4, centerLat, centerLon, radiusMm, start, end);
 }
 
-void DrawQueue::addEdgeChain (int penIndex, int penStyle, int penWidth, Nodes& nodes) {
-    container.push_back (new PolyPolylineDrawer (penIndex, penStyle, penWidth, north, west, zoom, nodes));
+void DrawQueue::addEdgeChain (int penIndex, int penStyle, int penWidth, Nodes& nodes, Edges& edges) {
+    container.push_back (new PolyPolylineDrawer (penIndex, penStyle, penWidth, north, west, zoom, nodes, edges));
 }
 
-void DrawQueue::addEdge (GeoEdge& edge) {
-    PolyPolylineDrawer *drawer = (PolyPolylineDrawer *) container.back ();
+void DrawQueue::addEdge (EdgeRef& edgeRef) {
+    if (container.size () > 0) {
+        PolyPolylineDrawer *drawer = (PolyPolylineDrawer *) container.back ();
 
-    auto addVertex = [drawer] (double lat, double lon) {
-        drawer->addVertex (lat, lon);
-    };
-    auto addNode = [addVertex, drawer] (size_t nodeIndex) {
-        auto& pos = drawer->nodes [nodeIndex].points [0];
-        addVertex (pos.lat, pos.lon);
-    };
-
-    drawer->addContour ();
-    addNode (edge.beginIndex);
-    for (auto pos: edge.internalNodes) {
-        addVertex (pos.lat, pos.lon);
+        drawer->addEdge (edgeRef);
     }
-    addNode (edge.endIndex);
 }
 

@@ -70,6 +70,7 @@ struct ArcDrawer: Drawer {
 struct PolyPolylineDrawer: Drawer {
     Contours polyPolyline;
     Nodes& nodes;
+    Edges& edges;
 
     PolyPolylineDrawer (
         size_t _penIndex,
@@ -78,8 +79,9 @@ struct PolyPolylineDrawer: Drawer {
         double _north,
         double _west,
         int _zoom,
-        Nodes& _nodes
-    ): Drawer (_penIndex, _penStyle, _penWidth, _north, _west, 0.0, 0.0, 0.0, _zoom), nodes (_nodes) {
+        Nodes& _nodes,
+        Edges& _edges
+    ): Drawer (_penIndex, _penStyle, _penWidth, _north, _west, 0.0, 0.0, 0.0, _zoom), nodes (_nodes), edges (_edges) {
     }
 
     void addContour () {
@@ -88,8 +90,10 @@ struct PolyPolylineDrawer: Drawer {
     void addVertex (double lat, double lon) {
         polyPolyline.back ().emplace_back (lat, lon);
     }
+    void addNode (size_t nodeIndex);
 
     virtual void run (RECT& client, HDC paintDC, PaletteIndex paletteIndex, Palette& palette);
+    virtual void addEdge (struct EdgeRef& edgeRef);
 };
 
 struct PolyPolygonDrawer: PolyPolylineDrawer {
@@ -102,8 +106,9 @@ struct PolyPolygonDrawer: PolyPolylineDrawer {
         double _north,
         double _west,
         int _zoom,
-        Nodes& _nodes
-    ): PolyPolylineDrawer (-1, PS_SOLID, 0, _north, _west, _zoom, _nodes), fillBrushIndex (_fillBrushIndex), patternBrushIndex (_patternBrushIndex) {
+        Nodes& _nodes,
+        Edges& _edges
+    ): PolyPolylineDrawer (-1, PS_SOLID, 0, _north, _west, _zoom, _nodes, _edges), fillBrushIndex (_fillBrushIndex), patternBrushIndex (_patternBrushIndex) {
     }
 
     virtual void run (RECT& client, HDC paintDC, PaletteIndex paletteIndex, Palette& palette);
@@ -154,6 +159,6 @@ struct DrawQueue {
         double start,
         double end
     );
-    void DrawQueue::addEdgeChain (int penIndex, int penStyle, int penWidth, Nodes& nodes);
-    void DrawQueue::addEdge (struct GeoEdge& edge);
+    void DrawQueue::addEdgeChain (int penIndex, int penStyle, int penWidth, Nodes& nodes, Edges& edges);
+    void DrawQueue::addEdge (struct EdgeRef& edgeRef);
 };

@@ -625,11 +625,11 @@ void paintChart (
                 } else {
                     pen = (HPEN) GetStockObject (BLACK_PEN);
                 }
-                drawQueue.addEdgeChain (lookupTableItem->edgePenIndex, lookupTableItem->edgePenStyle, lookupTableItem->edgePenWidth, nodes);
+                drawQueue.addEdgeChain (lookupTableItem->edgePenIndex, lookupTableItem->edgePenStyle, lookupTableItem->edgePenWidth, nodes, edges);
                 for (auto& edgeRef: feature.edgeRefs) {
                     if (edgeRef.hidden) continue;
                     //paintEdge (client, paintDC, nodes, edges [edgeRef.index], dai, north, west, zoom, pen);
-                    drawQueue.addEdge (edges [edgeRef.index]);
+                    drawQueue.addEdge (edgeRef);
                 }
             }
 
