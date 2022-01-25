@@ -539,6 +539,31 @@ void paintSymbol (
     }
 }
 
+void paintSymbol (
+    RECT& client,
+    HDC paintDC,
+    double lat,
+    double lon,
+    size_t symbolIndex,
+    double rotAngle,
+    Dai& dai,
+    double north,
+    double west,
+    uint8_t zoom,
+    PaletteIndex paletteIndex
+) {
+    int symbolX, symbolY;
+    auto& symbol = dai.symbols [symbolIndex];
+    int westX, northY;
+    geoToXY (north, west, zoom, westX, northY);
+    geoToXY (lat, lon, zoom, symbolX, symbolY);
+    symbolX -= westX;
+    symbolY -= northY;
+    if (symbolX >= 0 && symbolX <= client.right && symbolY >= 0 && symbolY <= client.bottom) {
+        completeDrawProc (paintDC, symbol.drawProc, symbolX, symbolY, paletteIndex, dai, symbol.pivotPtCol, symbol.pivotPtRow, symbol.bBoxCol, symbol.bBoxRow, rotAngle);
+    }
+}
+
 void paintEdge (
     RECT& client,
     HDC paintDC,
@@ -692,8 +717,11 @@ void paintChart (
         }
 
         int offset = 0;
+
         for (auto& symbolDraw: lookupTableItem->symbols) {
-            paintSymbol (client, paintDC, nodes [feature.nodeIndex], dai, north, west, zoom, offset, symbolDraw, paletteIndex);
+            auto& pos = nodes [feature.nodeIndex].points.front ();
+            //paintSymbol (client, paintDC, nodes [feature.nodeIndex], dai, north, west, zoom, offset, symbolDraw, paletteIndex);
+            drawQueue.addSymbol (pos.lat, pos.lon, symbolDraw.symbolIndex, symbolDraw.rotAngle, dai);
         }
         drawQueue.run ();
 

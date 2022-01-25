@@ -14,6 +14,9 @@ enum ATTRS {
     RESTRN = 131,
     VALDCO = 174,
     WATLEV = 187,
+    TECSOU = 156,
+    QUASOU = 125,
+    STATUS = 149,
 };
 
 enum OBJ_CLASSES {

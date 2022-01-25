@@ -125,3 +125,16 @@ void paintText (
     PaletteIndex paletteIndex,
     Dai& dai
 );
+void paintSymbol (
+    RECT& client,
+    HDC paintDC,
+    double lat,
+    double lon,
+    size_t symbolIndex,
+    double rotAngle,
+    Dai& dai,
+    double north,
+    double west,
+    uint8_t zoom,
+    PaletteIndex paletteIndex
+);

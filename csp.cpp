@@ -189,7 +189,7 @@ void depare03 (LookupTableItem *item, FeatureObject *object, Dai& dai, Nodes& no
 
         // Edge customization
         item->customEdgePres = true;
-        
+
         edgeRef.displayPriority = 8;
         //edgeRef.radarPriority = 'O';
         edgeRef.dispCat = DisplayCat::DISPLAY_BASE;
@@ -218,6 +218,104 @@ void depcnt03 (LookupTableItem *item, FeatureObject *object, Dai& dai, Nodes& no
     item->edgePenStyle = PS_SOLID;
     item->edgePenWidth = 1;
 }
+
+void sndfrm04 (FeatureObject *object, double depth, std::vector<std::string>& symbols) {
+    std::string prefix;
+    if (depth <= settings.safetyDepth) {
+        prefix = "SOUNDS";
+    } else {
+        prefix = "SOUNDG";
+    }
+
+    auto tecsou = object->getAttr (ATTRS::TECSOU);
+
+    if (tecsou && !tecsou->noValue && (tecsou->listIncludes (4) || tecsou->listIncludes (6))) {
+        symbols.emplace_back (prefix + "B1");
+    }
+
+    auto quasou = object->getAttr (ATTRS::QUASOU);
+    auto status = object->getAttr (ATTRS::STATUS);
+
+    static uint8_t values [] { 3, 4, 5, 8, 9, 0 };
+    if (quasou && !quasou->noValue && (quasou->listIncludes (values) || status && !status->noValue && status->listIncludes (18))) {
+        symbols.emplace_back (prefix + "C2");
+    } else {
+        // Check spatial object
+        if (0) {
+            symbols.emplace_back (prefix + "C2");
+        }
+    }
+
+    if (depth < 0.0) {
+        symbols.emplace_back (prefix + "A1");
+    }
+
+    std::string depthStr = std::to_string (fabs (depth));
+
+    if (depth < 10.0) {
+        // algo1
+        symbols.emplace_back (prefix + "1" + depthStr [0]);
+
+        for (size_t i = 1; i < depthStr.length (); ++ i) {
+            if (depthStr [i] == '.') {
+                symbols.emplace_back (prefix + "5" + depthStr [i+1]); break;
+            }
+        }
+    } else if (depth < 31.0 && (double) (int) depth != depth) {
+        // algo 2
+        symbols.emplace_back (prefix + "2" + depthStr [0]);
+        symbols.emplace_back (prefix + "1" + depthStr [1]);
+
+        for (size_t i = 2; i < depthStr.length (); ++ i) {
+            if (depthStr [i] == '.') {
+                symbols.emplace_back (prefix + "5" + depthStr [i+1]); break;
+            }
+        }
+    } else if (depth < 100.0) {
+        // algo 3
+        symbols.emplace_back (prefix + "1" + depthStr [0]);
+        symbols.emplace_back (prefix + "0" + depthStr [1]);
+    } else if (depth < 1000.0) {
+        // algo 4
+        symbols.emplace_back (prefix + "2" + depthStr [0]);
+        symbols.emplace_back (prefix + "1" + depthStr [1]);
+        symbols.emplace_back (prefix + "0" + depthStr [2]);
+    } else if (depth < 10000.0) {
+        // algo 5
+        symbols.emplace_back (prefix + "2" + depthStr [0]);
+        symbols.emplace_back (prefix + "1" + depthStr [1]);
+        symbols.emplace_back (prefix + "0" + depthStr [2]);
+        symbols.emplace_back (prefix + "4" + depthStr [3]);
+    } else {
+        // algo 6
+        symbols.emplace_back (prefix + "3" + depthStr [0]);
+        symbols.emplace_back (prefix + "2" + depthStr [1]);
+        symbols.emplace_back (prefix + "1" + depthStr [2]);
+        symbols.emplace_back (prefix + "0" + depthStr [3]);
+        symbols.emplace_back (prefix + "4" + depthStr [4]);
+    }
+}
+
+void soundg03 (LookupTableItem *item, FeatureObject *object, Dai& dai, Nodes& nodes, Edges& edges, Features& features, int zoom, DrawQueue& drawQueue) {
+    auto& node = nodes.container [object->nodeIndex];
+
+    for (auto& pos: node.points) {
+        std::vector<std::string> symbols;
+
+        sndfrm04 (object, pos.depth, symbols);
+
+        for (auto& symbolName: symbols) {
+            size_t symbolIndex = dai.getSymbolIndex (symbolName.c_str ());
+if(symbolIndex == (size_t) -1){
+    int iii=0;
+    ++iii;
+    --iii;
+}
+            drawQueue.addSymbol (pos.lat, pos.lon, symbolIndex, 0.0, dai);
+        }
+    }
+}
+
 
 void lights06 (LookupTableItem *item, FeatureObject *object, Dai& dai, Nodes& nodes, Edges& edges, Features& features, int zoom, DrawQueue& drawQueue) {
     auto valnmr = object->getAttr (ATTRS::VALNMR);
@@ -462,4 +560,5 @@ void initCSPs (Dai& dai) {
     dai.addCSP ("LIGHTS06", lights06);
     dai.addCSP ("DEPCNT03", depcnt03);
     dai.addCSP ("DEPARE03", depare03);
+    dai.addCSP ("SOUNDG03", soundg03);
 }

@@ -59,6 +59,14 @@ struct Attr {
         }
         return false;
     }
+    bool listIncludes (uint8_t *values) {
+        for (uint8_t *value = values; *value; ++ value) {
+            for (uint8_t byte: listValue) {
+                if (byte == *value) return true;
+            }
+        }
+        return false;
+    }
 };
 
 struct GeoEdge: TopologyObject {

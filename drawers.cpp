@@ -301,6 +301,10 @@ void TextDrawer::run (RECT& client, HDC paintDC, PaletteIndex paletteIndex, Pale
     paintText (client, paintDC, text.data (), format, lat, lon, desc.horOffset, desc.verOffset, desc.colorIndex, north, west, zoom, paletteIndex, dai);
 };
 
+void SymbolDrawer::run (RECT& client, HDC paintDC, PaletteIndex paletteIndex, Palette& palette) {
+    paintSymbol (client, paintDC, lat, lon, symbolIndex, rotAngle, dai, north, west, zoom,paletteIndex);
+}
+
 void DrawQueue::addCompoundLightArc (
     int penIndex,
     int penStyle,

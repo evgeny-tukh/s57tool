@@ -29,6 +29,25 @@ struct Drawer {
     virtual void run (RECT& client, HDC paintDC, PaletteIndex paletteIndex, Palette& palette) {}
 };
 
+struct SymbolDrawer: Drawer {
+    size_t symbolIndex;
+    double rotAngle;
+    Dai& dai;
+
+    SymbolDrawer (
+        double _north,
+        double _west,
+        double _lat,
+        double _lon,
+        size_t _symbolIndex,
+        double _rotAngle,
+        int _zoom,
+        Dai& _dai
+    ): Drawer (0, 0, 0, _north, _west, _lat, _lon, 0.0, _zoom), symbolIndex (_symbolIndex), dai (_dai), rotAngle (_rotAngle) {}
+
+    virtual void run (RECT& client, HDC paintDC, PaletteIndex paletteIndex, Palette& palette);
+};
+
 struct TextDrawer: Drawer {
     std::string text;
     TextDesc desc;
@@ -184,6 +203,9 @@ struct DrawQueue {
     }
     void addText (double lat, double lon, TextDesc& desc, FeatureObject *object) {
         container.push_back (new TextDrawer (north, west, lat, lon, zoom, desc, object, dai)); 
+    }
+    void addSymbol (double lat, double lon, size_t symbolIndex, double rotAngle, Dai& dai) {
+        container.push_back (new SymbolDrawer (north, west, lat, lon, symbolIndex, rotAngle, zoom, dai));
     }
     void addCompoundLightArc (
         int penIndex,
