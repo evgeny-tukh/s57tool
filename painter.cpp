@@ -528,11 +528,14 @@ void paintSymbol (
     auto& symbol = dai.symbols [symbolDraw.symbolIndex];
     int westX, northY;
     geoToXY (north, west, zoom, westX, northY);
-    geoToXY (node.points.front ().lat, node.points.front ().lon, zoom, symbolX, symbolY);
-    symbolX -= westX;
-    symbolY -= northY;
-    if (symbolX >= 0 && symbolX <= client.right && symbolY >= 0 && symbolY <= client.bottom) {
-        completeDrawProc (paintDC, symbol.drawProc, symbolX, symbolY, paletteIndex, dai, symbol.pivotPtCol, symbol.pivotPtRow, symbol.bBoxCol, symbol.bBoxRow, symbolDraw.rotAngle);
+
+    for (size_t i = 0; i < node.points.size (); ++ i) {
+        geoToXY (node.points [i].lat, node.points [i].lon, zoom, symbolX, symbolY);
+        symbolX -= westX;
+        symbolY -= northY;
+        if (symbolX >= 0 && symbolX <= client.right && symbolY >= 0 && symbolY <= client.bottom) {
+            completeDrawProc (paintDC, symbol.drawProc, symbolX, symbolY, paletteIndex, dai, symbol.pivotPtCol, symbol.pivotPtRow, symbol.bBoxCol, symbol.bBoxRow, symbolDraw.rotAngle);
+        }
     }
 }
 
@@ -677,7 +680,7 @@ void paintChart (
 
     for (size_t i = 0; i < features.size (); ++ i) {
         auto& feature = features [i];
-        if (feature.primitive != 1) continue;
+        if (feature.primitive != 1 && feature.primitive != 4) continue;
         if (!lookupTables [i]) continue;
         auto lookupTableItem = feature.findBestItem (displayCat, pointObjTableSet, dai);
         if (!lookupTableItem) continue;
