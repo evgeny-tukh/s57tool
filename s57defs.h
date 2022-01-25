@@ -692,7 +692,7 @@ struct LookupTableItem {
     std::vector<SymbolDraw> symbols;
     std::vector<LineDraw> lines;
     std::vector<std::string> textInstructions;
-    std::vector<TextDesc> textDescriptions;
+    std::vector<struct TextDesc> textDescriptions;
     bool customEdgePres;
 
     // Lights only, specified in LIGHTS06 procedre
@@ -721,6 +721,7 @@ struct LookupTableItem {
         comment.clear ();
         attrCombination.clear ();
         textInstructions.clear ();
+        textDescriptions.clear ();
         instruction.clear ();
         objectType = '\0';
         radarPriority = '\0';
@@ -754,6 +755,7 @@ struct LookupTableItem {
         instruction.insert (instruction.begin (), source.instruction.begin (), source.instruction.end ());
         symbols.insert (symbols.begin (), source.symbols.begin (), source.symbols.end ());
         textInstructions.insert (textInstructions.begin (), source.textInstructions.begin (), source.textInstructions.end ());
+        textDescriptions.insert (textDescriptions.begin (), source.textDescriptions.begin (), source.textDescriptions.end ());
         comment = source.comment.c_str ();
         classCode = source.classCode;
         comment = source.comment;
@@ -1036,8 +1038,18 @@ struct TextDesc {
     enum FontStyle {
         REGULAR = 1,
     };
+    enum ParamType {
+        INT_VAL,
+        FLOAT_VAL,
+        STRING_VAL,
+        UNKNOWN_TYPE,
+    };
+    struct ParamDesc {
+        ParamType type;
+        std::string format;
+        size_t classCode;
+    };
 
-    std::string text;
     HorJust horJust;
     VerJust verJust;
     Spacing spacing;
@@ -1047,6 +1059,9 @@ struct TextDesc {
     int fontSize;
     int horOffset;
     int verOffset;
+    size_t colorIndex;
+    std::vector<ParamDesc> paramDescs;
+    std::vector<std::string> plainTextParts;
 };
 
 #pragma pack()

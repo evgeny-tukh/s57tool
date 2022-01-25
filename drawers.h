@@ -30,43 +30,8 @@ struct Drawer {
 };
 
 struct TextDrawer: Drawer {
-    enum HorJust {
-        CENTER = 1,
-        RIGHT = 2,
-        LEFT = 3,
-    };
-    enum VerJust {
-        BOTTOM = 1,
-        CENT = 2,
-        TOP = 3,
-    };
-    enum Spacing {
-        FIT = 1,
-        STD = 2,
-        WORD_WRAP = 3,
-    };
-    enum FontType {
-        SERIF = 1,
-    };
-    enum FontWeight {
-        LIGHT = 4,
-        MEDIUM = 5,
-        BOLD = 6,
-    };
-    enum FontStyle {
-        REGULAR = 1,
-    };
-
     std::string text;
-    HorJust horJust;
-    VerJust verJust;
-    Spacing spacing;
-    FontType fontType;
-    FontWeight fontWeight;
-    FontStyle fontStyle;
-    int fontSize;
-    int horOffset;
-    int verOffset;
+    TextDesc desc;
     Dai& dai;
 
     TextDrawer (
@@ -75,17 +40,12 @@ struct TextDrawer: Drawer {
         double _lat,
         double _lon,
         int _zoom,
-        const char *instr,
-        FeatureObject *object,
-        Dai& dai,
-        AttrDictionary& attrDic
+        TextDesc& _desc,
+        FeatureObject *_object,
+        Dai& _dai
     );
 
     virtual void run (RECT& client, HDC paintDC, PaletteIndex paletteIndex, Palette& palette);
-    bool parseExtendedInstr (const char *instr, FeatureObject *object, Dai& dai, AttrDictionary& attrDic);
-    bool parseRegularInstr (const char *instr, FeatureObject *object, Dai& dai, AttrDictionary& attrDic);
-    void parseInstrCommon (std::vector<std::string>& parts, FeatureObject *object, Dai& dai, AttrDictionary& attrDic, int start);
-    bool parseInstr (const char *instr, std::vector<std::string>& parts);
 };
 
 struct LineDrawer: Drawer {
@@ -222,8 +182,8 @@ struct DrawQueue {
     void addArc (int penIndex, int penStyle, int penWidth, double centerLat, double centerLon, double radiusMm, double start, double end) {
         container.push_back (new ArcDrawer (penIndex, penStyle, penWidth, north, west, centerLat, centerLon, radiusMm, start, end, zoom));
     }
-    void addText (double lat, double lon, const char *instr, FeatureObject *object) {
-        container.push_back (new TextDrawer (north, west, lat, lon, zoom, instr, object, dai, attrDic)); 
+    void addText (double lat, double lon, TextDesc& desc, FeatureObject *object) {
+        container.push_back (new TextDrawer (north, west, lat, lon, zoom, desc, object, dai)); 
     }
     void addCompoundLightArc (
         int penIndex,

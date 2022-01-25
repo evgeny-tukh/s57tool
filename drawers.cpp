@@ -83,21 +83,35 @@ TextDrawer::TextDrawer (
     double _lat,
     double _lon,
     int _zoom,
-    const char *instr,
-    FeatureObject *object,
-    Dai& _dai,
-    AttrDictionary& attrDic
-) : Drawer (LookupTableItem::NOT_EXIST, PS_SOLID, 1, _north, _west, _lat, _lon, 0.0, _zoom), dai (_dai) {
-    if (instr [0] == 'T') {
-        if (instr [1] == 'E') {
-            parseExtendedInstr (instr, object, dai, attrDic);
-        } else {
-            parseRegularInstr (instr, object, dai, attrDic);
+    TextDesc& _desc,
+    FeatureObject *_object,
+    Dai& _dai
+) : Drawer (LookupTableItem::NOT_EXIST, PS_SOLID, 1, _north, _west, _lat, _lon, 0.0, _zoom), desc (_desc), dai (_dai) {
+    if (_desc.paramDescs.size () == 1) {
+        auto attr = _object->getAttr (_desc.paramDescs.front ().classCode);
+
+        if (attr && !attr->noValue) text = attr->strValue;
+    } else {
+        text = _desc.plainTextParts.front ();
+        for (size_t i = 0; i < _desc.paramDescs.size (); ++ i) {
+            auto& paramDesc = _desc.paramDescs [i];
+            auto attr = _object->getAttr (paramDesc.classCode);
+            if (attr && !attr->noValue) {
+                char value [500];
+                switch (paramDesc.type) {
+                    case TextDesc::ParamType::INT_VAL: sprintf (value, paramDesc.format.c_str (), attr->intValue); break;
+                    case TextDesc::ParamType::FLOAT_VAL: sprintf (value, paramDesc.format.c_str (), attr->floatValue); break;
+                    case TextDesc::ParamType::STRING_VAL: strcpy (value, attr->strValue.c_str ()); break;
+                    default: *value = '\0';
+                }
+                text += value;
+            }
+            text += _desc.plainTextParts [i+1];
         }
     }
 }
 
-bool TextDrawer::parseInstr (const char *instr, std::vector<std::string>& parts) {
+bool parseInstr (const char *instr, std::vector<std::string>& parts) {
     char *leftBracket = strchr ((char *) instr, '(');
     char *rightBracket = leftBracket ? strchr (leftBracket + 1, ')') : 0;
     bool result = false;
@@ -108,6 +122,54 @@ bool TextDrawer::parseInstr (const char *instr, std::vector<std::string>& parts)
     }
 
     return result;
+}
+
+void parseFormatAndArgs (const char *format, std::vector<std::string>& args, AttrDictionary& attrDic, TextDesc& desc) {
+    desc.paramDescs.clear ();
+    desc.plainTextParts.clear ();
+
+    for (auto& arg: args) {
+        auto attrDesc = attrDic.findByAcronym (arg.c_str ());
+
+        auto& paramDesc = desc.paramDescs.emplace_back ();
+        paramDesc.classCode = attrDesc ? attrDesc->code : 0;
+    }
+
+    desc.plainTextParts.emplace_back ();
+    size_t paramNo = 0;
+
+    for (const char *chr = format; *chr; ++ chr) {
+        if (*chr == '%') {
+            for (const char *fmtChr = chr; *fmtChr; ++ fmtChr) {
+                auto& paramDesc = desc.paramDescs [paramNo];
+                paramDesc.format += *fmtChr;
+                switch (*fmtChr) {
+                    case 'd': paramDesc.type = TextDesc::ParamType::INT_VAL; break;
+                    case 'f': paramDesc.type = TextDesc::ParamType::FLOAT_VAL; break;
+                    case 's': paramDesc.type = TextDesc::ParamType::STRING_VAL; break;
+                    default: paramDesc.type = TextDesc::ParamType::UNKNOWN_TYPE;
+                }
+                if (paramDesc.type != TextDesc::ParamType::UNKNOWN_TYPE) {
+                    chr = fmtChr - 1;
+                    desc.plainTextParts.emplace_back ();
+                    break;
+                }
+            }
+        } else {
+            desc.plainTextParts.back () += *chr;
+        }
+    }
+}
+
+void prepareSingleArg (const char *acronym, AttrDictionary& attrDic, TextDesc& desc) {
+    desc.paramDescs.clear ();
+    desc.plainTextParts.clear ();
+
+    auto attrDesc = attrDic.findByAcronym (acronym);
+
+    auto& paramDesc = desc.paramDescs.emplace_back ();
+    paramDesc.classCode = attrDesc ? attrDesc->code : 0;
+    paramDesc.type = TextDesc::ParamType::STRING_VAL;
 }
 
 std::string s57format (const char *format, std::vector<std::string>& args, FeatureObject *object, Dai& dai, AttrDictionary& attrDic) {
@@ -166,117 +228,59 @@ inline std::string unquote (std::string& source) {
     return result;
 }
 
-void TextDrawer::parseInstrCommon (std::vector<std::string>& parts, FeatureObject *object, Dai& dai, AttrDictionary& attrDic, int start) {
+void parseInstrCommon (std::vector<std::string>& parts, Dai& dai, int start, TextDesc& desc) {
     int fld = start;
-    horJust = (HorJust) (parts.size () > fld ? parts [fld].front () - '0' : 3); ++ fld;
-    verJust = (VerJust) (parts.size () > fld ? parts [fld].front () - '0' : 1); ++ fld;
-    spacing = (Spacing) (parts.size () > fld ? parts [fld].front () - '0' : 2); ++ fld;
+    desc.horJust = (TextDesc::HorJust) (parts.size () > fld ? parts [fld].front () - '0' : 3); ++ fld;
+    desc.verJust = (TextDesc::VerJust) (parts.size () > fld ? parts [fld].front () - '0' : 1); ++ fld;
+    desc.spacing = (TextDesc::Spacing) (parts.size () > fld ? parts [fld].front () - '0' : 2); ++ fld;
     auto chars = parts.size () > fld ? unquote (parts [fld]) : "3121510"; ++ fld;
-    fontType = (FontType) (chars [0] - '0');
-    fontWeight = (FontWeight) (chars [1] - '0');
-    fontStyle = (FontStyle) (chars [2] - '0');
-    fontSize = (double) ((chars [3] - '0') * 10 + chars [4] - '0') / PIXEL_SIZE_IN_MM;
-    horOffset = parts.size () > fld ? std::atoi (parts [fld].c_str ()) : 0; ++ fld;
-    verOffset = parts.size () > fld ? std::atoi (parts [fld].c_str ()) : 0; ++ fld;
-    penIndex = dai.getBasePenIndex (parts.size () > fld ? parts [fld].c_str () : "CHBLK"); ++ fld;
-    if (penIndex == LookupTableItem::NOT_EXIST) penIndex = dai.getBasePenIndex ("CHBLK"); ++ fld;
-}
-
-bool TextDrawer::parseExtendedInstr (const char *instr, FeatureObject *object, Dai& dai, AttrDictionary& attrDic) {
-    std::vector<std::string> parts;
-    bool result = false;
-
-    auto getArgValue = [object, &attrDic] (const char *arg) {
-        auto attr = object->getAttr (arg, attrDic);
-        return (attr && !attr->noValue) ? attr->strValue : "";
-    };
-
-    if (parseInstr (instr, parts)) {
-        auto format = unquote (parts [0]);
-        auto argsStr = unquote (parts [1]);
-        std::vector<std::string> args;
-        splitString (argsStr, args, ',');
-        text = s57format (format.c_str (), args, object, dai, attrDic);
-        parseInstrCommon (parts, object, dai, attrDic, 2);
-        result = true;
-    }
-    return result;
-}
-
-bool TextDrawer::parseRegularInstr (const char *instr, FeatureObject *object, Dai& dai, AttrDictionary& attrDic) {
-    std::vector<std::string> parts;
-    bool result = false;
-
-    if (parseInstr (instr, parts)) {
-        auto attrName = unquote (parts [0]);
-        auto attr = object->getAttr (attrName.c_str (), attrDic);
-        text = (attr && !attr->noValue) ? attr->strValue.c_str () : "";
-        parseInstrCommon (parts, object, dai, attrDic, 1);
-        result = true;
-    }
-    return result;
-}
-
-void TextDrawer::parseInstrCommon (std::vector<std::string>& parts, FeatureObject *object, Dai& dai, AttrDictionary& attrDic, int start, TextDesc& desc) {
-    int fld = start;
-    desc.horJust = (HorJust) (parts.size () > fld ? parts [fld].front () - '0' : 3); ++ fld;
-    desc.verJust = (VerJust) (parts.size () > fld ? parts [fld].front () - '0' : 1); ++ fld;
-    desc.spacing = (Spacing) (parts.size () > fld ? parts [fld].front () - '0' : 2); ++ fld;
-    auto chars = parts.size () > fld ? unquote (parts [fld]) : "3121510"; ++ fld;
-    desc.fontType = (FontType) (chars [0] - '0');
-    desc.fontWeight = (FontWeight) (chars [1] - '0');
-    desc.fontStyle = (FontStyle) (chars [2] - '0');
+    desc.fontType = (TextDesc::FontType) (chars [0] - '0');
+    desc.fontWeight = (TextDesc::FontWeight) (chars [1] - '0');
+    desc.fontStyle = (TextDesc::FontStyle) (chars [2] - '0');
     desc.fontSize = (double) ((chars [3] - '0') * 10 + chars [4] - '0') / PIXEL_SIZE_IN_MM;
     desc.horOffset = parts.size () > fld ? std::atoi (parts [fld].c_str ()) : 0; ++ fld;
     desc.verOffset = parts.size () > fld ? std::atoi (parts [fld].c_str ()) : 0; ++ fld;
-    desc.penIndex = dai.getBasePenIndex (parts.size () > fld ? parts [fld].c_str () : "CHBLK"); ++ fld;
-    if (desc.penIndex == LookupTableItem::NOT_EXIST) penIndex = dai.getBasePenIndex ("CHBLK"); ++ fld;
+    desc.colorIndex = dai.getBasePenIndex (parts.size () > fld ? parts [fld].c_str () : "CHBLK");
+    if (desc.colorIndex == LookupTableItem::NOT_EXIST) desc.colorIndex = dai.getBasePenIndex ("CHBLK");
 }
 
-bool TextDrawer::parseExtendedInstr (const char *instr, FeatureObject *object, Dai& dai, AttrDictionary& attrDic, TextDesc& desc) {
+bool parseExtendedInstr (const char *instr, Dai& dai, AttrDictionary& attrDic, TextDesc& desc) {
     std::vector<std::string> parts;
     bool result = false;
-
-    auto getArgValue = [object, &attrDic] (const char *arg) {
-        auto attr = object->getAttr (arg, attrDic);
-        return (attr && !attr->noValue) ? attr->strValue : "";
-    };
 
     if (parseInstr (instr, parts)) {
         auto format = unquote (parts [0]);
         auto argsStr = unquote (parts [1]);
         std::vector<std::string> args;
         splitString (argsStr, args, ',');
-        text = s57format (format.c_str (), args, object, dai, attrDic);
-        parseInstrCommon (parts, object, dai, attrDic, 2);
+        parseFormatAndArgs (format.c_str (), args, attrDic, desc);
+        parseInstrCommon (parts, dai, 2, desc);
         result = true;
     }
     return result;
 }
 
-bool TextDrawer::parseRegularInstr (const char *instr, FeatureObject *object, Dai& dai, AttrDictionary& attrDic) {
+bool parseRegularInstr (const char *instr, Dai& dai, AttrDictionary& attrDic, TextDesc& desc) {
     std::vector<std::string> parts;
     bool result = false;
 
     if (parseInstr (instr, parts)) {
         auto attrName = unquote (parts [0]);
-        auto attr = object->getAttr (attrName.c_str (), attrDic);
-        text = (attr && !attr->noValue) ? attr->strValue.c_str () : "";
-        parseInstrCommon (parts, object, dai, attrDic, 1);
+        prepareSingleArg (attrName.c_str (), attrDic, desc);
+        parseInstrCommon (parts, dai, 1, desc);
         result = true;
     }
     return result;
 }
 
-void parseTextInstruction (const char *instr, FeatureObject *object, Dai& dai, AttrDictionary& attrDic, TextDesc& desc) {
+void parseTextInstruction (const char *instr, Dai& dai, AttrDictionary& attrDic, TextDesc& desc) {
     if (instr [0] == 'T') {
         if (instr [1] == 'E') {
-            parseExtendedInstr (instr, object, dai, attrDic);
+            parseExtendedInstr (instr, dai, attrDic, desc);
         } else {
-            parseRegularInstr (instr, object, dai, attrDic);
+            parseRegularInstr (instr, dai, attrDic, desc);
         }
     }
-
 }
 
 void TextDrawer::run (RECT& client, HDC paintDC, PaletteIndex paletteIndex, Palette& palette) {
@@ -284,17 +288,17 @@ void TextDrawer::run (RECT& client, HDC paintDC, PaletteIndex paletteIndex, Pale
 
     unsigned int format = 0;
 
-    switch (horJust) {
-        case HorJust::CENTER: format |= DT_CENTER; break;
-        case HorJust::LEFT: format |= DT_LEFT; break;
-        case HorJust::RIGHT: format |= DT_RIGHT; break;
+    switch (desc.horJust) {
+        case TextDesc::HorJust::CENTER: format |= DT_CENTER; break;
+        case TextDesc::HorJust::LEFT: format |= DT_LEFT; break;
+        case TextDesc::HorJust::RIGHT: format |= DT_RIGHT; break;
     }
-    switch (verJust) {
-        case VerJust::CENT: format |= DT_VCENTER; break;
-        case VerJust::BOTTOM: format |= DT_BOTTOM; break;
-        case VerJust::TOP: format |= DT_TOP; break;
+    switch (desc.verJust) {
+        case TextDesc::VerJust::CENT: format |= DT_VCENTER; break;
+        case TextDesc::VerJust::BOTTOM: format |= DT_BOTTOM; break;
+        case TextDesc::VerJust::TOP: format |= DT_TOP; break;
     }
-    paintText (client, paintDC, text.data (), format, lat, lon, horOffset, verOffset, penIndex, north, west, zoom, paletteIndex, dai);
+    paintText (client, paintDC, text.data (), format, lat, lon, desc.horOffset, desc.verOffset, desc.colorIndex, north, west, zoom, paletteIndex, dai);
 };
 
 void DrawQueue::addCompoundLightArc (

@@ -578,10 +578,10 @@ void paintEdge (
 }
 
 void addAllTextDraws (FeatureObject& feature, LookupTableItem *lookupTableItem, DrawQueue& drawQueue, Edges& edges, Nodes& nodes) {
-    for (auto& instr: lookupTableItem->textInstructions) {
+    for (auto& desc: lookupTableItem->textDescriptions) {
         double lat, lon;
         getCenterPos (feature, edges, nodes, lat, lon);
-        drawQueue.addText (lat, lon, instr.c_str (), & feature);
+        drawQueue.addText (lat, lon, desc, & feature);
     }
 }
 

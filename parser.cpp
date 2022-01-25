@@ -9,6 +9,8 @@
 #include "data.h"
 #include "painter.h"
 
+void parseTextInstruction (const char *instr, Dai& dai, AttrDictionary& attrDic, TextDesc& desc);
+
 size_t splitString (std::string source, std::vector<std::string>& parts, char separator) {
     parts.clear ();
 
@@ -1431,7 +1433,7 @@ void parseLineStyle (const char *instruction, int& penStyle, int& penWidth, size
     }
 }
 
-void processInstructions (Dai& dai, LookupTableItem& item, std::vector<std::string>& instructions) {
+void processInstructions (Dai& dai, AttrDictionary& attrDic, LookupTableItem& item, std::vector<std::string>& instructions) {
     auto extractInstr = [] (std::string& instruction) {
         size_t leftBracketPos = instruction.find ('(', 2);
         size_t rightBracketPos = leftBracketPos == std::string::npos ? std::string::npos : instruction.find (')', leftBracketPos + 1);
@@ -1455,6 +1457,8 @@ void processInstructions (Dai& dai, LookupTableItem& item, std::vector<std::stri
             if (!colorName.empty ()) item.brushIndex = dai.palette.getSolidBrushIndex (colorName.c_str ());
         } else if (instruction [0] == 'T' && (instruction [1] == 'X' || instruction [1] == 'E')) {
             item.textInstructions.emplace_back (instruction);
+            auto &desc = item.textDescriptions.emplace_back ();
+            parseTextInstruction (instruction.c_str (), dai, attrDic, desc);
         } else if (instruction [0] == 'C' && instruction [1] == 'S') {
             auto procName = extractInstr (instruction);
 
@@ -1979,7 +1983,7 @@ void loadDai (const char *path, Dai& dai, ObjectDictionary& objectDictionary, At
         for (auto& item: lookupTable) {
             std::vector<std::string> parts;
             splitString (item.instruction, parts, ';');
-            processInstructions (dai, item, parts);
+            processInstructions (dai, attrDictionary, item, parts);
         }
     }
 
