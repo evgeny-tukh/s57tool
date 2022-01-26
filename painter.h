@@ -30,6 +30,18 @@ void paintChart (
     TableSet spatialObjTableSet,
     TableSet pointObjTableSet
 );
+void paintChartSmart (
+    RECT& client,
+    HDC paintDC,
+    Chart& chart,
+    Dai& dai,
+    AttrDictionary &attrDic,
+    View& view,
+    PaletteIndex paletteIndex,
+    DisplayCat displayCat,
+    TableSet spatialObjTableSet,
+    TableSet pointObjTableSet
+);
 
 HBRUSH createPatternBrush (PatternDesc& pattern, PaletteIndex paletteIndex, Dai& dai);
 

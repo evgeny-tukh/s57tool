@@ -724,6 +724,29 @@ void paintChart (
     textDrawQueue.run ();
 }
 
+void paintChartSmart (
+    RECT& client,
+    HDC paintDC,
+    Chart& chart,
+    Dai& dai,
+    AttrDictionary &attrDic,
+    View& view,
+    PaletteIndex paletteIndex,
+    DisplayCat displayCat,
+    TableSet spatialObjTableSet,
+    TableSet pointObjTableSet
+) {
+    HDC tempDC = CreateCompatibleDC (paintDC);
+    HBITMAP tempBmp = CreateCompatibleBitmap (paintDC, client.right + 1, client.bottom + 1);
+
+    SelectObject (tempDC, tempBmp);
+    FillRect (tempDC, & client, (HBRUSH) GetStockObject (WHITE_BRUSH));
+    paintChart (client, tempDC, chart, dai, attrDic, view, paletteIndex, displayCat, spatialObjTableSet, pointObjTableSet);
+    BitBlt (paintDC, 0, 0, client.right + 1, client.bottom + 1, tempDC, 0, 0, SRCCOPY);
+    DeleteObject (tempBmp);
+    DeleteDC (tempDC);
+}
+
 HBRUSH createPatternBrush (PatternDesc& pattern, PaletteIndex paletteIndex, Dai& dai) {
     HDC dc = GetDC (HWND_DESKTOP);
     int baseWidth = absCoordToScreen (pattern.bBoxWidth + pattern.minDistance);//absCoordToScreen (pattern.bBoxWidth + pattern.bBoxCol) + 2;

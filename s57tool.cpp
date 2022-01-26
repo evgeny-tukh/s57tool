@@ -14,6 +14,7 @@
 const char *MAIN_CLASS = "S57ToolMainWnd";
 const char *SPLASH_CLASS = "S57ToolSplashScreen";
 const char *CHART_CLASS = "S57ToolChartWnd";
+const char *CHART_AREA_CLASS = "S57ToolChartAreaWnd";
 const int COL_FILENAME = 0;
 const int COL_VOLUME = 1;
 const int COL_IMPL = 2;
@@ -63,7 +64,7 @@ struct Coord {
 
 struct Ctx {
     HINSTANCE instance;
-    HWND mainWnd, catalogCtl, recordTree, propsList, splashScreen, tabCtl, nodeList, edgeTree, featureTree, chartWnd, chartCtlBar;
+    HWND mainWnd, catalogCtl, recordTree, propsList, splashScreen, tabCtl, nodeList, edgeTree, featureTree, chartWnd, chartAreaWnd, chartCtlBar;
     HMENU mainMenu;
     View view;
     bool keepRunning, loaded, mouseDown;
@@ -860,6 +861,12 @@ void onSize (HWND wnd, int width, int height) {
     MoveWindow (ctx->nodeList, 3, 30, client.right - 6, client.bottom - 33 , true);
 }
 
+void onChartWndSize (HWND wnd, int width, int height) {
+    Ctx *ctx = (Ctx *) GetWindowLongPtr (wnd, GWLP_USERDATA);
+
+    MoveWindow (ctx->chartAreaWnd, 0, 30, width, height - 30, true);
+}
+
 void onNotify (HWND wnd, NMHDR *hdr) {
     Ctx *ctx = (Ctx *) GetWindowLongPtr (wnd, GWLP_USERDATA);
 
@@ -922,7 +929,7 @@ void onNotify (HWND wnd, NMHDR *hdr) {
     }
 }
 
-void initChartWnd (HWND wnd, void *param) {
+void initChartAreaWnd (HWND wnd, void *param) {
     Ctx *ctx = (Ctx *) param;
     RECT client;
 
@@ -937,10 +944,21 @@ void initChartWnd (HWND wnd, void *param) {
 
     TrackMouseEvent (& mouseTrackData);
 
+}
+
+void initChartWnd (HWND wnd, void *param) {
+    Ctx *ctx = (Ctx *) param;
+    RECT client;
+
+    SetWindowLongPtr (wnd, GWLP_USERDATA, (LONG_PTR) param);
+    GetClientRect (wnd, & client);
+
     ctx->chartCtlBar = CreateWindow (WC_STATIC, "[No position] [Z12]", SS_CENTER | WS_CHILD | WS_VISIBLE | WS_BORDER, 0, 0, 200, 24, wnd, 0, ctx->instance, 0);
 
     CreateWindow (WC_BUTTON, "Zoom In", BS_PUSHBUTTON | WS_VISIBLE | WS_CHILD, 200, 0, 80, 24, wnd, (HMENU) IDC_ZOOM_IN, ctx->instance, 0);
     CreateWindow (WC_BUTTON, "Zoom Out", BS_PUSHBUTTON | WS_VISIBLE | WS_CHILD, 280, 0, 80, 24, wnd, (HMENU) IDC_ZOOM_OUT, ctx->instance, 0);
+    
+    ctx->chartAreaWnd = CreateWindow (CHART_AREA_CLASS, "", WS_BORDER | WS_VISIBLE | WS_CHILD, 0, 30, client.right + 1, client.bottom - 29, wnd, 0, ctx->instance, ctx);
 }
 
 void onChartWndLeftButtonDown (HWND wnd, uint16_t clientX, uint16_t clientY) {
@@ -955,13 +973,13 @@ void repaintChart (HWND wnd) {
     RECT client;
     HDC dc = GetDC (wnd);
     GetClientRect (wnd, & client);
-    HDC tempDC = CreateCompatibleDC (dc);
-    HBITMAP tempBmp = CreateCompatibleBitmap (tempDC, client.right + 1, client.bottom + 1);
+    /*HDC tempDC = CreateCompatibleDC (dc);
+    HBITMAP tempBmp = CreateCompatibleBitmap (dc, client.right + 1, client.bottom + 1);
     SelectObject (tempDC, tempBmp);
-    FillRect (tempDC, & client, (HBRUSH) GetStockObject (WHITE_BRUSH));
-    paintChart (
+    FillRect (tempDC, & client, (HBRUSH) GetStockObject (WHITE_BRUSH));*/
+    paintChartSmart (
         client,
-        tempDC,
+        dc, //tempDC,
         ctx->chart,
         ctx->dai,
         ctx->attrDictionary,
@@ -971,10 +989,10 @@ void repaintChart (HWND wnd) {
         TableSet::PLAIN_BOUNDARIES,
         TableSet::SIMPLIFIED
     );
-    BitBlt (dc, 0, 0, client.right + 1, client.bottom + 1, tempDC, 0, 0, SRCCOPY);
+    /*BitBlt (dc, 0, 0, client.right + 1, client.bottom + 1, tempDC, 0, 0, SRCCOPY);
     SelectObject (tempDC, (HBITMAP) 0);
     DeleteDC (tempDC);
-    DeleteObject (tempBmp);
+    DeleteObject (tempBmp);*/
     ReleaseDC (wnd, dc);
 }
 
@@ -988,7 +1006,7 @@ void onChartWndMouseMove (HWND wnd, uint16_t clientX, uint16_t clientY) {
         int deltaX = clientX - ctx->mouseDownX;
         int deltaY = clientY - ctx->mouseDownY;
 
-        if (std::abs (deltaX) > 3 || std::abs (deltaY) > 3) {
+        if (std::abs (deltaX) > 5 || std::abs (deltaY) > 5) {
             xyToGeo (x - deltaX, y - deltaY, ctx->view.zoom, ctx->view.north, ctx->view.west);
             ctx->mouseDownX = clientX;
             ctx->mouseDownY = clientY;
@@ -1005,7 +1023,7 @@ void onChartWndLeftButtonUp (HWND wnd, uint16_t clientX, uint16_t clientY) {
     Ctx *ctx = (Ctx *) GetWindowLongPtr (wnd, GWLP_USERDATA);
     onChartWndMouseMove (wnd, clientX, clientY);
     ctx->mouseDown = false;
-    InvalidateRect (wnd, 0, 1);
+    //InvalidateRect (wnd, 0, 1);
 }
 
 void onChartWndMouseWheel (HWND wnd, int16_t delta) {
@@ -1040,8 +1058,7 @@ void paintChartWnd (HWND wnd) {
     RECT client;
 
     GetClientRect (wnd, & client);
-    FillRect (paintDC, & client, (HBRUSH) GetStockObject (WHITE_BRUSH));
-    paintChart (
+    paintChartSmart (
         client,
         paintDC,
         ctx->chart,
@@ -1081,14 +1098,29 @@ LRESULT chartWndProc (HWND wnd, UINT msg, WPARAM param1, LPARAM param2) {
     LRESULT result = 0;
 
     switch (msg) {
+        case WM_SIZE:
+            onChartWndSize (wnd, LOWORD (param2), HIWORD (param2)); break;
+        case WM_COMMAND:
+            onChartWndCommand (wnd, LOWORD (param1)); break;
+        case WM_CREATE:
+            initChartWnd (wnd, ((CREATESTRUCT *) param2)->lpCreateParams); break;
+        default:
+            result = DefWindowProc (wnd, msg, param1, param2);
+    }
+    
+    return result;
+}
+
+LRESULT chartAreaWndProc (HWND wnd, UINT msg, WPARAM param1, LPARAM param2) {
+    LRESULT result = 0;
+
+    switch (msg) {
         case WM_LBUTTONDOWN:
             onChartWndLeftButtonDown (wnd, LOWORD (param2), HIWORD (param2)); break;
         case WM_LBUTTONUP:
             onChartWndLeftButtonUp (wnd, LOWORD (param2), HIWORD (param2)); break;
         case WM_PAINT:
             paintChartWnd (wnd); break;
-        case WM_COMMAND:
-            onChartWndCommand (wnd, LOWORD (param1)); break;
         case WM_MOUSEHOVER:
             SetCapture (wnd); break;
         case WM_MOUSELEAVE:
@@ -1098,7 +1130,7 @@ LRESULT chartWndProc (HWND wnd, UINT msg, WPARAM param1, LPARAM param2) {
         case WM_MOUSEMOVE:
             onChartWndMouseMove (wnd, LOWORD (param2), HIWORD (param2)); break;
         case WM_CREATE:
-            initChartWnd (wnd, ((CREATESTRUCT *) param2)->lpCreateParams); break;
+            initChartAreaWnd (wnd, ((CREATESTRUCT *) param2)->lpCreateParams); break;
         default:
             result = DefWindowProc (wnd, msg, param1, param2);
     }
@@ -1189,6 +1221,16 @@ void registerClasses (Ctx& ctx) {
     classInfo.hInstance = ctx.instance;
     classInfo.lpfnWndProc = chartWndProc;
     classInfo.lpszClassName = CHART_CLASS;
+    classInfo.style = CS_HREDRAW | CS_VREDRAW;
+
+    RegisterClass (& classInfo);
+
+    classInfo.hbrBackground = (HBRUSH) GetStockObject (WHITE_BRUSH);
+    classInfo.hCursor = (HCURSOR) LoadCursor (0, IDC_HAND);
+    classInfo.hIcon = (HICON) LoadIcon (0, IDI_APPLICATION);
+    classInfo.hInstance = ctx.instance;
+    classInfo.lpfnWndProc = chartAreaWndProc;
+    classInfo.lpszClassName = CHART_AREA_CLASS;
     classInfo.style = CS_HREDRAW | CS_VREDRAW;
 
     RegisterClass (& classInfo);
