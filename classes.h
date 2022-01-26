@@ -16,6 +16,7 @@ enum ATTRS {
     WATLEV = 187,
     TECSOU = 156,
     QUASOU = 125,
+    QUAPOS = 402,
     STATUS = 149,
 };
 

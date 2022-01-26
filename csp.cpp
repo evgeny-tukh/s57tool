@@ -226,7 +226,7 @@ void depcnt03 (LookupTableItem *item, FeatureObject *object, Environment& enviro
     item->edgePenWidth = 1;
 }
 
-void sndfrm04 (FeatureObject *object, double depth, Environment& environment, std::vector<std::string>& symbols) {
+void sndfrm04 (FeatureObject *object, double depth, Chart& chart, Environment& environment, std::vector<std::string>& symbols) {
     Settings& settings = environment.settings;
     std::string prefix;
     if (depth <= settings.safetyDepth) {
@@ -249,8 +249,15 @@ void sndfrm04 (FeatureObject *object, double depth, Environment& environment, st
         symbols.emplace_back (prefix + "C2");
     } else {
         // Check spatial object
-        if (0) {
-            symbols.emplace_back (prefix + "C2");
+        auto objectsUnder = chart.getListOfAreasUnderPoint (*object);
+        
+        if (objectsUnder && objectsUnder->size () > 0) {
+            auto& area = chart.features [objectsUnder->front ().areaIndex];
+            auto quapos = area.getAttr (ATTRS::QUAPOS);
+
+            if (quapos && !quapos->noValue && quapos->intValue != 1 && quapos->intValue != 10 && quapos->intValue != 11) {
+                symbols.emplace_back (prefix + "C2");
+            }
         }
     }
 
@@ -310,7 +317,7 @@ void soundg03 (LookupTableItem *item, FeatureObject *object, Environment& enviro
     for (auto& pos: node.points) {
         std::vector<std::string> symbols;
 
-        sndfrm04 (object, pos.depth, environment, symbols);
+        sndfrm04 (object, pos.depth, chart, environment, symbols);
 
         for (auto& symbolName: symbols) {
             size_t symbolIndex = environment.dai.getSymbolIndex (symbolName.c_str ());

@@ -283,6 +283,12 @@ struct Chart {
     Features features;
     PointLocationInfo pointLocationInfo;
     AreaTopologyMap areaTopologyMap;
+
+    AreasUnderPoint *getListOfAreasUnderPoint (FeatureObject& point) {
+        auto& pos = pointLocationInfo.find (point.fidn);
+
+        return pos == pointLocationInfo.end () ? 0 : & pos->second;
+    }
 };
 struct Environment {
     ObjectDictionary objectDictionary;
