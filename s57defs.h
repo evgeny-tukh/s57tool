@@ -871,7 +871,7 @@ struct Palette {
 typedef void (*CSP) (
     LookupTableItem *item,
     struct FeatureObject *object,
-    struct Dai& dai,
+    struct Environment& environment,
     struct Chart& chart,
     View& view,
     struct DrawQueue& drawQueue
@@ -894,10 +894,6 @@ struct Dai {
     std::vector<SymbolDesc> symbols;
     std::vector<LineDesc> lines;
     std::vector<CSP> procedures;
-
-    Dai () {
-        initCSPs (*this);
-    }
 
     LookupTable *findLookupTable (uint16_t code, DisplayCat displayCat, TableSet tableSet, char objectType) {
         auto pos = lookupTableIndex.find (LookupTableItem::composeKey (code, displayCat, tableSet, objectType));
@@ -930,11 +926,6 @@ struct Dai {
     void addCSP (const char *name, CSP proc) {
         procIndex.emplace (name, procedures.size ());
         procedures.emplace_back (proc);
-    }
-    void runCSP (LookupTableItem *item, struct FeatureObject *object, Chart& chart, View& view, struct DrawQueue& drawQueue) {
-        if (item->procIndex >= 0 && item->procIndex < procedures.size ()) {
-            procedures [item->procIndex] (item, object, *this, chart, view, drawQueue);
-        }
     }
 };
 

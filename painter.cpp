@@ -608,8 +608,7 @@ void paintChart (
     RECT& client,
     HDC paintDC,
     Chart& chart,
-    Dai& dai,
-    AttrDictionary &attrDic,
+    Environment& environment,
     View& view,
     PaletteIndex paletteIndex,
     DisplayCat displayCat,
@@ -621,6 +620,8 @@ void paintChart (
     Nodes& nodes = chart.nodes;
     Edges& edges = chart.edges;
     Features& features = chart.features;
+    Dai& dai = environment.dai;
+    AttrDictionary& attrDic = environment.attrDictionary;
 
     auto getTableSet = [pointObjTableSet, spatialObjTableSet] (FeatureObject& feature) {
         switch (feature.primitive) {
@@ -651,7 +652,7 @@ void paintChart (
             auto lookupTableItem = feature.findBestItem (displayCat, getTableSet (feature), dai, prty);
             if (!lookupTableItem) continue;
             if (lookupTableItem->procIndex != LookupTableItem::NOT_EXIST) {
-                dai.runCSP (lookupTableItem, & feature, chart, view, drawQueue);
+                environment.runCSP (lookupTableItem, & feature, chart, view, drawQueue);
             }
 
             if (feature.primitive == 3) {
@@ -705,7 +706,7 @@ void paintChart (
         drawQueue.clear ();
 
         if (lookupTableItem->procIndex != LookupTableItem::NOT_EXIST) {
-            dai.runCSP (lookupTableItem, & feature, chart, view, drawQueue);
+            environment.runCSP (lookupTableItem, & feature, chart, view, drawQueue);
         }
 
         int offset = 0;
@@ -728,8 +729,7 @@ void paintChartSmart (
     RECT& client,
     HDC paintDC,
     Chart& chart,
-    Dai& dai,
-    AttrDictionary &attrDic,
+    Environment& environment,
     View& view,
     PaletteIndex paletteIndex,
     DisplayCat displayCat,
@@ -741,7 +741,7 @@ void paintChartSmart (
 
     SelectObject (tempDC, tempBmp);
     FillRect (tempDC, & client, (HBRUSH) GetStockObject (WHITE_BRUSH));
-    paintChart (client, tempDC, chart, dai, attrDic, view, paletteIndex, displayCat, spatialObjTableSet, pointObjTableSet);
+    paintChart (client, tempDC, chart, environment, view, paletteIndex, displayCat, spatialObjTableSet, pointObjTableSet);
     BitBlt (paintDC, 0, 0, client.right + 1, client.bottom + 1, tempDC, 0, 0, SRCCOPY);
     DeleteObject (tempBmp);
     DeleteDC (tempDC);

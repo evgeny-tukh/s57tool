@@ -8,6 +8,7 @@
 #include <tuple>
 #include "s57defs.h"
 #include "geo.h"
+#include "settings.h"
 
 enum NodeFlags {
     CONNECTED = 1,
@@ -283,6 +284,23 @@ struct Chart {
     PointLocationInfo pointLocationInfo;
     AreaTopologyMap areaTopologyMap;
 };
+struct Environment {
+    ObjectDictionary objectDictionary;
+    AttrDictionary attrDictionary;
+    Dai dai;
+    Settings settings;
+
+    Environment () {
+        initCSPs (*this);
+    }
+
+    void runCSP (LookupTableItem *item, struct FeatureObject *object, Chart& chart, View& view, struct DrawQueue& drawQueue) {
+        if (item->procIndex >= 0 && item->procIndex < dai.procedures.size ()) {
+            dai.procedures [item->procIndex] (item, object, *this, chart, view, drawQueue);
+        }
+    }
+};
+
 #else
 struct Nodes: TopologyCollection {
     std::vector<GeoNode> container;

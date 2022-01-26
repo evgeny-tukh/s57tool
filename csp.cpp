@@ -74,7 +74,8 @@ bool isEdgeSharedWithLinerStructure (FeatureObject *thisObject, size_t edgeIndex
     return watlev && (watlev->noValue || watlev->intValue == 1 || watlev->intValue == 2 || watlev->intValue == 6);
 }
 
-void seabed01 (double depthRangeVal1, double depthRangeVal2, LookupTableItem *item, Dai& dai) {
+void seabed01 (double depthRangeVal1, double depthRangeVal2, LookupTableItem *item, Environment& environment) {
+    Settings& settings = environment.settings;
     std::string colorName { "DEPIT" };
     bool shallow = true;
 
@@ -103,22 +104,24 @@ void seabed01 (double depthRangeVal1, double depthRangeVal2, LookupTableItem *it
         }
     }
     
-    item->brushIndex = dai.getBasePenIndex (colorName.c_str ());
+    item->brushIndex = environment.dai.getBasePenIndex (colorName.c_str ());
 
     if (settings.shallowPattern && shallow) {
-        item->patternBrushIndex = dai.getPatternIndex ("DIAMOND1");
+        item->patternBrushIndex = environment.dai.getPatternIndex ("DIAMOND1");
     }
 }
 
-void depare03 (LookupTableItem *item, FeatureObject *object, Dai& dai, Chart& chart, View& view, DrawQueue& drawQueue) {
+void depare03 (LookupTableItem *item, FeatureObject *object, Environment& environment, Chart& chart, View& view, DrawQueue& drawQueue) {
     Features& features = chart.features;
     Edges& edges = chart.edges;
+    Settings& settings = environment.settings;
+    Dai& dai = environment.dai;
     auto drval1 = object->getAttr (ATTRS::DRVAL1);
     auto drval2 = object->getAttr (ATTRS::DRVAL2);
     double depthRangeVal1 = (drval1 && !drval1->noValue) ? drval1->floatValue : -1.0;
     double depthRangeVal2 = (drval2 && !drval2->noValue) ? drval2->floatValue : (depthRangeVal1 + 0.01);
 
-    seabed01 (depthRangeVal1, depthRangeVal2, item, dai);
+    seabed01 (depthRangeVal1, depthRangeVal2, item, environment);
 
     if (object->classCode == OBJ_CLASSES::DRGARE) {
         item->edgePenIndex = dai.getBasePenIndex ("CHGRF");
@@ -214,14 +217,17 @@ void depare03 (LookupTableItem *item, FeatureObject *object, Dai& dai, Chart& ch
     }
 }
 
-void depcnt03 (LookupTableItem *item, FeatureObject *object, Dai& dai, Chart& chart, View& view, DrawQueue& drawQueue) {
+void depcnt03 (LookupTableItem *item, FeatureObject *object, Environment& environment, Chart& chart, View& view, DrawQueue& drawQueue) {
+    Settings& settings = environment.settings;
+    Dai& dai = environment.dai;
     // TO BE DONE!!!!
     item->edgePenIndex = dai.getBasePenIndex ("DEPCN");
     item->edgePenStyle = PS_SOLID;
     item->edgePenWidth = 1;
 }
 
-void sndfrm04 (FeatureObject *object, double depth, std::vector<std::string>& symbols) {
+void sndfrm04 (FeatureObject *object, double depth, Environment& environment, std::vector<std::string>& symbols) {
+    Settings& settings = environment.settings;
     std::string prefix;
     if (depth <= settings.safetyDepth) {
         prefix = "SOUNDS";
@@ -298,30 +304,32 @@ void sndfrm04 (FeatureObject *object, double depth, std::vector<std::string>& sy
     }
 }
 
-void soundg03 (LookupTableItem *item, FeatureObject *object, Dai& dai, Chart& chart, View& view, DrawQueue& drawQueue) {
+void soundg03 (LookupTableItem *item, FeatureObject *object, Environment& environment, Chart& chart, View& view, DrawQueue& drawQueue) {
     auto& node = chart.nodes.container [object->nodeIndex];
 
     for (auto& pos: node.points) {
         std::vector<std::string> symbols;
 
-        sndfrm04 (object, pos.depth, symbols);
+        sndfrm04 (object, pos.depth, environment, symbols);
 
         for (auto& symbolName: symbols) {
-            size_t symbolIndex = dai.getSymbolIndex (symbolName.c_str ());
+            size_t symbolIndex = environment.dai.getSymbolIndex (symbolName.c_str ());
 if(symbolIndex == (size_t) -1){
     int iii=0;
     ++iii;
     --iii;
 }
-            drawQueue.addSymbol (pos.lat, pos.lon, symbolIndex, 0.0, dai);
+            drawQueue.addSymbol (pos.lat, pos.lon, symbolIndex, 0.0, environment.dai);
         }
     }
 }
 
 
-void lights06 (LookupTableItem *item, FeatureObject *object, Dai& dai, Chart& chart, View& view, DrawQueue& drawQueue) {
+void lights06 (LookupTableItem *item, FeatureObject *object, Environment& environment, Chart& chart, View& view, DrawQueue& drawQueue) {
     Nodes& nodes = chart.nodes;
     Features& features = chart.features;
+    Dai& dai = environment.dai;
+    Settings& settings = environment.settings;
     auto valnmr = object->getAttr (ATTRS::VALNMR);
     Attr *orient = 0;
     auto position = nodes [object->nodeIndex].points.front ();
@@ -560,9 +568,9 @@ void lights06 (LookupTableItem *item, FeatureObject *object, Dai& dai, Chart& ch
     }
 }
 
-void initCSPs (Dai& dai) {
-    dai.addCSP ("LIGHTS06", lights06);
-    dai.addCSP ("DEPCNT03", depcnt03);
-    dai.addCSP ("DEPARE03", depare03);
-    dai.addCSP ("SOUNDG03", soundg03);
+void initCSPs (Environment& environment) {
+    environment.dai.addCSP ("LIGHTS06", lights06);
+    environment.dai.addCSP ("DEPCNT03", depcnt03);
+    environment.dai.addCSP ("DEPARE03", depare03);
+    environment.dai.addCSP ("SOUNDG03", soundg03);
 }

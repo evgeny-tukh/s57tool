@@ -1,12 +1,12 @@
 #include "settings.h"
 
-Settings settings { 
-    false,  // fullSectorLength
-    false,  // safetyContourLabels
-    false,  // twoShades
-    true,   // shallowPattern
-    30.0,   // safetyContour
-    2.0,    // shallowContour
-    30.0,   // deepContour
-    30.0,   // safetyDepth
-};
+Settings::Settings ():
+    fullSectorLength (false),
+    safetyContourLabels (false),
+    twoShades (false),
+    shallowPattern (true),
+    safetyContour (30.0),
+    shallowContour (2.0),
+    deepContour (30.0),
+    safetyDepth (30.0) {
+}

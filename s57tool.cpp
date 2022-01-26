@@ -72,14 +72,8 @@ struct Ctx {
     std::vector<CatalogItem> catalog;
     std::string basePath;
     std::string splashText;
-    ObjectDictionary objectDictionary;
-    AttrDictionary attrDictionary;
     Chart chart;
-    /*Nodes nodes;
-    Edges edges;
-    Features features;
-    PointLocationInfo pointLocationInfo;*/
-    Dai dai;
+    Environment environment;
 
     Ctx (HINSTANCE _instance, HMENU _menu):
         instance (_instance),
@@ -346,7 +340,7 @@ void openFile (Ctx *ctx, CatalogItem *item) {
     extractNodes (records, ctx->chart, datasetParams);
     extractEdges (records, ctx->chart, datasetParams);
     extractFeatureObjects (records, ctx->chart);
-    deformatAttrValues (ctx->attrDictionary, ctx->chart);
+    deformatAttrValues (ctx->environment.attrDictionary, ctx->chart);
     buildPointLocationInfo (ctx->chart);
     
     SendMessage (ctx->recordTree, TVM_DELETEITEM, (WPARAM) TVI_ROOT, 0);
@@ -469,7 +463,7 @@ void openFile (Ctx *ctx, CatalogItem *item) {
         std::string group ("Group: " + std::to_string (feature.group));
         static char *geometries [] { "Point", "Line", "Area", "3D points" };
 
-        auto objectDesc = ctx->objectDictionary.findByCode (feature.classCode);
+        auto objectDesc = ctx->environment.objectDictionary.findByCode (feature.classCode);
 
         classInfo +=  " [";
         classInfo += objectDesc ? objectDesc->name : "N/A";
@@ -520,7 +514,7 @@ void openFile (Ctx *ctx, CatalogItem *item) {
         for (auto& attr: feature.attributes) {
             std::string attrInfo (std::to_string (attr.classCode));
 
-            AttrDesc *attrDesc = (AttrDesc *) ctx->attrDictionary.findByCode (attr.classCode);
+            AttrDesc *attrDesc = (AttrDesc *) ctx->environment.attrDictionary.findByCode (attr.classCode);
 
             attrInfo +=  " [";
             attrInfo += attrDesc ? attrDesc->name : "N/A";
@@ -981,8 +975,7 @@ void repaintChart (HWND wnd) {
         client,
         dc, //tempDC,
         ctx->chart,
-        ctx->dai,
-        ctx->attrDictionary,
+        ctx->environment,
         ctx->view,
         PaletteIndex::Day,
         DisplayCat::STANDARD,
@@ -1062,8 +1055,7 @@ void paintChartWnd (HWND wnd) {
         client,
         paintDC,
         ctx->chart,
-        ctx->dai,
-        ctx->attrDictionary,
+        ctx->environment,
         ctx->view,
         PaletteIndex::Day,
         DisplayCat::STANDARD,
@@ -1243,19 +1235,19 @@ void loadProc (Ctx *ctx) {
     GetModuleFileName (0, path, sizeof (path));
     PathRemoveFileSpec (path);
     PathAppend (path, "objclass.dic");
-    loadObjectDictionary (path, ctx->objectDictionary);
+    loadObjectDictionary (path, ctx->environment.objectDictionary);
     ctx->splashText += "\nLoading object attributes...";
     PathRemoveFileSpec (path);
     PathAppend (path, "attributes.dic");
-    loadAttrDictionary (path, ctx->attrDictionary);
+    loadAttrDictionary (path, ctx->environment.attrDictionary);
     ctx->splashText += "\nLoading color table...";
     PathRemoveFileSpec (path);
     PathAppend (path, "ColTables.rgb");
-    loadColorTable (path, ctx->dai);
+    loadColorTable (path, ctx->environment.dai);
     ctx->splashText += "\nLoading DAI...";
     PathRemoveFileSpec (path);
     PathAppend (path, "PresLib_e4.0.3.dai");
-    loadDai (path, ctx->dai, ctx->objectDictionary, ctx->attrDictionary);
+    loadDai (path, ctx->environment);
     ctx->splashText += "\nDone.";
     ctx->loaded = true;
 

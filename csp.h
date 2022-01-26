@@ -1,3 +1,3 @@
 #pragma once
 
-void initCSPs (struct Dai& dai);
+void initCSPs (struct Environment& env);

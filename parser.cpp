@@ -1932,7 +1932,10 @@ void parseInstructionList (const char *source, DrawProcedure& drawProcedure) {
 
 }
 
-void loadDai (const char *path, Dai& dai, ObjectDictionary& objectDictionary, AttrDictionary& attrDictionary) {
+void loadDai (const char *path, Environment& environment) {
+    Dai& dai = environment.dai;
+    ObjectDictionary& objectDictionary = environment.objectDictionary;
+    AttrDictionary& attrDictionary = environment.attrDictionary;
     char *content = 0;
     size_t size = loadFileAndConvertToAnsi (path, content);
 
