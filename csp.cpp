@@ -114,8 +114,12 @@ void depare03 (LookupTableItem *item, FeatureObject *object, Dai& dai, Nodes& no
     auto drval1 = object->getAttr (ATTRS::DRVAL1);
     auto drval2 = object->getAttr (ATTRS::DRVAL2);
     double depthRangeVal1 = (drval1 && !drval1->noValue) ? drval1->floatValue : -1.0;
-    double depthRangeVal2 = (drval2 && !drval2->noValue) ? drval1->floatValue : (depthRangeVal1 + 0.01);
-
+    double depthRangeVal2 = (drval2 && !drval2->noValue) ? drval2->floatValue : (depthRangeVal1 + 0.01);
+if(object->fidn==29141220){
+    int iii=0;
+    ++iii;
+    --iii;
+}
     seabed01 (depthRangeVal1, depthRangeVal2, item, dai);
 
     if (object->classCode == OBJ_CLASSES::DRGARE) {
