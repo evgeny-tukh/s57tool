@@ -110,7 +110,7 @@ void seabed01 (double depthRangeVal1, double depthRangeVal2, LookupTableItem *it
     }
 }
 
-void depare03 (LookupTableItem *item, FeatureObject *object, Dai& dai, Chart& chart, int zoom, DrawQueue& drawQueue) {
+void depare03 (LookupTableItem *item, FeatureObject *object, Dai& dai, Chart& chart, View& view, DrawQueue& drawQueue) {
     Features& features = chart.features;
     Edges& edges = chart.edges;
     auto drval1 = object->getAttr (ATTRS::DRVAL1);
@@ -214,7 +214,7 @@ void depare03 (LookupTableItem *item, FeatureObject *object, Dai& dai, Chart& ch
     }
 }
 
-void depcnt03 (LookupTableItem *item, FeatureObject *object, Dai& dai, Chart& chart, int zoom, DrawQueue& drawQueue) {
+void depcnt03 (LookupTableItem *item, FeatureObject *object, Dai& dai, Chart& chart, View& view, DrawQueue& drawQueue) {
     // TO BE DONE!!!!
     item->edgePenIndex = dai.getBasePenIndex ("DEPCN");
     item->edgePenStyle = PS_SOLID;
@@ -298,7 +298,7 @@ void sndfrm04 (FeatureObject *object, double depth, std::vector<std::string>& sy
     }
 }
 
-void soundg03 (LookupTableItem *item, FeatureObject *object, Dai& dai, Chart& chart, int zoom, DrawQueue& drawQueue) {
+void soundg03 (LookupTableItem *item, FeatureObject *object, Dai& dai, Chart& chart, View& view, DrawQueue& drawQueue) {
     auto& node = chart.nodes.container [object->nodeIndex];
 
     for (auto& pos: node.points) {
@@ -319,7 +319,7 @@ if(symbolIndex == (size_t) -1){
 }
 
 
-void lights06 (LookupTableItem *item, FeatureObject *object, Dai& dai, Chart& chart, int zoom, DrawQueue& drawQueue) {
+void lights06 (LookupTableItem *item, FeatureObject *object, Dai& dai, Chart& chart, View& view, DrawQueue& drawQueue) {
     Nodes& nodes = chart.nodes;
     Features& features = chart.features;
     auto valnmr = object->getAttr (ATTRS::VALNMR);
@@ -459,7 +459,7 @@ void lights06 (LookupTableItem *item, FeatureObject *object, Dai& dai, Chart& ch
  
         if (sector2Value <= sector1Value) sector2Value += 360.0;
 
-        double legLengthMm = settings.fullSectorLength ? nominalRange * 1852000.0 / zoomToScale (zoom) : 25.0;
+        double legLengthMm = settings.fullSectorLength ? nominalRange * 1852000.0 / zoomToScale (view.zoom) : 25.0;
 
         //size_t penIndex = dai.getPenIndex ("LS(DASH,1,CHBLK)");
         //

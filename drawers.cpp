@@ -8,15 +8,15 @@
 PenTool Drawer::penTool;
 
 void LineDrawer::run (RECT& client, HDC paintDC, PaletteIndex paletteIndex, Palette& palette) {
-    paintLine (client, paintDC, penStyle, penWidth, penIndex, lat, lon, brg, rangeMm, north, west, zoom, paletteIndex, palette);
+    paintLine (client, paintDC, penStyle, penWidth, penIndex, lat, lon, brg, rangeMm, view, paletteIndex, palette);
 }
 
 void ArcDrawer::run (RECT& client, HDC paintDC, PaletteIndex paletteIndex, Palette& palette) {
-    paintArc (client, paintDC, penStyle, penWidth, penIndex, lat, lon, start, end, rangeMm, north, west, zoom, paletteIndex, palette);
+    paintArc (client, paintDC, penStyle, penWidth, penIndex, lat, lon, start, end, rangeMm, view, paletteIndex, palette);
 }
 
 void PolyPolylineDrawer::run (RECT& client, HDC paintDC, PaletteIndex paletteIndex, Palette& palette) {
-    paintPolyPolyline (client, paintDC, penStyle, penWidth, penIndex, polyPolyline, north, west, zoom, paletteIndex, palette);
+    paintPolyPolyline (client, paintDC, penStyle, penWidth, penIndex, polyPolyline, view, paletteIndex, palette);
 }
 
 void PolyPolylineDrawer::addNode (size_t nodeIndex) {
@@ -46,7 +46,7 @@ void PolyPolylineDrawer::addEdge (EdgeRef& edgeRef) {
 }
 
 void PolyPolygonDrawer::run (RECT& client, HDC paintDC, PaletteIndex paletteIndex, Palette& palette) {
-    paintPolyPolygon (client, paintDC, fillBrushIndex, patternBrushIndex, polyPolyline, north, west, zoom, paletteIndex, palette);
+    paintPolyPolygon (client, paintDC, fillBrushIndex, patternBrushIndex, polyPolyline, view, paletteIndex, palette);
 }
 
 void PolyPolygonDrawer::addEdge (EdgeRef& edgeRef) {
@@ -78,15 +78,13 @@ void PolyPolygonDrawer::addEdge (EdgeRef& edgeRef) {
 }
 
 TextDrawer::TextDrawer (
-    double _north,
-    double _west,
+    View& _view,
     double _lat,
     double _lon,
-    int _zoom,
     TextDesc& _desc,
     FeatureObject *_object,
     Dai& _dai
-) : Drawer (LookupTableItem::NOT_EXIST, PS_SOLID, 1, _north, _west, _lat, _lon, 0.0, _zoom), desc (_desc), dai (_dai) {
+) : Drawer (LookupTableItem::NOT_EXIST, PS_SOLID, 1, _view, _lat, _lon, 0.0), desc (_desc), dai (_dai) {
     if (_desc.paramDescs.size () == 1) {
         auto attr = _object->getAttr (_desc.paramDescs.front ().classCode);
 
@@ -298,11 +296,11 @@ void TextDrawer::run (RECT& client, HDC paintDC, PaletteIndex paletteIndex, Pale
         case TextDesc::VerJust::BOTTOM: format |= DT_BOTTOM; break;
         case TextDesc::VerJust::TOP: format |= DT_TOP; break;
     }
-    paintText (client, paintDC, text.data (), format, lat, lon, desc.horOffset, desc.verOffset, desc.colorIndex, north, west, zoom, paletteIndex, dai);
+    paintText (client, paintDC, text.data (), format, lat, lon, desc.horOffset, desc.verOffset, desc.colorIndex, view, paletteIndex, dai);
 };
 
 void SymbolDrawer::run (RECT& client, HDC paintDC, PaletteIndex paletteIndex, Palette& palette) {
-    paintSymbol (client, paintDC, lat, lon, symbolIndex, rotAngle, dai, north, west, zoom,paletteIndex);
+    paintSymbol (client, paintDC, lat, lon, symbolIndex, rotAngle, dai, view, paletteIndex);
 }
 
 void DrawQueue::addCompoundLightArc (
@@ -320,11 +318,11 @@ void DrawQueue::addCompoundLightArc (
 }
 
 void DrawQueue::addEdgeChain (int penIndex, int penStyle, int penWidth, Chart& chart) {
-    container.push_back (new PolyPolylineDrawer (penIndex, penStyle, penWidth, north, west, zoom, chart));
+    container.push_back (new PolyPolylineDrawer (penIndex, penStyle, penWidth, view, chart));
 }
 
 void DrawQueue::addArea (size_t fillBrushIndex, size_t patternBrushIndex, Chart& chart) {
-    container.push_back (new PolyPolygonDrawer (fillBrushIndex, patternBrushIndex, north, west, zoom, chart));
+    container.push_back (new PolyPolygonDrawer (fillBrushIndex, patternBrushIndex, view, chart));
 }
 
 void DrawQueue::addEdge (EdgeRef& edgeRef) {

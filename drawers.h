@@ -8,23 +8,21 @@
 
 struct Drawer {
     size_t penIndex;
-    double north, west;
+    View& view;
     double lat, lon;
     double rangeMm;
-    int zoom, penStyle, penWidth;
+    int penStyle, penWidth;
     static PenTool penTool;
 
     Drawer (
         size_t _penIndex,
         int _penStyle,
         int _penWidth,
-        double _north,
-        double _west,
+        View& _view,
         double _lat,
         double _lon,
-        double _rangeMm,
-        int _zoom
-    ): penIndex (_penIndex), penStyle (_penStyle), penWidth (_penWidth), north (_north), west (_west), lat (_lat), lon (_lon), zoom (_zoom), rangeMm (_rangeMm) {}
+        double _rangeMm
+    ): penIndex (_penIndex), penStyle (_penStyle), penWidth (_penWidth), view (_view), lat (_lat), lon (_lon), rangeMm (_rangeMm) {}
 
     virtual void run (RECT& client, HDC paintDC, PaletteIndex paletteIndex, Palette& palette) {}
 };
@@ -35,15 +33,13 @@ struct SymbolDrawer: Drawer {
     Dai& dai;
 
     SymbolDrawer (
-        double _north,
-        double _west,
+        View& _view,
         double _lat,
         double _lon,
         size_t _symbolIndex,
         double _rotAngle,
-        int _zoom,
         Dai& _dai
-    ): Drawer (0, 0, 0, _north, _west, _lat, _lon, 0.0, _zoom), symbolIndex (_symbolIndex), dai (_dai), rotAngle (_rotAngle) {}
+    ): Drawer (0, 0, 0, _view, _lat, _lon, 0.0), symbolIndex (_symbolIndex), dai (_dai), rotAngle (_rotAngle) {}
 
     virtual void run (RECT& client, HDC paintDC, PaletteIndex paletteIndex, Palette& palette);
 };
@@ -54,11 +50,9 @@ struct TextDrawer: Drawer {
     Dai& dai;
 
     TextDrawer (
-        double _north,
-        double _west,
+        View& _view,
         double _lat,
         double _lon,
-        int _zoom,
         TextDesc& _desc,
         FeatureObject *_object,
         Dai& _dai
@@ -74,14 +68,12 @@ struct LineDrawer: Drawer {
         size_t _penIndex,
         int _penStyle,
         int _penWidth,
-        double _north,
-        double _west,
+        View& _view,
         double _lat,
         double _lon,
         double _brg,
-        double _rangeMm,
-        int _zoom
-    ): Drawer (_penIndex, _penStyle, _penWidth, _north, _west, _lat, _lon, _rangeMm, _zoom), brg (_brg) {}
+        double _rangeMm
+    ): Drawer (_penIndex, _penStyle, _penWidth, _view, _lat, _lon, _rangeMm), brg (_brg) {}
 
     virtual void run (RECT& client, HDC paintDC, PaletteIndex paletteIndex, Palette& palette);
 };
@@ -93,15 +85,13 @@ struct ArcDrawer: Drawer {
         size_t _penIndex,
         int _penStyle,
         int _penWidth,
-        double _north,
-        double _west,
+        View& _view,
         double _centerLat,
         double _centerLon,
         double _radiusMm,
         double _start,
-        double _end,
-        int _zoom
-    ): Drawer (_penIndex, _penStyle, _penWidth, _north, _west, _centerLat, _centerLon, _radiusMm, _zoom), start (_start), end (_end) {}
+        double _end
+    ): Drawer (_penIndex, _penStyle, _penWidth, _view, _centerLat, _centerLon, _radiusMm), start (_start), end (_end) {}
 
     virtual void run (RECT& client, HDC paintDC, PaletteIndex paletteIndex, Palette& palette);
 };
@@ -114,11 +104,9 @@ struct PolyPolylineDrawer: Drawer {
         size_t _penIndex,
         int _penStyle,
         int _penWidth,
-        double _north,
-        double _west,
-        int _zoom,
+        View& _view,
         Chart& _chart
-    ): Drawer (_penIndex, _penStyle, _penWidth, _north, _west, 0.0, 0.0, 0.0, _zoom), chart (_chart) {
+    ): Drawer (_penIndex, _penStyle, _penWidth, _view, 0.0, 0.0, 0.0), chart (_chart) {
     }
 
     void addContour () {
@@ -141,11 +129,9 @@ struct PolyPolygonDrawer: PolyPolylineDrawer {
     PolyPolygonDrawer (
         size_t _fillBrushIndex,
         size_t _patternBrushIndex,
-        double _north,
-        double _west,
-        int _zoom,
+        View& _view,
         Chart& _chart
-    ): PolyPolylineDrawer (-1, PS_SOLID, 0, _north, _west, _zoom, _chart), fillBrushIndex (_fillBrushIndex), patternBrushIndex (_patternBrushIndex), hole (false) {
+    ): PolyPolylineDrawer (-1, PS_SOLID, 0, _view, _chart), fillBrushIndex (_fillBrushIndex), patternBrushIndex (_patternBrushIndex), hole (false) {
     }
 
     virtual void run (RECT& client, HDC paintDC, PaletteIndex paletteIndex, Palette& palette);
@@ -163,9 +149,8 @@ struct PolyPolygonDrawer: PolyPolylineDrawer {
 
 struct DrawQueue {
     std::vector<Drawer *> container;
-    double north, west;
     HDC paintDC;
-    int zoom;
+    View& view;
     PaletteIndex paletteIndex;
     Dai& dai;
     RECT& client;
@@ -177,10 +162,8 @@ struct DrawQueue {
         PaletteIndex _paletteIndex,
         Dai& _dai,
         AttrDictionary& _attrDic,
-        double _north,
-        double _west,
-        int _zoom
-    ): paintDC (_paintDC), paletteIndex (_paletteIndex), dai (_dai), north (_north), west (_west), zoom (_zoom), client (_client), attrDic (_attrDic) {}
+        View& _view
+    ): paintDC (_paintDC), paletteIndex (_paletteIndex), dai (_dai), view (_view), client (_client), attrDic (_attrDic) {}
 
     virtual ~DrawQueue () {
         clear ();
@@ -193,16 +176,16 @@ struct DrawQueue {
         for (auto drawer: container) drawer->run (client, paintDC, paletteIndex, dai.palette);
     }
     void addLine (int penIndex, int penStyle, int penWidth, double lat, double lon, double brg, double rangeMm) {
-        container.push_back (new LineDrawer (penIndex, penStyle, penWidth, north, west, lat, lon, brg, rangeMm, zoom));
+        container.push_back (new LineDrawer (penIndex, penStyle, penWidth, view, lat, lon, brg, rangeMm));
     }
     void addArc (int penIndex, int penStyle, int penWidth, double centerLat, double centerLon, double radiusMm, double start, double end) {
-        container.push_back (new ArcDrawer (penIndex, penStyle, penWidth, north, west, centerLat, centerLon, radiusMm, start, end, zoom));
+        container.push_back (new ArcDrawer (penIndex, penStyle, penWidth, view, centerLat, centerLon, radiusMm, start, end));
     }
     void addText (double lat, double lon, TextDesc& desc, FeatureObject *object) {
-        container.push_back (new TextDrawer (north, west, lat, lon, zoom, desc, object, dai)); 
+        container.push_back (new TextDrawer (view, lat, lon, desc, object, dai)); 
     }
     void addSymbol (double lat, double lon, size_t symbolIndex, double rotAngle, Dai& dai) {
-        container.push_back (new SymbolDrawer (north, west, lat, lon, symbolIndex, rotAngle, zoom, dai));
+        container.push_back (new SymbolDrawer (view, lat, lon, symbolIndex, rotAngle, dai));
     }
     void addCompoundLightArc (
         int penIndex,

@@ -24,9 +24,7 @@ void paintChart (
     Chart& chart,
     Dai& dai,
     AttrDictionary &attrDic,
-    double north,
-    double west,
-    uint8_t zoom,
+    View& view,
     PaletteIndex paletteIndex,
     DisplayCat displayCat,
     TableSet spatialObjTableSet,
@@ -59,9 +57,7 @@ void paintLine (
     double lon,
     double brg,
     double lengthInMm,
-    double north,
-    double west,
-    int zoom,
+    View& view,
     PaletteIndex paletteIndex,
     Palette& palette
 );
@@ -76,9 +72,7 @@ void paintArc (
     double start,
     double end,
     double radiusInMm,
-    double north,
-    double west,
-    int zoom,
+    View& view,
     PaletteIndex paletteIndex,
     Palette& palette
 );
@@ -89,9 +83,7 @@ void paintPolyPolyline (
     int width,
     size_t colorIndex,
     Contours& contours,
-    double north,
-    double west,
-    int zoom,
+    View& view,
     PaletteIndex paletteIndex,
     Palette& palette
 );
@@ -101,9 +93,7 @@ void paintPolyPolygon (
     size_t fillBrushIndex,
     size_t patternBrushIndex,
     Contours& contours,
-    double north,
-    double west,
-    int zoom,
+    View& view,
     PaletteIndex paletteIndex,
     Palette& palette
 );
@@ -117,9 +107,7 @@ void paintText (
     int xOffset,
     int yOffset,
     size_t colorIndex,
-    double north,
-    double west,
-    int zoom,
+    View& view,
     PaletteIndex paletteIndex,
     Dai& dai
 );
@@ -131,8 +119,6 @@ void paintSymbol (
     size_t symbolIndex,
     double rotAngle,
     Dai& dai,
-    double north,
-    double west,
-    uint8_t zoom,
+    View& view,
     PaletteIndex paletteIndex
 );

@@ -65,10 +65,9 @@ struct Ctx {
     HINSTANCE instance;
     HWND mainWnd, catalogCtl, recordTree, propsList, splashScreen, tabCtl, nodeList, edgeTree, featureTree, chartWnd, chartCtlBar;
     HMENU mainMenu;
+    View view;
     bool keepRunning, loaded, mouseDown;
-    double north, west;
     int mouseDownX, mouseDownY;
-    uint8_t zoom;
     std::vector<CatalogItem> catalog;
     std::string basePath;
     std::string splashText;
@@ -86,9 +85,7 @@ struct Ctx {
         mainMenu (_menu),
         keepRunning (true),
         loaded (false),
-        north (/*66.99*/Coord (32.0, 28.457, true)),
-        west (/*-178.99*/Coord (60.0, 54.605)),
-        zoom (/*12*/13),
+        view (Coord (32.0, 28.457, true), Coord (60.0, 54.605), 13),
         mouseDown (false) {
     }
 
@@ -968,9 +965,7 @@ void repaintChart (HWND wnd) {
         ctx->chart,
         ctx->dai,
         ctx->attrDictionary,
-        ctx->north,
-        ctx->west,
-        ctx->zoom,
+        ctx->view,
         PaletteIndex::Day,
         DisplayCat::STANDARD,
         TableSet::PLAIN_BOUNDARIES,
@@ -987,22 +982,22 @@ void onChartWndMouseMove (HWND wnd, uint16_t clientX, uint16_t clientY) {
     double lat, lon;
     Ctx *ctx = (Ctx *) GetWindowLongPtr (wnd, GWLP_USERDATA);
     int x, y;
-    geoToXY (ctx->north, ctx->west, ctx->zoom, x, y);
+    geoToXY (ctx->view.north, ctx->view.west, ctx->view.zoom, x, y);
 
     if (ctx->mouseDown) {
         int deltaX = clientX - ctx->mouseDownX;
         int deltaY = clientY - ctx->mouseDownY;
 
         if (std::abs (deltaX) > 3 || std::abs (deltaY) > 3) {
-            xyToGeo (x - deltaX, y - deltaY, ctx->zoom, ctx->north, ctx->west);
+            xyToGeo (x - deltaX, y - deltaY, ctx->view.zoom, ctx->view.north, ctx->view.west);
             ctx->mouseDownX = clientX;
             ctx->mouseDownY = clientY;
             repaintChart (wnd);
         }
     } else {
-        xyToGeo (x + clientX, y + clientY, ctx->zoom, lat, lon);
+        xyToGeo (x + clientX, y + clientY, ctx->view.zoom, lat, lon);
 
-        SetWindowText (ctx->chartCtlBar, (formatLat (lat).append (" ").append (formatLon (lon))).append (" Z").append (std::to_string (ctx->zoom)).c_str ());
+        SetWindowText (ctx->chartCtlBar, (formatLat (lat).append (" ").append (formatLon (lon))).append (" Z").append (std::to_string (ctx->view.zoom)).c_str ());
     }
 }
 
@@ -1015,7 +1010,7 @@ void onChartWndLeftButtonUp (HWND wnd, uint16_t clientX, uint16_t clientY) {
 
 void onChartWndMouseWheel (HWND wnd, int16_t delta) {
     Ctx *ctx = (Ctx *) GetWindowLongPtr (wnd, GWLP_USERDATA);
-    uint8_t newZoom = ctx->zoom;
+    uint8_t newZoom = ctx->view.zoom;
     if (delta > 0) {
         newZoom ++;
     } else {
@@ -1027,15 +1022,15 @@ void onChartWndMouseWheel (HWND wnd, int16_t delta) {
         newZoom = 18;
     }
 
-    if (ctx->zoom != newZoom) {
-        ctx->zoom = newZoom;
+    if (ctx->view.zoom != newZoom) {
+        ctx->view.zoom = newZoom;
         InvalidateRect (wnd, 0, true);
     }
 }
 
 void onMouseOut (HWND wnd) {
     Ctx *ctx = (Ctx *) GetWindowLongPtr (wnd, GWLP_USERDATA);
-    SetWindowText (ctx->chartCtlBar, std::to_string (ctx->zoom).c_str ());
+    SetWindowText (ctx->chartCtlBar, std::to_string (ctx->view.zoom).c_str ());
 }
 
 void paintChartWnd (HWND wnd) {
@@ -1052,9 +1047,7 @@ void paintChartWnd (HWND wnd) {
         ctx->chart,
         ctx->dai,
         ctx->attrDictionary,
-        ctx->north,
-        ctx->west,
-        ctx->zoom,
+        ctx->view,
         PaletteIndex::Day,
         DisplayCat::STANDARD,
         TableSet::PLAIN_BOUNDARIES,
@@ -1068,15 +1061,15 @@ void onChartWndCommand (HWND wnd, uint16_t command) {
 
     switch (command) {
         case IDC_ZOOM_IN:
-            if (ctx->zoom < 18) {
-                ++ ctx->zoom;
+            if (ctx->view.zoom < 18) {
+                ++ ctx->view.zoom;
                 InvalidateRect (wnd, 0, 1);
                 onChartWndMouseMove (wnd, 240, 12);
             }
             break;
         case IDC_ZOOM_OUT:
-            if (ctx->zoom > 1) {
-                -- ctx->zoom;
+            if (ctx->view.zoom > 1) {
+                -- ctx->view.zoom;
                 InvalidateRect (wnd, 0, 1);
                 onChartWndMouseMove (wnd, 320, 12);
             }

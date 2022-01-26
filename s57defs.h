@@ -873,7 +873,7 @@ typedef void (*CSP) (
     struct FeatureObject *object,
     struct Dai& dai,
     struct Chart& chart,
-    int zoom,
+    View& view,
     struct DrawQueue& drawQueue
 );
 
@@ -931,9 +931,9 @@ struct Dai {
         procIndex.emplace (name, procedures.size ());
         procedures.emplace_back (proc);
     }
-    void runCSP (LookupTableItem *item, struct FeatureObject *object, Chart& chart, int zoom, struct DrawQueue& drawQueue) {
+    void runCSP (LookupTableItem *item, struct FeatureObject *object, Chart& chart, View& view, struct DrawQueue& drawQueue) {
         if (item->procIndex >= 0 && item->procIndex < procedures.size ()) {
-            procedures [item->procIndex] (item, object, *this, chart, zoom, drawQueue);
+            procedures [item->procIndex] (item, object, *this, chart, view, drawQueue);
         }
     }
 };

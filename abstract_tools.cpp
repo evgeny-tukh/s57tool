@@ -1,10 +1,10 @@
 #include "abstract_tools.h"
 #include "geo.h"
 
-void PenTool::geo2screen (double lat, double lon, double north, double west, int zoom, int& x, int& y) {
+void PenTool::geo2screen (double lat, double lon, View& view, int& x, int& y) {
     int westX, northY;
-    geoToXY (lat, lon, zoom, x, y);
-    geoToXY (north, west, zoom, westX, northY);
+    geoToXY (lat, lon, view.zoom, x, y);
+    geoToXY (view.north, view.west, view.zoom, westX, northY);
     x -= westX;
     y -= northY;
 };
@@ -46,10 +46,10 @@ void PenTool::composeSection (int x1, int y1, int x2, int y2, double lengthInPix
     }
 }
 
-void PenTool::appendToLastLeg (double lat, double lon, double north, double west, int zoom, PolyPolygon& polyPolygon) {
+void PenTool::appendToLastLeg (double lat, double lon, View& view, PolyPolygon& polyPolygon) {
     int x, y;
 
-    geo2screen (lat, lon, north, west, zoom, x, y);
+    geo2screen (lat, lon, view, x, y);
 
     polyPolygon.back ().emplace_back ();
     polyPolygon.back ().back ().x = x;
@@ -62,16 +62,14 @@ void PenTool::composeLeg (
     double lon,
     double destLat,
     double destLon,
-    double north,
-    double west,
-    int zoom,
+    View& view,
     PolyPolygon& polyPolygon,
     bool appendMode
 ) {
     int x1, y1, x2, y2;
 
-    geo2screen (lat, lon, north, west, zoom, x1, y1);
-    geo2screen (destLat, destLon, north, west, zoom, x2, y2);
+    geo2screen (lat, lon, view, x1, y1);
+    geo2screen (destLat, destLon, view, x2, y2);
 
     int cath1 = x2 - x1;
     int cath2 = y2 - y1;
@@ -102,23 +100,21 @@ void PenTool::composeLine (
     double lon,
     double brg,
     double lengthInMm,
-    double north,
-    double west,
-    int zoom,
+    View& view,
     PolyPolygon& polyPolygon,
     bool appendMode
 ) {
     double destLat, destLon;
-    calcSphericalPos (lat, lon, brg, mmToMiles (lengthInMm, zoom), destLat, destLon);
+    calcSphericalPos (lat, lon, brg, mmToMiles (lengthInMm, view.zoom), destLat, destLon);
 
-    composeLeg (style, lat, lon, destLat, destLon, north, west, zoom, polyPolygon, appendMode);
+    composeLeg (style, lat, lon, destLat, destLon, view, polyPolygon, appendMode);
 }
 
-void PenTool::composeArc (int style, double centerLat, double centerLon, double start, double end, double radiusInMm, double north, double west, int zoom, PolyPolygon& polyPolygon) {
+void PenTool::composeArc (int style, double centerLat, double centerLon, double start, double end, double radiusInMm, View& view, PolyPolygon& polyPolygon) {
     double startRad = start * RAD_IN_DEG;
     double endRad = end * RAD_IN_DEG;
     double arcLengthRad = endRad - startRad;
-    double radiusInNm = mmToMiles (radiusInMm, zoom);
+    double radiusInNm = mmToMiles (radiusInMm, view.zoom);
     
     if (arcLengthRad < 0.0) {
         startRad -= TWO_PI;
@@ -135,7 +131,7 @@ void PenTool::composeArc (int style, double centerLat, double centerLon, double 
             double lat, lon;
             int x, y;
             calcSphericalPos (centerLat, centerLon, brg, radiusInNm, lat, lon);
-            geo2screen (lat, lon, north, west, zoom, x, y);
+            geo2screen (lat, lon, view, x, y);
             polyPolygon.back ().emplace_back ();
             polyPolygon.back ().back ().x = x;
             polyPolygon.back ().back ().y = y;
@@ -159,12 +155,12 @@ void PenTool::composeArc (int style, double centerLat, double centerLon, double 
             int x, y;
             polyPolygon.emplace_back ();
             calcSphericalPos (centerLat, centerLon, brg, radiusInNm, lat, lon);
-            geo2screen (lat, lon, north, west, zoom, x, y);
+            geo2screen (lat, lon, view, x, y);
             polyPolygon.back ().emplace_back ();
             polyPolygon.back ().back ().x = x;
             polyPolygon.back ().back ().y = y;
             calcSphericalPos (centerLat, centerLon, brg + strokeArcBrgDeg, radiusInNm, lat, lon);
-            geo2screen (lat, lon, north, west, zoom, x, y);
+            geo2screen (lat, lon, view, x, y);
             polyPolygon.back ().emplace_back ();
             polyPolygon.back ().back ().x = x;
             polyPolygon.back ().back ().y = y;
@@ -173,18 +169,18 @@ void PenTool::composeArc (int style, double centerLat, double centerLon, double 
     }
 }
 
-void PenTool::beginPolyPolygon (double north, double west, int zoom, PolyPolygon& polyPolygon) {
+void PenTool::beginPolyPolygon (View& view, PolyPolygon& polyPolygon) {
     polygonMode = true;
-    curNorth = north;
-    curWest = west;
-    curZoom = zoom;
+    curView.north = view.north;
+    curView.west = view.west;
+    curView.zoom = view.zoom;
     polyPolygon.emplace_back ();
 }
 
 void PenTool::addVertexToPolygon (double lat, double lon) {
     int x, y;
 
-    geo2screen (lat, lon, curNorth, curWest, curZoom, x, y);
+    geo2screen (lat, lon, curView, x, y);
 
     curPolyPolygon->back ().emplace_back ();
 

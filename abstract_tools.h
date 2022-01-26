@@ -3,27 +3,28 @@
 #include <vector>
 #include <tuple>
 #include <Windows.h>
+#include "geo.h"
 
 struct PenTool {
     typedef std::vector<std::vector<POINT>> PolyPolygon;
 
     bool polygonMode;
-    double curNorth;
-    double curWest;
-    int curZoom;
+    View curView;
     PolyPolygon *curPolyPolygon;
 
-    void composeLine (int style, double lat, double lon, double brg, double lengthInMm, double north, double west, int zoom, PolyPolygon& polyPolygon, bool appendMode);
-    void composeLeg (int style, double lat, double lon, double destLat, double destLon, double north, double west, int zoom, PolyPolygon& polyPolygon, bool appendMode);
-    void appendToLastLeg (double lat, double lon, double north, double west, int zoom, PolyPolygon& polyPolygon);
+    PenTool (): curView (0.0, 0.0, 0), polygonMode (false), curPolyPolygon (0) {}
 
-    void composeArc (int style, double centerLat, double centerLon, double start, double end, double radiusInMm, double north, double west, int zoom, PolyPolygon& vertices);
-    void beginPolyPolygon (double north, double west, int zoom, PolyPolygon& polyPolygon);
+    void composeLine (int style, double lat, double lon, double brg, double lengthInMm, View& view, PolyPolygon& polyPolygon, bool appendMode);
+    void composeLeg (int style, double lat, double lon, double destLat, double destLon, View& view, PolyPolygon& polyPolygon, bool appendMode);
+    void appendToLastLeg (double lat, double lon, View& view, PolyPolygon& polyPolygon);
+
+    void composeArc (int style, double centerLat, double centerLon, double start, double end, double radiusInMm, View& view, PolyPolygon& vertices);
+    void beginPolyPolygon (View& view, PolyPolygon& polyPolygon);
     void addVertexToPolygon (double lat, double lon);
 
     void composeSection (int x1, int y1, int x2, int y2, double lengthInPix, double strokeLengthPix, double gapLengthPix, PolyPolygon& polyPolygon);
 
-    void geo2screen (double lat, double lon, double north, double west, int zoom, int& x, int& y);
+    void geo2screen (double lat, double lon, View& view, int& x, int& y);
     std::tuple<bool, double, double> getStrokeProps (int style);
 
     template<typename TYPE>

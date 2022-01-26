@@ -5,7 +5,7 @@
 #include "drawers.h"
 
 HBRUSH createPatternBrush (PatternDesc& pattern, PaletteIndex paletteIndex, Dai& dai);
-void paintLine (RECT& client, HDC paintDC, Dai& dai, double north, double west, uint8_t zoom, LineDraw& line, PaletteIndex paletteIndex);
+void paintLine (RECT& client, HDC paintDC, Dai& dai, View& view, LineDraw& line, PaletteIndex paletteIndex);
 
 std::vector<DrawToolItem <PatternTool>> patternTools;
 
@@ -202,9 +202,7 @@ void paintArea (
     Edges& edges,
     std::vector<EdgeRef>& edgeRefs,
     Dai& dai,
-    double north,
-    double west,
-    uint8_t zoom,
+    View& view,
     HBRUSH brush,
     //bool patternMode
     PatternTool *patternTool
@@ -213,11 +211,11 @@ void paintArea (
     std::vector<std::vector<POINT>> polyPolygon;
 
     int westX, northY;
-    geoToXY (north, west, zoom, westX, northY);
+    geoToXY (view.north, view.west, view.zoom, westX, northY);
 
-    auto addVertex = [&vertices, zoom, westX, northY, &polyPolygon] (double lat, double lon) {
+    auto addVertex = [&vertices, &view, westX, northY, &polyPolygon] (double lat, double lon) {
         int x, y;
-        geoToXY (lat, lon, zoom, x, y);
+        geoToXY (lat, lon, view.zoom, x, y);
         x -= westX;
         y -= northY;
         if (vertices.size () == 0 || vertices.back ().x != x || vertices.back ().y != y) {
@@ -519,9 +517,7 @@ void paintSymbol (
     HDC paintDC,
     GeoNode& node,
     Dai& dai,
-    double north,
-    double west,
-    uint8_t zoom,
+    View& view,
     int& offset,
     SymbolDraw& symbolDraw,
     PaletteIndex paletteIndex
@@ -529,10 +525,10 @@ void paintSymbol (
     int symbolX, symbolY;
     auto& symbol = dai.symbols [symbolDraw.symbolIndex];
     int westX, northY;
-    geoToXY (north, west, zoom, westX, northY);
+    geoToXY (view.north, view.west, view.zoom, westX, northY);
 
     for (size_t i = 0; i < node.points.size (); ++ i) {
-        geoToXY (node.points [i].lat, node.points [i].lon, zoom, symbolX, symbolY);
+        geoToXY (node.points [i].lat, node.points [i].lon, view.zoom, symbolX, symbolY);
         symbolX -= westX;
         symbolY -= northY;
         if (symbolX >= 0 && symbolX <= client.right && symbolY >= 0 && symbolY <= client.bottom) {
@@ -549,16 +545,14 @@ void paintSymbol (
     size_t symbolIndex,
     double rotAngle,
     Dai& dai,
-    double north,
-    double west,
-    uint8_t zoom,
+    View& view,
     PaletteIndex paletteIndex
 ) {
     int symbolX, symbolY;
     auto& symbol = dai.symbols [symbolIndex];
     int westX, northY;
-    geoToXY (north, west, zoom, westX, northY);
-    geoToXY (lat, lon, zoom, symbolX, symbolY);
+    geoToXY (view.north, view.west, view.zoom, westX, northY);
+    geoToXY (lat, lon, view.zoom, symbolX, symbolY);
     symbolX -= westX;
     symbolY -= northY;
     if (symbolX >= 0 && symbolX <= client.right && symbolY >= 0 && symbolY <= client.bottom) {
@@ -572,19 +566,17 @@ void paintEdge (
     Nodes& nodes,
     GeoEdge& edge,
     Dai& dai,
-    double north,
-    double west,
-    uint8_t zoom,
+    View& view,
     HPEN pen
 ) {
     std::vector<POINT> vertices;
 
     int westX, northY;
-    geoToXY (north, west, zoom, westX, northY);
+    geoToXY (view.north, view.west, view.zoom, westX, northY);
 
-    auto addVertex = [&vertices, zoom, westX, northY] (double lat, double lon) {
+    auto addVertex = [&vertices, &view, westX, northY] (double lat, double lon) {
         int x, y;
-        geoToXY (lat, lon, zoom, x, y);
+        geoToXY (lat, lon, view.zoom, x, y);
         auto& point = vertices.emplace_back ();
         point.x = x - westX;
         point.y = y - northY;
@@ -618,9 +610,7 @@ void paintChart (
     Chart& chart,
     Dai& dai,
     AttrDictionary &attrDic,
-    double north,
-    double west,
-    uint8_t zoom,
+    View& view,
     PaletteIndex paletteIndex,
     DisplayCat displayCat,
     TableSet spatialObjTableSet,
@@ -647,8 +637,8 @@ void paintChart (
         lookupTables.emplace_back (lookupTable);
     }
 
-    DrawQueue drawQueue (client, paintDC, paletteIndex, dai, attrDic, north, west, zoom);
-    DrawQueue textDrawQueue (client, paintDC, paletteIndex, dai, attrDic, north, west, zoom);
+    DrawQueue drawQueue (client, paintDC, paletteIndex, dai, attrDic, view);
+    DrawQueue textDrawQueue (client, paintDC, paletteIndex, dai, attrDic, view);
 
     for (int prty = 1; prty < 10; ++ prty) {
         drawQueue.clear ();
@@ -661,7 +651,7 @@ void paintChart (
             auto lookupTableItem = feature.findBestItem (displayCat, getTableSet (feature), dai, prty);
             if (!lookupTableItem) continue;
             if (lookupTableItem->procIndex != LookupTableItem::NOT_EXIST) {
-                dai.runCSP (lookupTableItem, & feature, chart, zoom, drawQueue);
+                dai.runCSP (lookupTableItem, & feature, chart, view, drawQueue);
             }
 
             if (feature.primitive == 3) {
@@ -715,7 +705,7 @@ void paintChart (
         drawQueue.clear ();
 
         if (lookupTableItem->procIndex != LookupTableItem::NOT_EXIST) {
-            dai.runCSP (lookupTableItem, & feature, chart, zoom, drawQueue);
+            dai.runCSP (lookupTableItem, & feature, chart, view, drawQueue);
         }
 
         int offset = 0;
@@ -805,9 +795,7 @@ void paintArc (
     HDC paintDC,
     size_t penIndex,
     Dai& dai,
-    double north,
-    double west,
-    uint8_t zoom,
+    View& view,
     double centerLat,
     double centerLon,
     double radiusMm,
@@ -820,8 +808,8 @@ void paintArc (
 
     auto [penExists, pen] = dai.palette.pens [penIndex].get (paletteIndex);
 
-    geoToXY (north, west, zoom, westX, northY);
-    geoToXY (centerLat, centerLon, zoom, centerX, centerY);
+    geoToXY (view.north, view.west, view.zoom, westX, northY);
+    geoToXY (centerLat, centerLon, view.zoom, centerX, centerY);
     
     centerX -= westX;
     centerY -= northY;
@@ -854,20 +842,20 @@ void paintArc (
     }
 }
 
-void paintLine (RECT& client, HDC paintDC, Dai& dai, double north, double west, uint8_t zoom, LineDraw& line, PaletteIndex paletteIndex) {
+void paintLine (RECT& client, HDC paintDC, Dai& dai, View& view, LineDraw& line, PaletteIndex paletteIndex) {
     if (line.mode == LineDrawMode::ARC) {
-        paintArc (client, paintDC, line.penIndex, dai, north, west, zoom, line.lat1, line.lon1, line.lengthMm, line.brg, line.endBrg, paletteIndex);
+        paintArc (client, paintDC, line.penIndex, dai, view, line.lat1, line.lon1, line.lengthMm, line.brg, line.endBrg, paletteIndex);
     } else {
         int x1, y1, x2, y2, westX, northY;
 
-        geoToXY (north, west, zoom, westX, northY);
-        geoToXY (line.lat1, line.lon1, zoom, x1, y1);
+        geoToXY (view.north, view.west, view.zoom, westX, northY);
+        geoToXY (line.lat1, line.lon1, view.zoom, x1, y1);
 
         x1 -= westX;
         y1 -= northY;
 
         if (line.mode == LineDrawMode::BETWEEN_TWO_POINTS) {
-            geoToXY (line.lat1, line.lon1, zoom, x2, y2);
+            geoToXY (line.lat1, line.lon1, view.zoom, x2, y2);
 
             x2 -= westX;
             y2 -= northY;
@@ -886,7 +874,7 @@ void paintLine (RECT& client, HDC paintDC, Dai& dai, double north, double west, 
     }
 }
 
-void paintCompoundArc (RECT& client, HDC paintDC, ArcDef& arcDef, Dai& dai, double north, double west, uint8_t zoom, double lat, double lon, PaletteIndex paletteIndex) {
+void paintCompoundArc (RECT& client, HDC paintDC, ArcDef& arcDef, Dai& dai, View& view, double lat, double lon, PaletteIndex paletteIndex) {
     static size_t outlineColorIndex = LookupTableItem::NOT_EXIST;
 
     if (outlineColorIndex == LookupTableItem::NOT_EXIST) {
@@ -897,8 +885,8 @@ void paintCompoundArc (RECT& client, HDC paintDC, ArcDef& arcDef, Dai& dai, doub
 
     auto [outlinePenExists, outlinePens] = dai.palette.basePens [outlineColorIndex].get (paletteIndex);
 
-    geoToXY (north, west, zoom, westX, northY);
-    geoToXY (lat, lon, zoom, centerX, centerY);
+    geoToXY (view.north, view.west, view.zoom, westX, northY);
+    geoToXY (lat, lon, view.zoom, centerX, centerY);
     
     centerX -= westX;
     centerY -= northY;
@@ -932,9 +920,7 @@ void paintLine (
     double lon,
     double brg,
     double lengthInMm,
-    double north,
-    double west,
-    int zoom,
+    View& view,
     PaletteIndex paletteIndex,
     Palette& palette
 ){
@@ -944,7 +930,7 @@ void paintLine (
         PenTool::PolyPolygon polyPolygon;
         PenTool tool;
 
-        tool.composeLine (style, lat, lon, brg, lengthInMm, north, west, zoom, polyPolygon, true);
+        tool.composeLine (style, lat, lon, brg, lengthInMm, view, polyPolygon, true);
 
         HPEN lastPen = (HPEN) SelectObject (paintDC, pen);
 
@@ -977,9 +963,7 @@ void paintArc (
     double start,
     double end,
     double radiusInMm,
-    double north,
-    double west,
-    int zoom,
+    View& view,
     PaletteIndex paletteIndex,
     Palette& palette
 ) {
@@ -989,7 +973,7 @@ void paintArc (
         PenTool::PolyPolygon polyPolygon;
         PenTool tool;
 
-        tool.composeArc (style, centerLat, centerLon, start, end, radiusInMm, north, west, zoom, polyPolygon);
+        tool.composeArc (style, centerLat, centerLon, start, end, radiusInMm, view, polyPolygon);
 
         HPEN lastPen = (HPEN) SelectObject (paintDC, pen);
 
@@ -1018,9 +1002,7 @@ void paintPolyPolygon (
     size_t fillBrushIndex,
     size_t patternBrushIndex,
     Contours& contours,
-    double north,
-    double west,
-    int zoom,
+    View& view,
     PaletteIndex paletteIndex,
     Palette& palette
 ){
@@ -1035,7 +1017,7 @@ void paintPolyPolygon (
             polyPolygon.emplace_back ();
 
             for (auto& vertex: contour) {
-                tool.appendToLastLeg (vertex.lat, vertex.lon, north, west, zoom, polyPolygon);
+                tool.appendToLastLeg (vertex.lat, vertex.lon, view, polyPolygon);
             }
         }
 
@@ -1071,9 +1053,7 @@ void paintPolyPolyline (
     int width,
     size_t colorIndex,
     Contours& contours,
-    double north,
-    double west,
-    int zoom,
+    View& view,
     PaletteIndex paletteIndex,
     Palette& palette
 ){
@@ -1088,14 +1068,14 @@ void paintPolyPolyline (
 
             if (style == PS_SOLID) {
                 for (auto& vertex: contour) {
-                    tool.appendToLastLeg (vertex.lat, vertex.lon, north, west, zoom, polyPolygon);
+                    tool.appendToLastLeg (vertex.lat, vertex.lon, view, polyPolygon);
                 }
             } else {
                 for (size_t i = 1; i < contour.size (); ++ i) {
                     auto& origin = contour [i-1];
                     auto& dest = contour [i];
 
-                    tool.composeLeg (style, origin.lat, origin.lon, dest.lat, dest.lon, north, west, zoom, polyPolygon, true);
+                    tool.composeLeg (style, origin.lat, origin.lon, dest.lat, dest.lon, view, polyPolygon, true);
                 }
             }
         }
@@ -1129,16 +1109,14 @@ void paintText (
     int xOffset,
     int yOffset,
     size_t colorIndex,
-    double north,
-    double west,
-    int zoom,
+    View& view,
     PaletteIndex paletteIndex,
     Dai& dai
 ){
     int x, y, westX, northY;
 
-    geoToXY (north, west, zoom, westX, northY);
-    geoToXY (lat, lon, zoom, x, y);
+    geoToXY (view.north, view.west, view.zoom, westX, northY);
+    geoToXY (lat, lon, view.zoom, x, y);
     
     x += xOffset - westX;
     y += yOffset - northY;
