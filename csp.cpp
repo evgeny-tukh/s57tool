@@ -110,16 +110,14 @@ void seabed01 (double depthRangeVal1, double depthRangeVal2, LookupTableItem *it
     }
 }
 
-void depare03 (LookupTableItem *item, FeatureObject *object, Dai& dai, Nodes& nodes, Edges& edges, Features& features, int zoom, DrawQueue& drawQueue) {
+void depare03 (LookupTableItem *item, FeatureObject *object, Dai& dai, Chart& chart, int zoom, DrawQueue& drawQueue) {
+    Features& features = chart.features;
+    Edges& edges = chart.edges;
     auto drval1 = object->getAttr (ATTRS::DRVAL1);
     auto drval2 = object->getAttr (ATTRS::DRVAL2);
     double depthRangeVal1 = (drval1 && !drval1->noValue) ? drval1->floatValue : -1.0;
     double depthRangeVal2 = (drval2 && !drval2->noValue) ? drval2->floatValue : (depthRangeVal1 + 0.01);
-if(object->fidn==29141220){
-    int iii=0;
-    ++iii;
-    --iii;
-}
+
     seabed01 (depthRangeVal1, depthRangeVal2, item, dai);
 
     if (object->classCode == OBJ_CLASSES::DRGARE) {
@@ -216,7 +214,7 @@ if(object->fidn==29141220){
     }
 }
 
-void depcnt03 (LookupTableItem *item, FeatureObject *object, Dai& dai, Nodes& nodes, Edges& edges, Features& features, int zoom, DrawQueue& drawQueue) {
+void depcnt03 (LookupTableItem *item, FeatureObject *object, Dai& dai, Chart& chart, int zoom, DrawQueue& drawQueue) {
     // TO BE DONE!!!!
     item->edgePenIndex = dai.getBasePenIndex ("DEPCN");
     item->edgePenStyle = PS_SOLID;
@@ -300,8 +298,8 @@ void sndfrm04 (FeatureObject *object, double depth, std::vector<std::string>& sy
     }
 }
 
-void soundg03 (LookupTableItem *item, FeatureObject *object, Dai& dai, Nodes& nodes, Edges& edges, Features& features, int zoom, DrawQueue& drawQueue) {
-    auto& node = nodes.container [object->nodeIndex];
+void soundg03 (LookupTableItem *item, FeatureObject *object, Dai& dai, Chart& chart, int zoom, DrawQueue& drawQueue) {
+    auto& node = chart.nodes.container [object->nodeIndex];
 
     for (auto& pos: node.points) {
         std::vector<std::string> symbols;
@@ -321,7 +319,9 @@ if(symbolIndex == (size_t) -1){
 }
 
 
-void lights06 (LookupTableItem *item, FeatureObject *object, Dai& dai, Nodes& nodes, Edges& edges, Features& features, int zoom, DrawQueue& drawQueue) {
+void lights06 (LookupTableItem *item, FeatureObject *object, Dai& dai, Chart& chart, int zoom, DrawQueue& drawQueue) {
+    Nodes& nodes = chart.nodes;
+    Features& features = chart.features;
     auto valnmr = object->getAttr (ATTRS::VALNMR);
     Attr *orient = 0;
     auto position = nodes [object->nodeIndex].points.front ();

@@ -21,9 +21,7 @@ void paintCompoundArc (
 void paintChart (
     RECT& client,
     HDC paintDC,
-    Nodes& nodes,
-    Edges& edges,
-    Features& features,
+    Chart& chart,
     Dai& dai,
     AttrDictionary &attrDic,
     double north,

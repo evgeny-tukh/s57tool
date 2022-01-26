@@ -2,6 +2,8 @@
 #include <math.h>
 #include <Windows.h>
 #include "geo.h"
+#include "data.h"
+#include "classes.h"
 
 void geoToXY (double lat, double lon, int zoom, int& x, int& y) {
     double zoomFactor = (double) (1 << zoom);
@@ -130,3 +132,190 @@ void calcSphericalPos (double lat, double lon, double bearing, double range, dou
     destLat /= RAD_IN_DEG;
     destLon /= RAD_IN_DEG;
 }
+
+void composeAreaMetrics (FeatureObject *object, Chart& chart, Contours& metrics) {
+    Nodes& nodes = chart.nodes;
+    Edges& edges = chart.edges;
+    bool hole = false;
+
+    auto isLastContourClosed = [&metrics] () {
+        auto& lastContour = metrics.back ();
+        if (lastContour.size () > 1) {
+            return lastContour.front ().lat == lastContour.back ().lat && lastContour.front ().lon == lastContour.back ().lon;
+        } else {
+            return false;
+        }
+    };
+    auto addVertex = [&metrics] (double lat, double lon) {
+        metrics.back ().emplace_back (lat, lon);
+    };
+    auto addNode = [&nodes, &addVertex] (size_t nodeIndex) {
+        auto& pos = nodes [nodeIndex].points [0];
+        addVertex (pos.lat, pos.lon);
+    };
+    auto addEdge = [&edges, &metrics, &hole, &isLastContourClosed, &addNode, &addVertex] (EdgeRef& edgeRef) {
+        if (edgeRef.hidden) return;
+
+        auto& edge = edges.container [edgeRef.index];
+
+        if (metrics.empty ()) metrics.emplace_back ();
+
+        if (edgeRef.hole != hole) {
+            hole = edgeRef.hole;
+            metrics.emplace_back ();
+        } else if (hole && isLastContourClosed ()) {
+            metrics.emplace_back ();
+        }
+        if (edgeRef.unclockwise) {
+            addNode (edge.endIndex);
+            for (auto pos = edge.internalNodes.rbegin (); pos != edge.internalNodes.rend (); ++ pos) {
+                addVertex (pos->lat, pos->lon);
+            }
+            addNode (edge.beginIndex);
+        } else {
+            addNode (edge.beginIndex);
+            for (auto pos: edge.internalNodes) {
+                addVertex (pos.lat, pos.lon);
+            }
+            addNode (edge.endIndex);
+        }
+    };
+
+    metrics.clear ();
+
+    if (!object || object->primitive != 3) return;
+
+    for (auto& edgeRef: object->edgeRefs) {
+        if (edgeRef.hidden) return;
+
+        auto& edge = edges.container [edgeRef.index];
+
+        if (metrics.empty ()) metrics.emplace_back ();
+
+        if (edgeRef.hole != hole) {
+            hole = edgeRef.hole;
+            metrics.emplace_back ();
+        } else if (hole && isLastContourClosed ()) {
+            metrics.emplace_back ();
+        }
+        if (edgeRef.unclockwise) {
+            addNode (edge.endIndex);
+            for (auto pos = edge.internalNodes.rbegin (); pos != edge.internalNodes.rend (); ++ pos) {
+                addVertex (pos->lat, pos->lon);
+            }
+            addNode (edge.beginIndex);
+        } else {
+            addNode (edge.beginIndex);
+            for (auto pos: edge.internalNodes) {
+                addVertex (pos.lat, pos.lon);
+            }
+            addNode (edge.endIndex);
+        }
+    }
+}
+
+void getBoundingRect (Contour& contour, double& northmost, double& southmost, double& westmost, double& eastmost) {
+    northmost = -90.0;
+    southmost = 90.0;
+    westmost = 180.0;
+    eastmost = -180.0;
+    for (auto& pt: contour) {
+        northmost = max (northmost, pt.lat);
+        southmost = min (southmost, pt.lat);
+        westmost = min (westmost, pt.lon);
+        eastmost = max (eastmost, pt.lon);
+    }
+}
+
+std::tuple<double, double> crossTwoLines (double x11, double y11, double x12, double y12, double x21, double y21, double x22, double y22) {
+    double c1 = (y12 - y11) / (x12 - x11);
+    double c2 = (y22 - y21) / (x22 - x21);
+    double x = (y21 - y11 + x11 * c1 - x21 * c2) / (c1 - c2);
+    double y = y11 + (x - x11) * c1;
+    return std::tuple<double, double>(x, y);
+}
+
+inline bool inside (double val, double a, double b) {
+    return val >= min (a, b) && val <= max (a, b);
+}
+
+std::tuple<bool, double, double> crossTowSections (double x11, double y11, double x12, double y12, double x21, double y21, double x22, double y22) {
+    auto [crossX, crossY] = crossTwoLines (x11, y11, x12, y12, x21, y21, x22, y22);
+    bool crossed = inside (crossX, x11, x12) && inside (crossX, x21, x22) && inside (crossY, y11, y12) && inside (crossY, y21, y22);
+    return std::tuple<bool, double, double>(crossed, crossX, crossY);
+}
+
+bool isPointInsideContour (double lat, double lon, Contour& contour) {
+    int crossCount = 0;
+    
+    for (size_t i = 0; i < contour.size (); ++ i) {
+        auto& pt1 = i > 0 ? contour [i-1] : contour.back ();
+        auto& pt2 = contour [i];
+
+        auto [crossed, crossX, crossY] = crossTowSections (pt1.lon, pt1.lat, pt2.lon, pt2.lat, lon, lat, -180.0, lat);
+
+        if (crossed) ++ crossCount;
+    }
+
+    return crossCount & 1;
+}
+
+AreaTopology& checkAddAreaTopology (FeatureObject& area, Chart& chart) {
+    auto pos = chart.areaTopologyMap.find (area.fidn);
+
+    if (pos == chart.areaTopologyMap.end ()) {
+        pos = chart.areaTopologyMap.emplace (area.fidn, AreaTopology ()).first;
+        composeAreaMetrics (& area, chart, pos->second.metrics);
+        getBoundingRect (pos->second.metrics.front (), pos->second.northmost, pos->second.southmost, pos->second.westmost, pos->second.eastmost);
+    }
+    return pos->second;
+}
+
+void addPointLocationInfo (FeatureObject& point, Chart& chart, AreasUnderPoint& areasUnderPoint) {
+    for (size_t i = 0; i < chart.features.container.size (); ++ i) {
+        auto& object = chart.features.container [i];
+        if (object.primitive != 3) continue;
+        switch (object.classCode) {
+            case OBJ_CLASSES::DEPARE:
+            case OBJ_CLASSES::UNSARE:
+            case OBJ_CLASSES::DRGARE:
+                break;
+            default:
+                continue;
+        }
+
+        auto& areaTopology = checkAddAreaTopology (object, chart);
+        auto& pos = chart.nodes [point.nodeIndex].points.front ();
+
+        if (areaTopology.isPointInside (pos.lat, pos.lon)) {
+            auto& info = areasUnderPoint.emplace_back ();
+            info.areaIndex = i;
+            info.fidn = object.fidn;
+            
+            auto drval1 = object.getAttr (ATTRS::DRVAL1);
+            auto drval2 = object.getAttr (ATTRS::DRVAL2);
+
+            if (drval1 && !drval1->noValue) info.depthRangeValue1 = drval1->floatValue;
+            if (drval2 && !drval2->noValue) info.depthRangeValue2 = drval2->floatValue;
+        }
+    }
+}
+
+void buildPointLocationInfo (Chart& chart) {
+    Features& features = chart.features;
+    Edges& edges = chart.edges;
+    Nodes& nodes = chart.nodes;
+    PointLocationInfo& info = chart.pointLocationInfo;
+    AreaTopologyMap& areaTopologyMap = chart.areaTopologyMap;
+
+    info.clear ();
+
+    for (auto& object: features.container) {
+        if (object.primitive != 1 && object.primitive != 4) continue;
+
+        auto& item = info.emplace (object.fidn, AreasUnderPoint ()).first->second;
+
+        addPointLocationInfo (object, chart, item);
+    }
+}
+

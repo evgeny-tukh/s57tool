@@ -9,7 +9,9 @@ void paintLine (RECT& client, HDC paintDC, Dai& dai, double north, double west, 
 
 std::vector<DrawToolItem <PatternTool>> patternTools;
 
-void getCenterPos (FeatureObject& object, Edges& edges, Nodes& nodes, double& lat, double& lon) {
+void getCenterPos (FeatureObject& object, Chart& chart, double& lat, double& lon) {
+    Nodes& nodes = chart.nodes;
+    Edges& edges = chart.edges;
     double sumLat = 0.0;
     double sumLon = 0.0;
     size_t count = 0;
@@ -602,10 +604,10 @@ void paintEdge (
     Polyline (paintDC, vertices.data (), (int) vertices.size ());
 }
 
-void addAllTextDraws (FeatureObject& feature, LookupTableItem *lookupTableItem, DrawQueue& drawQueue, Edges& edges, Nodes& nodes) {
+void addAllTextDraws (FeatureObject& feature, LookupTableItem *lookupTableItem, DrawQueue& drawQueue, Chart& chart) {
     for (auto& desc: lookupTableItem->textDescriptions) {
         double lat, lon;
-        getCenterPos (feature, edges, nodes, lat, lon);
+        getCenterPos (feature, chart, lat, lon);
         drawQueue.addText (lat, lon, desc, & feature);
     }
 }
@@ -613,9 +615,7 @@ void addAllTextDraws (FeatureObject& feature, LookupTableItem *lookupTableItem, 
 void paintChart (
     RECT& client,
     HDC paintDC,
-    Nodes& nodes,
-    Edges& edges,
-    Features& features,
+    Chart& chart,
     Dai& dai,
     AttrDictionary &attrDic,
     double north,
@@ -628,6 +628,9 @@ void paintChart (
 ) {
     static char *objectTypes { "PLA" };
     std::vector<LookupTable *> lookupTables;
+    Nodes& nodes = chart.nodes;
+    Edges& edges = chart.edges;
+    Features& features = chart.features;
 
     auto getTableSet = [pointObjTableSet, spatialObjTableSet] (FeatureObject& feature) {
         switch (feature.primitive) {
@@ -658,13 +661,13 @@ void paintChart (
             auto lookupTableItem = feature.findBestItem (displayCat, getTableSet (feature), dai, prty);
             if (!lookupTableItem) continue;
             if (lookupTableItem->procIndex != LookupTableItem::NOT_EXIST) {
-                dai.runCSP (lookupTableItem, & feature, nodes, edges, features, zoom, drawQueue);
+                dai.runCSP (lookupTableItem, & feature, chart, zoom, drawQueue);
             }
 
             if (feature.primitive == 3) {
                 HBRUSH brush = 0;
                 HPEN pen = 0;
-                drawQueue.addArea (lookupTableItem->brushIndex, lookupTableItem->patternBrushIndex, nodes, edges);
+                drawQueue.addArea (lookupTableItem->brushIndex, lookupTableItem->patternBrushIndex, chart);
                 for (auto& edgeRef: feature.edgeRefs) {
                     if (edgeRef.hidden) continue;
                     drawQueue.addEdge (edgeRef);
@@ -680,22 +683,21 @@ void paintChart (
                             edgeRef.customPres ? edgeRef.penIndex : lookupTableItem->edgePenIndex,
                             edgeRef.customPres ? edgeRef.penStyle : lookupTableItem->edgePenStyle,
                             edgeRef.customPres ? edgeRef.penWidth : lookupTableItem->edgePenWidth,
-                            nodes,
-                        edges);
+                            chart
+                        );
                         drawQueue.addEdge (edgeRef);
                     }
 
                 } else {
-                    drawQueue.addEdgeChain (lookupTableItem->edgePenIndex, lookupTableItem->edgePenStyle, lookupTableItem->edgePenWidth, nodes, edges);
+                    drawQueue.addEdgeChain (lookupTableItem->edgePenIndex, lookupTableItem->edgePenStyle, lookupTableItem->edgePenWidth, chart);
                     for (auto& edgeRef: feature.edgeRefs) {
                         if (edgeRef.hidden) continue;
-                        //paintEdge (client, paintDC, nodes, edges [edgeRef.index], dai, north, west, zoom, pen);
                         drawQueue.addEdge (edgeRef);
                     }
                 }
             }
 
-            addAllTextDraws (feature, lookupTableItem, textDrawQueue, edges, nodes);
+            addAllTextDraws (feature, lookupTableItem, textDrawQueue, chart);
 
             delete lookupTableItem;
         }
@@ -713,19 +715,18 @@ void paintChart (
         drawQueue.clear ();
 
         if (lookupTableItem->procIndex != LookupTableItem::NOT_EXIST) {
-            dai.runCSP (lookupTableItem, & feature, nodes, edges, features, zoom, drawQueue);
+            dai.runCSP (lookupTableItem, & feature, chart, zoom, drawQueue);
         }
 
         int offset = 0;
 
         for (auto& symbolDraw: lookupTableItem->symbols) {
             auto& pos = nodes [feature.nodeIndex].points.front ();
-            //paintSymbol (client, paintDC, nodes [feature.nodeIndex], dai, north, west, zoom, offset, symbolDraw, paletteIndex);
             drawQueue.addSymbol (pos.lat, pos.lon, symbolDraw.symbolIndex, symbolDraw.rotAngle, dai);
         }
         drawQueue.run ();
 
-        addAllTextDraws (feature, lookupTableItem, textDrawQueue, edges, nodes);
+        addAllTextDraws (feature, lookupTableItem, textDrawQueue, chart);
 
         delete lookupTableItem;
     }

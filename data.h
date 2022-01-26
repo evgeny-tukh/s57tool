@@ -7,6 +7,7 @@
 #include <string>
 #include <tuple>
 #include "s57defs.h"
+#include "geo.h"
 
 enum NodeFlags {
     CONNECTED = 1,
@@ -129,7 +130,7 @@ struct FeatureObject: TopologyObject {
         return 0;
     }
 
-    Attr *getEdgeAttr (EdgeRef& edgeRef, const char *acronym, struct AttrDictionary& dic, Edges& edges);
+    Attr *getEdgeAttr (EdgeRef& edgeRef, const char *acronym, struct AttrDictionary& dic, struct Edges& edges);
     Attr *getEdgeAttr (EdgeRef& edgeRef, size_t classCode, struct Edges& edges);
 
     LookupTableItem *findBestItem (DisplayCat displayCat, TableSet tableSet, Dai& dai, int priority = -1) {
@@ -275,6 +276,13 @@ struct GeoCollection: TopologyCollection {
 struct Nodes: GeoCollection<GeoNode> {};
 struct Edges: GeoCollection<GeoEdge> {};
 struct Features: GeoCollection<FeatureObject> {};
+struct Chart {
+    Nodes nodes;
+    Edges edges;
+    Features features;
+    PointLocationInfo pointLocationInfo;
+    AreaTopologyMap areaTopologyMap;
+};
 #else
 struct Nodes: TopologyCollection {
     std::vector<GeoNode> container;

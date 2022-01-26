@@ -74,9 +74,11 @@ struct Ctx {
     std::string splashText;
     ObjectDictionary objectDictionary;
     AttrDictionary attrDictionary;
-    Nodes nodes;
+    Chart chart;
+    /*Nodes nodes;
     Edges edges;
     Features features;
+    PointLocationInfo pointLocationInfo;*/
     Dai dai;
 
     Ctx (HINSTANCE _instance, HMENU _menu):
@@ -343,10 +345,11 @@ void openFile (Ctx *ctx, CatalogItem *item) {
     loadParseS57File (path, records);
     extractDatasetParameters (records, datasetParams);
     //extractFeatureObjects (records, objects);
-    extractNodes (records, ctx->nodes, datasetParams);
-    extractEdges (records, ctx->edges, ctx->nodes, datasetParams);
-    extractFeatureObjects (records, ctx->features, ctx->edges, ctx->nodes);
-    deformatAttrValues (ctx->attrDictionary, ctx->features);
+    extractNodes (records, ctx->chart, datasetParams);
+    extractEdges (records, ctx->chart, datasetParams);
+    extractFeatureObjects (records, ctx->chart);
+    deformatAttrValues (ctx->attrDictionary, ctx->chart);
+    buildPointLocationInfo (ctx->chart);
     
     SendMessage (ctx->recordTree, TVM_DELETEITEM, (WPARAM) TVI_ROOT, 0);
     SendMessage (ctx->propsList, LVM_DELETEALLITEMS, 0, 0);
@@ -428,8 +431,8 @@ void openFile (Ctx *ctx, CatalogItem *item) {
     addParam ("Horizontal datum", datasetParams.horDatum.has_value () ? std::to_string (datasetParams.horDatum.value ()).c_str () : "N/A");
     addParam ("Vertical datum", datasetParams.verDatum.has_value () ? std::to_string (datasetParams.verDatum.value ()).c_str () : "N/A");
 
-    for (size_t i = 0; i < ctx->nodes.size (); ++ i) {
-        addNode (i, ctx->nodes);
+    for (size_t i = 0; i < ctx->chart.nodes.size (); ++ i) {
+        addNode (i, ctx->chart.nodes);
     }
 
     TV_INSERTSTRUCTA data;
@@ -461,7 +464,7 @@ void openFile (Ctx *ctx, CatalogItem *item) {
 
     featureGroupItem [4] = (HTREEITEM) SendMessage (ctx->featureTree, TVM_INSERTITEM, 0, (LPARAM) & data);
 
-    for (auto& feature: ctx->features) {
+    for (auto& feature: ctx->chart.features) {
         std::string featureID ("Feature id: " + std::to_string (feature.fidn));
         std::string id ("ID: " + std::to_string (feature.id));
         std::string classInfo ("Class: " + std::to_string (feature.classCode));
@@ -602,7 +605,7 @@ void openFile (Ctx *ctx, CatalogItem *item) {
             SendMessage (ctx->featureTree, TVM_INSERTITEM, 0, (LPARAM) & data);
         };
         if (feature.primitive == PRIM::Point) {
-            auto& pointsArray = ctx->nodes [feature.nodeIndex].points;
+            auto& pointsArray = ctx->chart.nodes [feature.nodeIndex].points;
             if (pointsArray.size () == 1) {
                 addPointItem (pointsArray.front (), "Position", objectItem);
             } else if (pointsArray.size () > 1) {
@@ -640,17 +643,17 @@ void openFile (Ctx *ctx, CatalogItem *item) {
                     data.hParent = edgeItem;
                     (HTREEITEM) SendMessage (ctx->featureTree, TVM_INSERTITEM, 0, (LPARAM) & data);
                 }
-                auto& edge = ctx->edges [feature.edgeRefs [i].index];
-                addPointItem (ctx->nodes [edge.beginIndex].points [0], "Begin", edgeItem);
+                auto& edge = ctx->chart.edges [feature.edgeRefs [i].index];
+                addPointItem (ctx->chart.nodes [edge.beginIndex].points [0], "Begin", edgeItem);
                 for (size_t j = 0; j < edge.internalNodes.size (); ++ j) {
                     addPointItem (edge.internalNodes [j], std::to_string (j).data (), edgeItem);
                 }
-                addPointItem (ctx->nodes [edge.endIndex].points [0], "End", edgeItem);
+                addPointItem (ctx->chart.nodes [edge.endIndex].points [0], "End", edgeItem);
             }
         }
     }
 
-    for (auto& edge: ctx->edges) {
+    for (auto& edge: ctx->chart.edges) {
         TV_INSERTSTRUCT data;
         char buffer [200];
 
@@ -684,7 +687,7 @@ void openFile (Ctx *ctx, CatalogItem *item) {
             SendMessage (ctx->edgeTree, TVM_INSERTITEM, 0, (LPARAM) & data);
         };
 
-        addEdgeNodeItem (ctx->nodes [edge.beginIndex], "Begin");
+        addEdgeNodeItem (ctx->chart.nodes [edge.beginIndex], "Begin");
 
         if (edge.internalNodes.size () > 0) {
             size_t count = 0;
@@ -717,7 +720,7 @@ void openFile (Ctx *ctx, CatalogItem *item) {
             }
         }
 
-        addEdgeNodeItem (ctx->nodes [edge.endIndex], "End");
+        addEdgeNodeItem (ctx->chart.nodes [edge.endIndex], "End");
     }
 
     for (auto& rec: records) {
@@ -962,9 +965,7 @@ void repaintChart (HWND wnd) {
     paintChart (
         client,
         tempDC,
-        ctx->nodes,
-        ctx->edges,
-        ctx->features,
+        ctx->chart,
         ctx->dai,
         ctx->attrDictionary,
         ctx->north,
@@ -1048,9 +1049,7 @@ void paintChartWnd (HWND wnd) {
     paintChart (
         client,
         paintDC,
-        ctx->nodes,
-        ctx->edges,
-        ctx->features,
+        ctx->chart,
         ctx->dai,
         ctx->attrDictionary,
         ctx->north,

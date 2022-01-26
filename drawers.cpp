@@ -20,14 +20,14 @@ void PolyPolylineDrawer::run (RECT& client, HDC paintDC, PaletteIndex paletteInd
 }
 
 void PolyPolylineDrawer::addNode (size_t nodeIndex) {
-    auto& pos = nodes [nodeIndex].points [0];
+    auto& pos = chart.nodes [nodeIndex].points [0];
     addVertex (pos.lat, pos.lon);
 }
 
 void PolyPolylineDrawer::addEdge (EdgeRef& edgeRef) {
     if (edgeRef.hidden) return;
 
-    auto& edge = edges.container [edgeRef.index];
+    auto& edge = chart.edges.container [edgeRef.index];
 
     addContour ();
     if (edgeRef.unclockwise) {
@@ -52,7 +52,7 @@ void PolyPolygonDrawer::run (RECT& client, HDC paintDC, PaletteIndex paletteInde
 void PolyPolygonDrawer::addEdge (EdgeRef& edgeRef) {
     if (edgeRef.hidden) return;
 
-    auto& edge = edges.container [edgeRef.index];
+    auto& edge = chart.edges.container [edgeRef.index];
 
     if (polyPolyline.empty ()) polyPolyline.emplace_back ();
 
@@ -319,12 +319,12 @@ void DrawQueue::addCompoundLightArc (
     addArc (penIndex, PS_SOLID, 4, centerLat, centerLon, radiusMm, start, end);
 }
 
-void DrawQueue::addEdgeChain (int penIndex, int penStyle, int penWidth, Nodes& nodes, Edges& edges) {
-    container.push_back (new PolyPolylineDrawer (penIndex, penStyle, penWidth, north, west, zoom, nodes, edges));
+void DrawQueue::addEdgeChain (int penIndex, int penStyle, int penWidth, Chart& chart) {
+    container.push_back (new PolyPolylineDrawer (penIndex, penStyle, penWidth, north, west, zoom, chart));
 }
 
-void DrawQueue::addArea (size_t fillBrushIndex, size_t patternBrushIndex, Nodes& nodes, Edges& edges) {
-    container.push_back (new PolyPolygonDrawer (fillBrushIndex, patternBrushIndex, north, west, zoom, nodes, edges));
+void DrawQueue::addArea (size_t fillBrushIndex, size_t patternBrushIndex, Chart& chart) {
+    container.push_back (new PolyPolygonDrawer (fillBrushIndex, patternBrushIndex, north, west, zoom, chart));
 }
 
 void DrawQueue::addEdge (EdgeRef& edgeRef) {

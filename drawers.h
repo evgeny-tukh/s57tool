@@ -108,8 +108,7 @@ struct ArcDrawer: Drawer {
 
 struct PolyPolylineDrawer: Drawer {
     Contours polyPolyline;
-    Nodes& nodes;
-    Edges& edges;
+    Chart& chart;
 
     PolyPolylineDrawer (
         size_t _penIndex,
@@ -118,9 +117,8 @@ struct PolyPolylineDrawer: Drawer {
         double _north,
         double _west,
         int _zoom,
-        Nodes& _nodes,
-        Edges& _edges
-    ): Drawer (_penIndex, _penStyle, _penWidth, _north, _west, 0.0, 0.0, 0.0, _zoom), nodes (_nodes), edges (_edges) {
+        Chart& _chart
+    ): Drawer (_penIndex, _penStyle, _penWidth, _north, _west, 0.0, 0.0, 0.0, _zoom), chart (_chart) {
     }
 
     void addContour () {
@@ -146,9 +144,8 @@ struct PolyPolygonDrawer: PolyPolylineDrawer {
         double _north,
         double _west,
         int _zoom,
-        Nodes& _nodes,
-        Edges& _edges
-    ): PolyPolylineDrawer (-1, PS_SOLID, 0, _north, _west, _zoom, _nodes, _edges), fillBrushIndex (_fillBrushIndex), patternBrushIndex (_patternBrushIndex), hole (false) {
+        Chart& _chart
+    ): PolyPolylineDrawer (-1, PS_SOLID, 0, _north, _west, _zoom, _chart), fillBrushIndex (_fillBrushIndex), patternBrushIndex (_patternBrushIndex), hole (false) {
     }
 
     virtual void run (RECT& client, HDC paintDC, PaletteIndex paletteIndex, Palette& palette);
@@ -217,7 +214,7 @@ struct DrawQueue {
         double start,
         double end
     );
-    void addEdgeChain (int penIndex, int penStyle, int penWidth, Nodes& nodes, Edges& edges);
+    void addEdgeChain (int penIndex, int penStyle, int penWidth, Chart& chart);
     void addEdge (struct EdgeRef& edgeRef);
-    void addArea (size_t fillBrushIndex, size_t patternBrushIndex, Nodes& nodes, Edges& edges);
+    void addArea (size_t fillBrushIndex, size_t patternBrushIndex, Chart& chart);
 };

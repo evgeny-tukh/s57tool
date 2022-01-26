@@ -1,6 +1,9 @@
 #pragma once
 
 #include <vector>
+#include <map>
+#include <tuple>
+#include <optional>
 
 const double PI = 3.1415926535897932384626433832795;
 const double TWO_PI = PI + PI;
@@ -49,7 +52,40 @@ inline bool isAngleBetween (double angle, double a, double b) {
     }
 }
 
+bool isPointInsideContour (double lat, double lon, Contour& contour);
+
+struct AreaTopology {
+    Contours metrics;
+    double northmost, southmost, westmost, eastmost;
+
+    bool isPointInside (double lat, double lon) {
+        if (lat > northmost || lat < southmost || lon < westmost || lon > eastmost) return false;
+        if (!isPointInsideContour (lat, lon, metrics.front ())) return false;
+
+        for (size_t i = 1; i < metrics.size (); ++ i) {
+            if (isPointInsideContour (lat, lon, metrics [i])) return false;
+        }
+
+        return true;
+    }
+};
+typedef std::map<uint32_t, AreaTopology> AreaTopologyMap;
+
+struct AreaUnderPoint {
+    size_t areaIndex;
+    uint32_t fidn;
+    std::optional<double> depthRangeValue1, depthRangeValue2;
+};
+
+typedef std::vector<AreaUnderPoint> AreasUnderPoint;
+
+// Keyed by point/3d array object FIDN
+typedef std::map<uint32_t, AreasUnderPoint> PointLocationInfo;
+
 double calcSphericalRng (const double lat1, const double lon1, const double lat2, const double lon2);
 double calcSphericalRngNm (const double lat1, const double lon1, const double lat2, const double lon2);
 double calcSphericalBrg (const double lat1, const double lon1, const double lat2, const double lon2);
 void calcSphericalPos (double lat, double lon, double bearing, double rangeNm, double& destLat, double& destLon);
+void composeAreaMetrics (struct FeatureObject *object, struct Chart& chart, Contours& metrics);
+void getBoundingRect (Contour& contour, double& northmost, double& southmost, double& westmost, double& eastmost);
+void buildPointLocationInfo (struct Chart& chart);

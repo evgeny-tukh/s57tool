@@ -458,7 +458,8 @@ size_t parseDataDescriptiveRecord (
     return parsedLeader.recLength;
 }
 
-void deformatAttrValues (AttrDictionary& attrDictionary, Features& features) {
+void deformatAttrValues (AttrDictionary& attrDictionary, Chart& chart) {
+    Features& features = chart.features;
     for (size_t i = 0; i < features.size (); ++ i) {
         auto& feature = features [i];
         for (auto& attr: feature.attributes) {
@@ -492,7 +493,9 @@ void deformatAttrValues (AttrDictionary& attrDictionary, Features& features) {
     }
 }
 
-void extractEdges (std::vector<std::vector<FieldInstance>>& records, Edges& edges, Nodes& points, DatasetParams datasetParams) {
+void extractEdges (std::vector<std::vector<FieldInstance>>& records, Chart& chart, DatasetParams datasetParams) {
+    Edges& edges = chart.edges;
+    Nodes& points = chart.nodes;
     edges.clear ();
 
     for (auto& record: records) {
@@ -645,7 +648,8 @@ void extractEdges (std::vector<std::vector<FieldInstance>>& records, Edges& edge
     edges.buildIndex ();
 }
 
-void extractNodes (std::vector<std::vector<FieldInstance>>& records, Nodes& points, DatasetParams datasetParams) {
+void extractNodes (std::vector<std::vector<FieldInstance>>& records, Chart& chart, DatasetParams datasetParams) {
+    Nodes& points = chart.nodes;
     points.clear ();
 
     for (auto& record: records) {
@@ -805,7 +809,11 @@ void extractNodes (std::vector<std::vector<FieldInstance>>& records, Nodes& poin
     points.buildIndex ();
 }
 
-void extractFeatureObjects (std::vector<std::vector<FieldInstance>>& records, Features& features, Edges& edges, Nodes& nodes) {
+void extractFeatureObjects (std::vector<std::vector<FieldInstance>>& records, Chart& chart) {
+    Features& features = chart.features;
+    Edges& edges = chart.edges;
+    Nodes& nodes = chart.nodes;
+
     features.clear ();
 
     for (auto& record: records) {
@@ -997,7 +1005,7 @@ void extractFeatureObjects (std::vector<std::vector<FieldInstance>>& records, Fe
     }
     features.buildIndex ();
 }
-
+/*
 void extractFeatureObjects (std::vector<std::vector<FieldInstance>>& records, std::vector<FeatureDesc>& objects) {
     FeatureDesc *curFeature = 0;
 
@@ -1086,7 +1094,7 @@ void extractFeatureObjects (std::vector<std::vector<FieldInstance>>& records, st
         }
     }
 }
-
+*/
 void extractDatasetParameters (std::vector<std::vector<FieldInstance>>& records, DatasetParams& datasetParams) {
     bool found = false;
 
