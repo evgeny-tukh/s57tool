@@ -622,6 +622,7 @@ void paintChart (
 ) {
     static char *objectTypes { "PLA" };
     std::vector<LookupTable *> lookupTables;
+    std::vector<EdgeRef> delayedEdges [10];
     Nodes& nodes = chart.nodes;
     Edges& edges = chart.edges;
     Features& features = chart.features;
@@ -653,11 +654,7 @@ void paintChart (
             auto& feature = features [i];
             if (feature.primitive != 2 && feature.primitive != 3) continue;
             if (!lookupTables [i]) continue;
-if(feature.fidn==29142256){
-int iii=0;
-++iii;
---iii;
-}
+
             auto lookupTableItem = feature.findBestItem (displayCat, getTableSet (feature), dai, prty);
             if (!lookupTableItem) continue;
 
@@ -677,16 +674,22 @@ int iii=0;
                 if (lookupTableItem->customEdgePres) {
                     for (auto& edgeRef: feature.edgeRefs) {
                         if (edgeRef.hidden) continue;
-                        drawQueue.addEdgeChain (
-                            edgeRef.customPres ? edgeRef.penIndex : lookupTableItem->edgePenIndex,
-                            edgeRef.customPres ? edgeRef.penStyle : lookupTableItem->edgePenStyle,
-                            edgeRef.customPres ? edgeRef.penWidth : lookupTableItem->edgePenWidth,
-                            chart
-                        );
-                        drawQueue.addEdge (edgeRef);
-                        if (edgeRef.customPres && edgeRef.symbolIndex) {
-                            drawQueue.addEdgeChain (edgeRef.secondPenIndex, edgeRef.secondPenStyle, edgeRef.secondPenWidth, chart);
+                        if (edgeRef.displayPriority > prty) {
+                            auto& ref = delayedEdges [edgeRef.displayPriority].emplace_back (edgeRef);
+                            if (ref.penIndex == LookupTableItem::NOT_EXIST) ref.penIndex = lookupTableItem->edgePenIndex;
+                            if (ref.secondPen && ref.secondPenIndex == LookupTableItem::NOT_EXIST) ref.secondPen = false;
+                        } else {
+                            drawQueue.addEdgeChain (
+                                edgeRef.customPres ? edgeRef.penIndex : lookupTableItem->edgePenIndex,
+                                edgeRef.customPres ? edgeRef.penStyle : lookupTableItem->edgePenStyle,
+                                edgeRef.customPres ? edgeRef.penWidth : lookupTableItem->edgePenWidth,
+                                chart
+                            );
                             drawQueue.addEdge (edgeRef);
+                            if (edgeRef.customPres && edgeRef.secondPen) {
+                                drawQueue.addEdgeChain (edgeRef.secondPenIndex, edgeRef.secondPenStyle, edgeRef.secondPenWidth, chart);
+                                drawQueue.addEdge (edgeRef);
+                            }
                         }
                     }
                 } else {
@@ -703,6 +706,16 @@ int iii=0;
             delete lookupTableItem;
         }
 
+        // Draw delayed edges
+        for (auto& edgeRef: delayedEdges [prty]) {
+            drawQueue.addEdgeChain (edgeRef.penIndex, edgeRef.penStyle, edgeRef.penWidth, chart );
+            drawQueue.addEdge (edgeRef);
+            if (edgeRef.customPres && edgeRef.secondPen) {
+                drawQueue.addEdgeChain (edgeRef.secondPenIndex, edgeRef.secondPenStyle, edgeRef.secondPenWidth, chart);
+                drawQueue.addEdge (edgeRef);
+            }
+        }
+        
         drawQueue.run ();
     }
 

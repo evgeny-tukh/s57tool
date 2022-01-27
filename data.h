@@ -98,6 +98,25 @@ struct EdgeRef {
     int displayPriority;
     DisplayCat dispCat;
 
+    EdgeRef (EdgeRef& src):
+        index (src.index),
+        hidden (src.hidden),
+        hole (src.hole),
+        unclockwise (src.unclockwise),
+        customPres (src.customPres),
+        secondPen (src.secondPen),
+        penIndex (src.penIndex),
+        secondPenIndex (src.secondPenIndex),
+        symbolIndex (src.symbolIndex),
+        penStyle (src.penStyle),
+        secondPenStyle (src.secondPenStyle),
+        penWidth (src.penWidth),
+        secondPenWidth (src.secondPenWidth),
+        viewingGroup (src.viewingGroup),
+        displayPriority (src.displayPriority),
+        dispCat (src.dispCat) {
+    }
+
     EdgeRef ():
         customPres (false),
         hidden (false),
