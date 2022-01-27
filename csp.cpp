@@ -421,7 +421,19 @@ UdwhazResult udwhaz05 (
 }
 
 bool quapnt02 (FeatureObject *object, Chart& chart, Environment& environment) {
-    return true;
+    bool accurate = true;
+
+    if (environment.settings.showLowAccuracy) {
+        for (auto& edgeRef: object->edgeRefs) {
+            auto quapos = object->getEdgeAttr (edgeRef, ATTRS::QUAPOS, chart.edges);
+
+            if (quapos && !quapos->noValue && quapos->intValue >= 2 && quapos->intValue <= 9) {
+                accurate = false; break;
+            }
+        }
+    }
+
+    return !accurate;
 }
 
 void wrecks05 (LookupTableItem *item, FeatureObject *object, Environment& environment, Chart& chart, View& view, DrawQueue& drawQueue) {
@@ -600,6 +612,156 @@ void soundg03 (LookupTableItem *item, FeatureObject *object, Environment& enviro
     }
 }
 
+void resare04 (LookupTableItem *item, FeatureObject *object, Environment& environment, Chart& chart, View& view, DrawQueue& drawQueue) {
+    static uint8_t _7_8_14 [] { 7, 8, 14, 0 };
+    static uint8_t _1_2 [] { 1, 2, 0 };
+    static uint8_t _3_4_5_6_24 [] { 3, 4, 5, 6, 24, 0 };
+    static uint8_t _13_16_17_23_25_26_27 [] { 13, 16, 17, 23, 25, 26, 27, 0 };
+    static uint8_t _9_10_11_12_15_18_19_20_21_22 [] { 9, 10, 11, 12, 15, 18, 19, 20, 21, 22, 0 };
+    static uint8_t _1_2_3_4_5_6_13_16_17_23_24_25_26_27 [] { 1, 2, 3, 4, 5, 6, 13, 16, 17, 23, 24, 25, 26, 27, 0 };
+    static uint8_t _3_4_5_6_13_16_17_23_24_25_26_27 [] { 3, 4, 5, 6, 13, 16, 17, 23, 24, 25, 26, 27, 0 };
+    static uint8_t _1_8_9_12_14_18_19_21_24_25_26 [] { 1, 8, 9, 12, 14, 18, 19, 21, 24, 25, 26, 0 };
+    static uint8_t _13_16_17_23_24_25_26_27 [] { 13, 16, 17, 23, 24, 25, 26, 27, 0 };
+    static uint8_t _4_5_6_7_10_20_22_23 [] { 4, 5, 6, 7, 10, 20, 22, 23, 0 };
+
+    auto restrn = object->getAttr (ATTRS::RESTRN);
+    auto catrea = object->getAttr (ATTRS::CATREA);
+    auto catreaIncludes = [&catrea] (uint8_t *list) {
+        return catrea && !catrea->noValue && catrea->listIncludes (list);
+    };
+
+    double lat, lon;
+    getCenterPos (*object, chart, lat, lon);
+
+    if (restrn && !restrn->noValue) {
+        if (restrn->listIncludes (_7_8_14)) {
+            // cont A
+            item->displayPriority = 6;
+
+            if (restrn->listIncludes (_1_2_3_4_5_6_13_16_17_23_24_25_26_27)) {
+                drawQueue.addSymbol (lat, lon, environment.dai.getSymbolIndex ("ENTRES61"), 0.0, environment.dai);
+            } else if (catreaIncludes (_1_8_9_12_14_18_19_21_24_25_26)) {
+                drawQueue.addSymbol (lat, lon, environment.dai.getSymbolIndex ("ENTRES61"), 0.0, environment.dai);
+            } else if (restrn->listIncludes (_9_10_11_12_15_18_19_20_21_22)) {
+                drawQueue.addSymbol (lat, lon, environment.dai.getSymbolIndex ("ENTRES71"), 0.0, environment.dai);
+            } else if (catreaIncludes (_4_5_6_7_10_20_22_23)) {
+                drawQueue.addSymbol (lat, lon, environment.dai.getSymbolIndex ("ENTRES71"), 0.0, environment.dai);
+            } else {
+                drawQueue.addSymbol (lat, lon, environment.dai.getSymbolIndex ("ENTRES51"), 0.0, environment.dai);
+            }
+
+            if (environment.settings.symbolizedBoundaries) {
+                item->lineCharIndex = environment.dai.getSymbolIndex ("ENTRES51)");
+            } else {
+                item->edgePenIndex = environment.dai.getBasePenIndex ("CHMGD");
+                item->edgePenStyle = PS_DASH;
+                item->edgePenWidth = 2;
+            }
+        } else if (restrn->listIncludes (_1_2)) {
+            // cont B
+            item->displayPriority = 6;
+
+            if (restrn->listIncludes (_3_4_5_6_13_16_17_23_24_25_26_27)) {
+                drawQueue.addSymbol (lat, lon, environment.dai.getSymbolIndex ("ACHRES61"), 0.0, environment.dai);
+            } else if (catreaIncludes (_1_8_9_12_14_18_19_21_24_25_26)) {
+                drawQueue.addSymbol (lat, lon, environment.dai.getSymbolIndex ("ACHRES61"), 0.0, environment.dai);
+            } else if (restrn->listIncludes (_9_10_11_12_15_18_19_20_21_22)) {
+                drawQueue.addSymbol (lat, lon, environment.dai.getSymbolIndex ("ACHRES71"), 0.0, environment.dai);
+            } else if (catreaIncludes (_4_5_6_7_10_20_22_23)) {
+                drawQueue.addSymbol (lat, lon, environment.dai.getSymbolIndex ("ACHRES71"), 0.0, environment.dai);
+            } else {
+                drawQueue.addSymbol (lat, lon, environment.dai.getSymbolIndex ("ACHRES51"), 0.0, environment.dai);
+            }
+
+            if (environment.settings.symbolizedBoundaries) {
+                item->lineCharIndex = environment.dai.getSymbolIndex ("ACHRES51)");
+            } else {
+                item->edgePenIndex = environment.dai.getBasePenIndex ("CHMGD");
+                item->edgePenStyle = PS_DASH;
+                item->edgePenWidth = 2;
+            }
+        } else if (restrn->listIncludes (_3_4_5_6_24)) {
+            // cont C
+            item->displayPriority = 6;
+
+            if (restrn->listIncludes (_13_16_17_23_24_25_26_27)) {
+                drawQueue.addSymbol (lat, lon, environment.dai.getSymbolIndex ("FSHRES61"), 0.0, environment.dai);
+            } else if (catreaIncludes (_1_8_9_12_14_18_19_21_24_25_26)) {
+                drawQueue.addSymbol (lat, lon, environment.dai.getSymbolIndex ("FSHRES61"), 0.0, environment.dai);
+            } else if (restrn->listIncludes (_9_10_11_12_15_18_19_20_21_22)) {
+                drawQueue.addSymbol (lat, lon, environment.dai.getSymbolIndex ("FSHRES71"), 0.0, environment.dai);
+            } else if (catreaIncludes (_4_5_6_7_10_20_22_23)) {
+                drawQueue.addSymbol (lat, lon, environment.dai.getSymbolIndex ("FSHRES71"), 0.0, environment.dai);
+            } else {
+                drawQueue.addSymbol (lat, lon, environment.dai.getSymbolIndex ("FSHRES51"), 0.0, environment.dai);
+            }
+
+            if (environment.settings.symbolizedBoundaries) {
+                item->lineCharIndex = environment.dai.getSymbolIndex ("FSHRES51)");
+            } else {
+                item->edgePenIndex = environment.dai.getBasePenIndex ("CHMGD");
+                item->edgePenStyle = PS_DASH;
+                item->edgePenWidth = 2;
+            }
+        } else if (restrn->listIncludes (_13_16_17_23_25_26_27)) {
+            // cont D
+            if (restrn->listIncludes (_9_10_11_12_15_18_19_20_21_22)) {
+                drawQueue.addSymbol (lat, lon, environment.dai.getSymbolIndex ("CTYARE71"), 0.0, environment.dai);
+            } else if (catreaIncludes (_4_5_6_7_10_20_22_23)) {
+                drawQueue.addSymbol (lat, lon, environment.dai.getSymbolIndex ("CTYARE71"), 0.0, environment.dai);
+            } else {
+                drawQueue.addSymbol (lat, lon, environment.dai.getSymbolIndex ("CTYARE51"), 0.0, environment.dai);
+            }
+
+            if (environment.settings.symbolizedBoundaries) {
+                item->lineCharIndex = environment.dai.getSymbolIndex ("CTYARE51)");
+            } else {
+                item->edgePenIndex = environment.dai.getBasePenIndex ("CHMGD");
+                item->edgePenStyle = PS_DASH;
+                item->edgePenWidth = 2;
+            }
+        } else {
+            if (restrn->listIncludes (_9_10_11_12_15_18_19_20_21_22)) {
+                drawQueue.addSymbol (lat, lon, environment.dai.getSymbolIndex ("INFARE51"), 0.0, environment.dai);
+            } else {
+                drawQueue.addSymbol (lat, lon, environment.dai.getSymbolIndex ("RSRDEF51"), 0.0, environment.dai);
+            }
+
+            if (environment.settings.symbolizedBoundaries) {
+                item->lineCharIndex = environment.dai.getSymbolIndex ("CTYARE51)");
+            } else {
+                item->edgePenIndex = environment.dai.getBasePenIndex ("CHMGD");
+                item->edgePenStyle = PS_DASH;
+                item->edgePenWidth = 2;
+            }
+        }
+    } else {
+        // cont E
+        if (catrea && !catrea->noValue) {
+            if (catreaIncludes (_1_8_9_12_14_18_19_21_24_25_26)) {
+                if (catreaIncludes (_4_5_6_7_10_20_22_23)) {
+                    drawQueue.addSymbol (lat, lon, environment.dai.getSymbolIndex ("CTYARE71"), 0.0, environment.dai);
+                } else {
+                    drawQueue.addSymbol (lat, lon, environment.dai.getSymbolIndex ("CTYARE51"), 0.0, environment.dai);
+                }
+            } else if (catreaIncludes (_4_5_6_7_10_20_22_23)) {
+                drawQueue.addSymbol (lat, lon, environment.dai.getSymbolIndex ("CTYARE51"), 0.0, environment.dai);
+            } else {
+                drawQueue.addSymbol (lat, lon, environment.dai.getSymbolIndex ("RSRDEF51"), 0.0, environment.dai);
+            }
+        } else {
+            drawQueue.addSymbol (lat, lon, environment.dai.getSymbolIndex ("RSRDEF51"), 0.0, environment.dai);
+        }
+
+        if (environment.settings.symbolizedBoundaries) {
+            item->lineCharIndex = environment.dai.getSymbolIndex ("CTYARE51)");
+        } else {
+            item->edgePenIndex = environment.dai.getBasePenIndex ("CHMGD");
+            item->edgePenStyle = PS_DASH;
+            item->edgePenWidth = 2;
+        }
+    }
+}
 
 void lights06 (LookupTableItem *item, FeatureObject *object, Environment& environment, Chart& chart, View& view, DrawQueue& drawQueue) {
     Nodes& nodes = chart.nodes;
@@ -850,4 +1012,5 @@ void initCSPs (Environment& environment) {
     environment.dai.addCSP ("DEPARE03", depare03);
     environment.dai.addCSP ("SOUNDG03", soundg03);
     environment.dai.addCSP ("WRECKS05", wrecks05);
+    environment.dai.addCSP ("RESARE04", resare04);
 }

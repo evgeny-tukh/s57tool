@@ -1551,16 +1551,25 @@ void loadLookupTableItem (
 
                             switch (instance.domain) {
                                 case 'E':
-                                case 'I':
+                                case 'I': {
                                     instance.noValue = false;
                                     instance.intValue = std::atoi (value.c_str ());
                                     break;
-                                case 'F':
+                                }
+                                case 'F': {
                                     instance.noValue = false;
                                     instance.floatValue = std::atof (value.c_str ());
                                     break;
-                                case 'L':
+                                }
+                                case 'L': {
+                                    std::vector<std::string> parts;
+                                    splitString (value.c_str (), parts, ',');
+                                    for (auto& part: parts) {
+                                        instance.listValue.insert (instance.listValue.begin (), (uint8_t) std::atoi (part.c_str ()));
+                                    }
+                                    instance.noValue = instance.listValue.empty ();
                                     break;
+                                }
                             }
 
                             if (desc) instance.classCode = desc->code;

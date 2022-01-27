@@ -21,6 +21,7 @@ enum ATTRS {
     STATUS = 149,
     EXPSOU = 93,
     CATWRK = 71,
+    CATREA = 56,
 };
 
 enum OBJ_CLASSES {

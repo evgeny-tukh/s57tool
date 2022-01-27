@@ -136,6 +136,41 @@ struct FeatureObject: TopologyObject {
     Attr *getEdgeAttr (EdgeRef& edgeRef, const char *acronym, struct AttrDictionary& dic, struct Edges& edges);
     Attr *getEdgeAttr (EdgeRef& edgeRef, size_t classCode, struct Edges& edges);
 
+    bool fitsInAttrsRequired (std::vector<AttrInstance>& attrsRequired) {
+        auto findActualAttr = [this] (uint16_t classCode) {
+            for (auto& attr: attributes) {
+                if (attr.classCode == classCode) return & attr;
+            }
+            return (Attr *) 0;
+        };
+
+        for (auto& requiredAttr: attrsRequired) {
+            auto actualAttr = findActualAttr (requiredAttr.classCode);
+            
+            if (!actualAttr) return false;
+
+            if (requiredAttr.noValue) return actualAttr->noValue;
+
+            switch (requiredAttr.domain) {
+                case 'E':
+                case 'I': {
+                    if (requiredAttr.intValue != actualAttr->intValue) return false;
+                    break;
+                }
+                case 'F': {
+                    if (requiredAttr.floatValue != actualAttr->floatValue) return false;
+                    break;
+                }
+                case 'L': {
+                    if (requiredAttr.listValue.size () != actualAttr->listValue.size ()) return false;
+                    if (memcmp (requiredAttr.listValue.data (), actualAttr->listValue.data (), requiredAttr.listValue.size ()) != 0) return false;
+                    break;
+                }
+            }
+        }
+        return true;
+    }
+
     LookupTableItem *findBestItem (DisplayCat displayCat, TableSet tableSet, Dai& dai, int priority = -1) {
         char objectType;
         
@@ -157,6 +192,11 @@ struct FeatureObject: TopologyObject {
 
         for (size_t i = 1; i < table->size (); ++ i) {
             LookupTableItem *item = & table->at (i);
+
+            if (fitsInAttrsRequired (item->attrCombination)) {
+                result = item; break;
+            }
+            continue;
             bool itemOk = true;
             for (size_t j = 0; j < item->attrCombination.size (); ++ j) {
                 auto& attrRequired = item->attrCombination [j];

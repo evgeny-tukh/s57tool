@@ -627,6 +627,7 @@ void paintChart (
 
             auto lookupTableItem = feature.findBestItem (displayCat, getTableSet (feature), dai, prty);
             if (!lookupTableItem) continue;
+
             if (lookupTableItem->procIndex != LookupTableItem::NOT_EXIST) {
                 environment.runCSP (lookupTableItem, & feature, chart, view, drawQueue);
             }
