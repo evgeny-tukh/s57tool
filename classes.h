@@ -22,6 +22,8 @@ enum ATTRS {
     EXPSOU = 93,
     CATWRK = 71,
     CATREA = 56,
+    CONDTN = 81,
+    CATSLC = 60,
 };
 
 enum OBJ_CLASSES {

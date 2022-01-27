@@ -664,6 +664,47 @@ void rescp02 (Attr *restrn, FeatureObject *object, Environment& environment, Cha
     }
 }
 
+void slcons04 (LookupTableItem *item, FeatureObject *object, Environment& environment, Chart& chart, View& view, DrawQueue& drawQueue) {
+    if (object->primitive == 1 || object->primitive == 4) {
+        if (quapnt02 (object, chart, environment)) {
+            auto& pos = chart.nodes [object->nodeIndex].points.front ();
+            drawQueue.addSymbol (pos.lat, pos.lon, environment.dai.getSymbolIndex ("LOWACC01"), 0.0, environment.dai);
+        }
+    } else {
+        for (auto& edgeRef: object->edgeRefs) {
+            auto quapos = object->getEdgeAttr (edgeRef, ATTRS::QUAPOS, chart.edges);
+
+            if (quapos && !quapos->noValue && (quapos->intValue == 1 || quapos->intValue == 10 || quapos->intValue == 11)) {
+                edgeRef.symbolIndex = environment.dai.getSymbolIndex ("LOWACC01");
+            } else {
+                auto condtn = object->getEdgeAttr (edgeRef, ATTRS::CONDTN, chart.edges);
+                auto catslc = object->getEdgeAttr (edgeRef, ATTRS::CATSLC, chart.edges);
+                auto watlev = object->getEdgeAttr (edgeRef, ATTRS::WATLEV, chart.edges);
+
+                edgeRef.customPres = true;
+                edgeRef.penIndex = environment.dai.getBasePenIndex ("CSTLN");
+
+                if (condtn && !condtn->noValue && (condtn->intValue == 1 || condtn->intValue == 2)) {
+                    edgeRef.penStyle = PS_DASH;
+                    edgeRef.penWidth = 1;
+                } else if (catslc && !catslc->noValue && (catslc->intValue == 6 || catslc->intValue == 15 || catslc->intValue == 16)) {
+                    edgeRef.penStyle = PS_SOLID;
+                    edgeRef.penWidth = 4;
+                } else if (watlev && !watlev->noValue && (watlev->intValue == 3 || watlev->intValue == 4)) {
+                    edgeRef.penStyle = PS_DASH;
+                    edgeRef.penWidth = 2;
+                } else if (watlev && !watlev->noValue && watlev->intValue == 2) {
+                    edgeRef.penStyle = PS_SOLID;
+                    edgeRef.penWidth = 2;
+                } else {
+                    edgeRef.penStyle = PS_SOLID;
+                    edgeRef.penWidth = 2;
+                }
+            }
+        }
+    }
+}
+
 void restrn01 (LookupTableItem *item, FeatureObject *object, Environment& environment, Chart& chart, View& view, DrawQueue& drawQueue) {
     auto restrn = object->getAttr (ATTRS::RESTRN);
 
@@ -1063,4 +1104,5 @@ void initCSPs (Environment& environment) {
     environment.dai.addCSP ("WRECKS05", wrecks05);
     environment.dai.addCSP ("RESARE04", resare04);
     environment.dai.addCSP ("RESTRN01", restrn01);
+    environment.dai.addCSP ("SLCONS04", slcons04);
 }
