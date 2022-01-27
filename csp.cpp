@@ -708,6 +708,140 @@ void qualin02 (LookupTableItem *item, FeatureObject *object, Environment& enviro
     }
 }
 
+void obstrn07 (LookupTableItem *item, FeatureObject *object, Environment& environment, Chart& chart, View& view, DrawQueue& drawQueue) {
+    auto valsou = object->getAttr (ATTRS::VALSOU);
+    double depth;
+
+    if (valsou && !valsou->noValue) {
+        depth = valsou->floatValue;
+    } else {
+        auto watlev = object->getAttr (ATTRS::WATLEV);
+        auto expsou = object->getAttr (ATTRS::EXPSOU);
+
+        std::optional<int> waterLevel, soundingExposition;
+
+        if (watlev && !watlev->noValue) waterLevel = watlev->intValue;
+        if (expsou && !expsou->noValue) soundingExposition = expsou->intValue;
+
+        auto [leastDepth, seabedDepth] = depval02 (object, chart, waterLevel, soundingExposition);
+        
+        if (leastDepth.has_value ()) {
+            depth = leastDepth.value ();
+        } else {
+            auto catobs = object->getAttr (ATTRS::CATOBS);
+
+            if (catobs && !catobs->noValue && catobs->intValue == 6 || watlev && !watlev->noValue && watlev->intValue == 3) {
+                depth = 0.01;
+            } else if (watlev && !watlev->noValue && watlev->intValue == 5) {
+                depth = 0.0;
+            } else {
+                depth = -15.0;
+            }
+        }
+
+        auto [isolatedDanger, displayCat, prty, viewingGroup] = udwhaz05 (object, depth, chart, environment);
+
+        if (object->primitive == 1 || object->primitive == 4) {
+            // cont a
+            bool lowAccuracy = quapnt02 (object, chart, environment);
+            auto& pos = chart.nodes [object->nodeIndex].points.front ();
+
+            if (isolatedDanger) {
+                drawQueue.addSymbol (pos.lat, pos.lon, environment.dai.getSymbolIndex ("ISODGR01"), 0.0, environment.dai);
+
+                if (lowAccuracy) drawQueue.addSymbol (pos.lat, pos.lon, environment.dai.getSymbolIndex ("LOWACC01"), 0.0, environment.dai);
+
+                return; 
+            }
+
+            bool sounding = false;
+            std::string symbolName;
+
+            if (valsou && !valsou->noValue) {
+                if (valsou->floatValue <= environment.settings.safetyDepth) {
+                    if (object->classCode == OBJ_CLASSES::UWTROC) {
+                        if (watlev && !watlev->noValue && (watlev->intValue == 4 || watlev->intValue == 5)) {
+                            symbolName = "UWTROC04";
+                            sounding = false;
+                        } else {
+                            symbolName = "DANGER01";
+                            sounding = true;
+                        }
+                    } else {
+                        auto catobs = object->getAttr (ATTRS::CATOBS);
+
+                        if (catobs && !catobs->noValue && catobs->intValue == 6) {
+                            symbolName = "DANGER01";
+                            sounding = true;
+                        } else if (watlev && !watlev->noValue && (watlev->intValue == 1 || watlev->intValue == 2)) {
+                            symbolName = "OBSTRN11";
+                            sounding = false;
+                        } else if (watlev && !watlev->noValue && (watlev->intValue == 4 || watlev->intValue == 5)) {
+                            symbolName = "DANGER03";
+                            sounding = true;
+                        } else {
+                            symbolName = "DANGER01";
+                            sounding = true;
+                        }
+                    }
+                } else {
+                    symbolName = "DANGER02";
+                    sounding = true;
+                }
+
+                drawQueue.addSymbol (pos.lat, pos.lon, environment.dai.getSymbolIndex (symbolName.c_str ()), 0.0, environment.dai);
+
+                if (sounding) {
+                    std::vector<std::string> symbols;
+
+                    sndfrm04 (object, depth, chart, environment, symbols);
+
+                    for (auto& symbol: symbols) {
+                        drawQueue.addSymbol (pos.lat, pos.lon, environment.dai.getSymbolIndex (symbol.c_str ()), 0.0, environment.dai);
+                    }
+
+                    if (lowAccuracy) drawQueue.addSymbol (pos.lat, pos.lon, environment.dai.getSymbolIndex ("LOWACC01"), 0.0, environment.dai);
+                }
+            }
+        } else if (object->primitive == 2) {
+            // cont b
+            for (auto& edgeRef: object->edgeRefs) {
+                auto quapos = object->getEdgeAttr (edgeRef, ATTRS::QUAPOS, chart.edges);
+
+                edgeRef.customPres = true;
+
+                if (quapos && !quapos->noValue && quapos->intValue >= 2 && quapos->intValue <= 9) {
+                    if (isolatedDanger) {
+                        edgeRef.symbolIndex = environment.dai.getSymbolIndex ("LOWACC41");
+                    } else {
+                        edgeRef.symbolIndex = environment.dai.getSymbolIndex ("LOWACC31");
+                    }
+                    continue;
+                }
+                
+                edgeRef.penWidth = 2;
+                edgeRef.penIndex = environment.dai.getBasePenIndex ("CHBLK");
+
+                if (isolatedDanger) {
+                    edgeRef.penStyle = PS_DOT; continue;
+                }
+
+                if (valsou && !valsou->noValue) {
+                    if (valsou->floatValue <= environment.settings.safetyDepth) {
+                        edgeRef.penStyle = PS_DOT;
+                    } else {
+                        edgeRef.penStyle = PS_DASH;
+                    }
+                } else {
+                    edgeRef.penStyle = PS_DOT;
+                }
+            }
+        } else {
+            // cont c
+        }
+    }
+}
+
 void quapos01 (LookupTableItem *item, FeatureObject *object, Environment& environment, Chart& chart, View& view, DrawQueue& drawQueue) {
     if (object->primitive == 2) {
         qualin02 (item, object, environment, chart, view, drawQueue);
@@ -1164,4 +1298,5 @@ void initCSPs (Environment& environment) {
     environment.dai.addCSP ("RESTRN01", restrn01);
     environment.dai.addCSP ("SLCONS04", slcons04);
     environment.dai.addCSP ("QUAPOS01", quapos01);
+    environment.dai.addCSP ("OBSTRN07", obstrn07);
 }

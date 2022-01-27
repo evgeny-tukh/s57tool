@@ -25,6 +25,7 @@ enum ATTRS {
     CONDTN = 81,
     CATSLC = 60,
     CONRAD = 82,
+    CATOBS = 42,
 };
 
 enum OBJ_CLASSES {
