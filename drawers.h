@@ -13,6 +13,8 @@ struct Drawer {
     double rangeMm;
     int penStyle, penWidth;
     static PenTool penTool;
+    
+    virtual bool isSymbol () { return false; }
 
     Drawer (
         size_t _penIndex,
@@ -31,6 +33,8 @@ struct SymbolDrawer: Drawer {
     size_t symbolIndex;
     double rotAngle;
     Dai& dai;
+
+    virtual bool isSymbol () { return true; }
 
     SymbolDrawer (
         View& _view,
@@ -200,4 +204,13 @@ struct DrawQueue {
     void addEdgeChain (int penIndex, int penStyle, int penWidth, Chart& chart);
     void addEdge (struct EdgeRef& edgeRef);
     void addArea (size_t fillBrushIndex, size_t patternBrushIndex, Chart& chart);
+    void removeAllSymbols () {
+        for (int i = container.size () - 1; i >= 0; --i) {
+            auto drawer = container [i];
+            if (drawer->isSymbol ()) {
+                container.erase (container.begin () + i);
+                delete drawer;
+            }
+        }
+    }
 };

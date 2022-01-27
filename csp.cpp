@@ -507,6 +507,8 @@ void wrecks05 (LookupTableItem *item, FeatureObject *object, Environment& enviro
                     drawQueue.addSymbol (pos.lat, pos.lon, environment.dai.getSymbolIndex ("WRECKS01"), 0.0, environment.dai);
                 } else if (watlev && !watlev->noValue && (watlev->intValue == 1 || watlev->intValue == 2 || watlev->intValue == 5 || watlev->intValue == 4)) {
                     drawQueue.addSymbol (pos.lat, pos.lon, environment.dai.getSymbolIndex ("WRECKS05"), 0.0, environment.dai);
+                } else {
+                    drawQueue.addSymbol (pos.lat, pos.lon, environment.dai.getSymbolIndex ("WRECKS05"), 0.0, environment.dai);
                 }
             }
             if (lowAccuracy) {
@@ -515,6 +517,70 @@ void wrecks05 (LookupTableItem *item, FeatureObject *object, Environment& enviro
         }
     } else {
         // cont B
+        auto watlev = object->getAttr (ATTRS::WATLEV);
+        auto catwrk = object->getAttr (ATTRS::CATWRK);
+
+        for (auto& edgeRef: object->edgeRefs) {
+            auto edgeQuapos = object->getEdgeAttr (edgeRef, ATTRS::QUAPOS, chart.edges);
+
+            if (edgeQuapos && !edgeQuapos->noValue) {
+                if (edgeQuapos->intValue != 1 && edgeQuapos->intValue != 10 && edgeQuapos->intValue != 11) {
+                    edgeRef.customPres = true;
+                    edgeRef.symbolIndex = environment.dai.getSymbolIndex ("LOWACC41");
+                    continue;
+                }
+            }
+
+            if (isolatedDanger) {
+                edgeRef.customPres = true;
+                edgeRef.penIndex = environment.dai.getBasePenIndex ("CHBLK");
+                edgeRef.penStyle = PS_DOT;
+                edgeRef.penWidth = 2;
+                continue;
+            }
+
+            auto edgeValsou = object->getEdgeAttr (edgeRef, ATTRS::VALSOU, chart.edges);
+
+            edgeRef.customPres = true;
+            edgeRef.penWidth = 2;
+            edgeRef.viewingGroup = 34050;
+
+            if (edgeValsou && !edgeValsou->noValue) {
+                edgeRef.penIndex = environment.dai.getBasePenIndex ("CHBLK");
+                if (edgeValsou->floatValue <= environment.settings.safetyDepth) {
+                    edgeRef.penStyle = PS_DOT;
+                } else {
+                    edgeRef.penStyle = PS_DASH;
+                }
+            } else {
+                edgeRef.penIndex = environment.dai.getBasePenIndex ("CSTLN");
+                edgeRef.displayPriority = 4;
+
+                if (watlev && !watlev->noValue && (watlev->intValue == 1 || watlev->intValue == 2)) {
+                    edgeRef.penStyle = PS_SOLID;
+                } else if (watlev && !watlev->noValue && watlev->intValue == 4) {
+                    edgeRef.penStyle = PS_DASH;
+                } else if (watlev && !watlev->noValue && (watlev->intValue == 5 || watlev->intValue == 3)) {
+                    edgeRef.penStyle = PS_DOT;
+                } else {
+                    edgeRef.penStyle = PS_DOT;
+                }
+            }
+        }
+
+        double lat, lon;
+        getCenterPos (*object, chart, lat, lon);
+
+        if (valsou && !valsou->noValue) {
+            if (isolatedDanger) {
+                drawQueue.removeAllSymbols ();
+                drawQueue.addSymbol (lat, lon, environment.dai.getSymbolIndex ("ISODGR01"), 0.0, environment.dai);
+            }
+        }
+
+        if (lowAccuracy) {
+            drawQueue.addSymbol (lat, lon, environment.dai.getSymbolIndex ("LOWACC01"), 0.0, environment.dai);
+        }
     }
 }
 

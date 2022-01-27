@@ -90,6 +90,7 @@ struct EdgeRef {
     bool unclockwise;
     bool customPres;
     size_t penIndex;
+    size_t symbolIndex;
     int penStyle;
     int penWidth;
     int viewingGroup;
@@ -102,6 +103,7 @@ struct EdgeRef {
         hole (false),
         unclockwise (false),
         penIndex (-1),
+        symbolIndex (-1),
         penStyle (0),
         penWidth (0),
         viewingGroup (0),

@@ -9,30 +9,6 @@ void paintLine (RECT& client, HDC paintDC, Dai& dai, View& view, LineDraw& line,
 
 std::vector<DrawToolItem <PatternTool>> patternTools;
 
-void getCenterPos (FeatureObject& object, Chart& chart, double& lat, double& lon) {
-    Nodes& nodes = chart.nodes;
-    Edges& edges = chart.edges;
-    double sumLat = 0.0;
-    double sumLon = 0.0;
-    size_t count = 0;
-    for (auto& edgeRef: object.edgeRefs) {
-        auto& edge = edges.container [edgeRef.index];
-        auto& begin = nodes.container [edge.beginIndex].points [0];
-        auto& end = nodes.container [edge.endIndex].points [0];
-        sumLat += begin.lat + end.lat;
-        sumLon += begin.lon + end.lon;
-
-        for (auto& pos: edge.internalNodes) {
-            sumLat += pos.lat;
-            sumLon += pos.lon;
-        }
-
-        count += 2 + edge.internalNodes.size ();
-    }
-    lat = sumLat / (double) count;
-    lon = sumLon / (double) count;
-}
-
 bool isPolyPolylineOverlappingScreen (std::vector<POINT>& polyPolyline, RECT& client) {
     for (auto& pt: polyPolyline) {
         if (pt.x >= 0 & pt.x <= client.right && pt.y >= 0 && pt.y <= client.bottom) return true;

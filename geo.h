@@ -121,3 +121,4 @@ void calcSphericalPos (double lat, double lon, double bearing, double rangeNm, d
 void composeAreaMetrics (struct FeatureObject *object, struct Chart& chart, Contours& metrics);
 void getBoundingRect (Contour& contour, double& northmost, double& southmost, double& westmost, double& eastmost);
 void buildPointLocationInfo (struct Chart& chart);
+void getCenterPos (FeatureObject& object, Chart& chart, double& lat, double& lon);
