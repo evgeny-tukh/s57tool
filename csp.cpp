@@ -486,6 +486,32 @@ void wrecks05 (LookupTableItem *item, FeatureObject *object, Environment& enviro
             }
         } else {
             // cont A
+            if (valsou && !valsou->noValue) {
+                if (valsou->floatValue <= environment.settings.safetyDepth) {
+                    drawQueue.addSymbol (pos.lat, pos.lon, environment.dai.getSymbolIndex ("DANGER01"), 0.0, environment.dai);
+                } else {
+                    drawQueue.addSymbol (pos.lat, pos.lon, environment.dai.getSymbolIndex ("DANGER02"), 0.0, environment.dai);
+                }
+            } else {
+                auto watlev = object->getAttr (ATTRS::WATLEV);
+                auto catwrk = object->getAttr (ATTRS::CATWRK);
+
+                item->displayPriority = 4;
+                item->displayCat = DisplayCat::CUSTOM;
+                item->viewingGroup = 34050;
+                if (catwrk && !catwrk->noValue && catwrk->intValue == 1 && watlev && !watlev->noValue && watlev->intValue == 3) {
+                    drawQueue.addSymbol (pos.lat, pos.lon, environment.dai.getSymbolIndex ("WRECKS04"), 0.0, environment.dai);
+                } else if (catwrk && !catwrk->noValue && catwrk->intValue == 2 && watlev && !watlev->noValue && watlev->intValue == 3) {
+                    drawQueue.addSymbol (pos.lat, pos.lon, environment.dai.getSymbolIndex ("WRECKS05"), 0.0, environment.dai);
+                } else if (catwrk && !catwrk->noValue && (catwrk->intValue == 4 || catwrk->intValue == 5)) {
+                    drawQueue.addSymbol (pos.lat, pos.lon, environment.dai.getSymbolIndex ("WRECKS01"), 0.0, environment.dai);
+                } else if (watlev && !watlev->noValue && (watlev->intValue == 1 || watlev->intValue == 2 || watlev->intValue == 5 || watlev->intValue == 4)) {
+                    drawQueue.addSymbol (pos.lat, pos.lon, environment.dai.getSymbolIndex ("WRECKS05"), 0.0, environment.dai);
+                }
+            }
+            if (lowAccuracy) {
+                drawQueue.addSymbol (pos.lat, pos.lon, environment.dai.getSymbolIndex ("LOWACC01"), 0.0, environment.dai);
+            }
         }
     } else {
         // cont B
