@@ -293,6 +293,7 @@ void addSpatialsUnderPoint (FeatureObject& point, Chart& chart, SpatialsUnderObj
             auto& info = areasUnderPoint.emplace_back ();
             info.areaIndex = i;
             info.fidn = object.fidn;
+            info.classCode = object.classCode;
             
             auto drval1 = object.getAttr (ATTRS::DRVAL1);
             auto drval2 = object.getAttr (ATTRS::DRVAL2);
@@ -315,6 +316,7 @@ void addSpatialsUnderSpatial (FeatureObject& spatialObj, Chart& chart, SpatialsU
             auto& info = areasUnderObject.emplace_back ();
             info.areaIndex = i;
             info.fidn = object.fidn;
+            info.classCode = object.classCode;
             
             auto drval1 = object.getAttr (ATTRS::DRVAL1);
             auto drval2 = object.getAttr (ATTRS::DRVAL2);

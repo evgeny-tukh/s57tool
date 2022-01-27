@@ -350,8 +350,74 @@ std::tuple<std::optional<double>, std::optional<double>> depval02 (
     return std::tuple<std::optional<double>, std::optional<double>> (leastDepth, seabedDepth);
 }
 
-bool udwhaz05 (FeatureObject *object, double depth, Chart& chart, Environment& environment) {
-    return true;
+typedef std::tuple<bool, std::optional<DisplayCat>, std::optional<int>, std::optional<int>> UdwhazResult;
+UdwhazResult udwhaz05 (
+    FeatureObject *object,
+    double depth,
+    Chart& chart,
+    Environment& environment
+) {
+    static const UdwhazResult NO_DANGER = UdwhazResult (false, std::optional<DisplayCat> (), std::optional<int> (), std::optional<int> ());
+    bool danger = false;
+
+    if (depth <= environment.settings.safetyContour) {
+        SpatialsUnderObject *list = 0;
+        if (object->primitive == 1 || object->primitive == 4) {
+            list = chart.getListOfSpatialsUnderPoint (*object);
+        } else if (object->primitive == 2 || object->primitive == 3) {
+            list = chart.getListOfSpatialsUnderSpatial (*object);
+        }
+
+        if (list) {
+            for (auto& item: *list) {
+                if (item.classCode == OBJ_CLASSES::DEPARE || item.classCode == OBJ_CLASSES::DRGARE) {
+                    if (item.depthRangeValue1.has_value () && item.depthRangeValue1.value () >= environment.settings.safetyContour) {
+                        danger = true; break;
+                    }
+                }
+            }
+        }
+
+        if (danger) {
+            auto watlev = object->getAttr (ATTRS::WATLEV);
+
+            if (watlev && !watlev->noValue && (watlev->intValue == 1 || watlev->intValue == 2)) {
+                return UdwhazResult (false, DisplayCat::DISPLAY_BASE, 8, 14050);
+            } else {
+                return UdwhazResult (true, DisplayCat::DISPLAY_BASE, 8, 14010);
+            }
+        } else if (environment.settings.showIsolatedDanger) {
+            SpatialsUnderObject *list;
+            if (object->primitive == 1 || object->primitive == 4) {
+                list = chart.getListOfSpatialsUnderPoint (*object);
+            } else {
+                list = chart.getListOfSpatialsUnderSpatial (*object);
+            }
+            for (auto& item: *list) {
+                auto& spatial = chart.features [item.areaIndex];
+
+                if (spatial.classCode == OBJ_CLASSES::DEPARE || spatial.classCode == OBJ_CLASSES::DRGARE) {
+                    if (item.depthRangeValue1.has_value () && item.depthRangeValue1.value () >= 0 && item.depthRangeValue1.value () < environment.settings.safetyContour) {
+                        danger = true; break;
+                    }
+                }
+            }
+
+            if (!danger) return NO_DANGER;
+
+            auto watlev = object->getAttr (ATTRS::WATLEV);
+
+            if (watlev && !watlev->noValue && (watlev->intValue == 1 || watlev->intValue == 2)) {
+                return UdwhazResult (false, DisplayCat::DISPLAY_BASE, 8, 24050);
+            } else {
+                return UdwhazResult (true, DisplayCat::DISPLAY_BASE, 8, 24020);
+            }
+        } else {
+            return NO_DANGER;
+        }
+    }
+
+    return NO_DANGER;
 }
 
 bool quapnt02 (FeatureObject *object, Chart& chart, Environment& environment) {
@@ -361,12 +427,11 @@ bool quapnt02 (FeatureObject *object, Chart& chart, Environment& environment) {
 void wrecks05 (LookupTableItem *item, FeatureObject *object, Environment& environment, Chart& chart, View& view, DrawQueue& drawQueue) {
     auto valsou = object->getAttr (ATTRS::VALSOU);
     double depth;
-    int viewingGroup;
     std::vector<std::string> symbols;
 
     if (valsou && !valsou->noValue) {
         depth = valsou->floatValue;
-        viewingGroup = 34051;
+        item->viewingGroup = 34051;
 
         sndfrm04 (object, depth, chart, environment, symbols);
     } else {
@@ -405,8 +470,12 @@ void wrecks05 (LookupTableItem *item, FeatureObject *object, Environment& enviro
             depth = leastDepth.value ();
         }
     }
-    bool isolatedDanger = udwhaz05 (object, depth, chart, environment);
+    auto [isolatedDanger, displayCat, priority, viewingGroup] = udwhaz05 (object, depth, chart, environment);
     bool lowAccuracy = quapnt02 (object, chart, environment);
+
+    if (displayCat.has_value ()) item->displayCat = displayCat.value ();
+    if (priority.has_value ()) item->displayPriority = priority.value ();
+    if (viewingGroup.has_value ()) item->viewingGroup = viewingGroup.value ();
 
     if (object->primitive == 1) {
         auto& pos = chart.nodes [object->nodeIndex].points.front ();

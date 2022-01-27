@@ -4,6 +4,7 @@ Settings::Settings ():
     fullSectorLength (false),
     safetyContourLabels (false),
     twoShades (false),
+    showIsolatedDanger (false),
     shallowPattern (true),
     safetyContour (30.0),
     shallowContour (2.0),

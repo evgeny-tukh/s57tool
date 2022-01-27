@@ -105,6 +105,7 @@ typedef std::map<uint32_t, AreaTopology> AreaTopologyMap;
 struct SpatialUnderObject {
     size_t areaIndex;
     uint32_t fidn;
+    uint16_t classCode;
     std::optional<double> depthRangeValue1, depthRangeValue2;
 };
 
