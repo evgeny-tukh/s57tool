@@ -5,6 +5,8 @@
 #include <tuple>
 #include <optional>
 
+static const int GEN_SQUARE = 25;
+
 const double PI = 3.1415926535897932384626433832795;
 const double TWO_PI = PI + PI;
 const double RAD_IN_DEG = PI / 180.0;

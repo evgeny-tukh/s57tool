@@ -34,10 +34,27 @@ struct PenTool {
         sizes.clear ();
         for (auto& contour: polyPolygon) {
             if (contour.size () > 0) {
-                sizes.push_back (contour.size ());
-                for (auto& vertex: contour) {
-                    vertices.push_back (vertex);
+                TYPE size = 0;
+                for (size_t i = 0; i < contour.size (); ++ i) {
+                    auto& vertex = contour [i];
+                    if (vertices.empty () || i == 0 || i == (contour.size () - 1)) {
+                        auto& pt = vertices.emplace_back ();
+                        pt.x = vertex.x;
+                        pt.y = vertex.y;
+                        ++ size;
+                    } else {
+                        int dx = vertices.back ().x - vertex.x;
+                        int dy = vertices.back ().y - vertex.y;
+                        int rngSquare = dx * dx + dy * dy;
+                        if (rngSquare >= GEN_SQUARE) {
+                            auto& pt = vertices.emplace_back ();
+                            pt.x = vertex.x;
+                            pt.y = vertex.y;
+                            ++ size;
+                        }
+                    }
                 }
+                if (size > 0) sizes.emplace_back (size);
             }
         }
     }
