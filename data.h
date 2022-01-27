@@ -281,13 +281,18 @@ struct Chart {
     Nodes nodes;
     Edges edges;
     Features features;
-    PointLocationInfo pointLocationInfo;
+    UnderlyingObjectsList objectsUnderPoints, objectsUnderSpatials;
     AreaTopologyMap areaTopologyMap;
 
-    AreasUnderPoint *getListOfAreasUnderPoint (FeatureObject& point) {
-        auto& pos = pointLocationInfo.find (point.fidn);
+    SpatialsUnderObject *getListOfSpatialsUnderPoint (FeatureObject& point) {
+        auto& pos = objectsUnderPoints.find (point.fidn);
 
-        return pos == pointLocationInfo.end () ? 0 : & pos->second;
+        return pos == objectsUnderPoints.end () ? 0 : & pos->second;
+    }
+    SpatialsUnderObject *getListOfSpatialsUnderSpatial (FeatureObject& spatialObj) {
+        auto& pos = objectsUnderSpatials.find (spatialObj.fidn);
+
+        return pos == objectsUnderSpatials.end () ? 0 : & pos->second;
     }
 };
 struct Environment {

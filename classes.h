@@ -13,11 +13,14 @@ enum ATTRS {
     DRVAL2 = 88,
     RESTRN = 131,
     VALDCO = 174,
+    VALSOU = 179,
     WATLEV = 187,
     TECSOU = 156,
     QUASOU = 125,
     QUAPOS = 402,
     STATUS = 149,
+    EXPSOU = 93,
+    CATWRK = 71,
 };
 
 enum OBJ_CLASSES {
@@ -36,4 +39,8 @@ enum OBJ_CLASSES {
     DAMCON = 38,
     SLCONS = 122,
     CAUSWY = 26,
+    SOUNDG = 129,
+    UWTROC = 153,
+    WRECKS = 159,
+    OBSTRN = 86,
 };

@@ -75,19 +75,43 @@ struct AreaTopology {
 
         return true;
     }
+    bool isCrossedBy (Contour& contour) {
+        for (auto& pt: contour) {
+            if (!isPointInsideContour (pt.lat, pt.lon, metrics.front ())) continue;
+
+            bool insideHole = false;
+
+            for (size_t i = 1; i < metrics.size (); ++ i) {
+                if (isPointInsideContour (pt.lat, pt.lon, metrics.front ())) {
+                    insideHole = true; break;
+                }
+            }
+
+            if (!insideHole) return true;
+        }
+        return false;
+    }
+    bool isCrossedBy (AreaTopology& another) {
+        if (northmost < another.southmost) return false;
+        if (southmost > another.northmost) return false;
+        if (westmost > another.eastmost) return false;
+        if (eastmost < another.westmost) return false;
+
+        return isCrossedBy (another.metrics.front ());
+    }
 };
 typedef std::map<uint32_t, AreaTopology> AreaTopologyMap;
 
-struct AreaUnderPoint {
+struct SpatialUnderObject {
     size_t areaIndex;
     uint32_t fidn;
     std::optional<double> depthRangeValue1, depthRangeValue2;
 };
 
-typedef std::vector<AreaUnderPoint> AreasUnderPoint;
+typedef std::vector<SpatialUnderObject> SpatialsUnderObject;
 
 // Keyed by point/3d array object FIDN
-typedef std::map<uint32_t, AreasUnderPoint> PointLocationInfo;
+typedef std::map<uint32_t, SpatialsUnderObject> UnderlyingObjectsList;
 
 double calcSphericalRng (const double lat1, const double lon1, const double lat2, const double lon2);
 double calcSphericalRngNm (const double lat1, const double lon1, const double lat2, const double lon2);

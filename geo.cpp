@@ -183,7 +183,7 @@ void composeAreaMetrics (FeatureObject *object, Chart& chart, Contours& metrics)
 
     metrics.clear ();
 
-    if (!object || object->primitive != 3) return;
+    if (!object || object->primitive != 3 && object->primitive != 2) return;
 
     for (auto& edgeRef: object->edgeRefs) {
         if (edgeRef.hidden) return;
@@ -266,23 +266,25 @@ AreaTopology& checkAddAreaTopology (FeatureObject& area, Chart& chart) {
     if (pos == chart.areaTopologyMap.end ()) {
         pos = chart.areaTopologyMap.emplace (area.fidn, AreaTopology ()).first;
         composeAreaMetrics (& area, chart, pos->second.metrics);
-        getBoundingRect (pos->second.metrics.front (), pos->second.northmost, pos->second.southmost, pos->second.westmost, pos->second.eastmost);
+        if (!pos->second.metrics.empty ()) {
+            getBoundingRect (pos->second.metrics.front (), pos->second.northmost, pos->second.southmost, pos->second.westmost, pos->second.eastmost);
+        }
     }
     return pos->second;
 }
 
-void addPointLocationInfo (FeatureObject& point, Chart& chart, AreasUnderPoint& areasUnderPoint) {
+void addSpatialsUnderPoint (FeatureObject& point, Chart& chart, SpatialsUnderObject& areasUnderPoint) {
     for (size_t i = 0; i < chart.features.container.size (); ++ i) {
         auto& object = chart.features.container [i];
-        if (object.primitive != 3) continue;
-        switch (object.classCode) {
+        if (object.primitive != 3 && object.group != 2) continue;
+        /*switch (object.classCode) {
             case OBJ_CLASSES::DEPARE:
             case OBJ_CLASSES::UNSARE:
             case OBJ_CLASSES::DRGARE:
                 break;
             default:
                 continue;
-        }
+        }*/
 
         auto& areaTopology = checkAddAreaTopology (object, chart);
         auto& pos = chart.nodes [point.nodeIndex].points.front ();
@@ -301,21 +303,61 @@ void addPointLocationInfo (FeatureObject& point, Chart& chart, AreasUnderPoint& 
     }
 }
 
+void addSpatialsUnderSpatial (FeatureObject& spatialObj, Chart& chart, SpatialsUnderObject& areasUnderObject) {
+    for (size_t i = 0; i < chart.features.container.size (); ++ i) {
+        auto& object = chart.features.container [i];
+        if (object.primitive == 1 || object.primitive == 4 || object.group != 1) continue;
+
+        auto& objectTopology = checkAddAreaTopology (spatialObj, chart);
+        auto& areaTopology = checkAddAreaTopology (object, chart);
+
+        if (areaTopology.isCrossedBy (objectTopology)) {
+            auto& info = areasUnderObject.emplace_back ();
+            info.areaIndex = i;
+            info.fidn = object.fidn;
+            
+            auto drval1 = object.getAttr (ATTRS::DRVAL1);
+            auto drval2 = object.getAttr (ATTRS::DRVAL2);
+
+            if (drval1 && !drval1->noValue) info.depthRangeValue1 = drval1->floatValue;
+            if (drval2 && !drval2->noValue) info.depthRangeValue2 = drval2->floatValue;
+        }
+    }
+}
+
 void buildPointLocationInfo (Chart& chart) {
     Features& features = chart.features;
     Edges& edges = chart.edges;
     Nodes& nodes = chart.nodes;
-    PointLocationInfo& info = chart.pointLocationInfo;
     AreaTopologyMap& areaTopologyMap = chart.areaTopologyMap;
 
-    info.clear ();
+    chart.objectsUnderPoints.clear ();
+    chart.objectsUnderSpatials.clear ();
+
+    auto isUnproperObject = [] (FeatureObject& object) {
+        switch (object.classCode) {
+            case OBJ_CLASSES::SOUNDG:
+            case OBJ_CLASSES::UWTROC:
+            case OBJ_CLASSES::WRECKS:
+            case OBJ_CLASSES::OBSTRN:
+                return false;
+            default:
+                return true;
+        }
+    };
 
     for (auto& object: features.container) {
-        if (object.primitive != 1 && object.primitive != 4) continue;
+        if (isUnproperObject (object)) continue;
 
-        auto& item = info.emplace (object.fidn, AreasUnderPoint ()).first->second;
+        if (object.primitive == 1 || object.primitive == 4) {
+            auto& item = chart.objectsUnderPoints.emplace (object.fidn, SpatialsUnderObject ()).first->second;
 
-        addPointLocationInfo (object, chart, item);
+            addSpatialsUnderPoint (object, chart, item);
+        } else if (object.primitive == 2 && object.primitive == 3) {
+            auto& item = chart.objectsUnderSpatials.emplace (object.fidn, SpatialsUnderObject ()).first->second;
+
+            addSpatialsUnderSpatial (object, chart, item);
+        }
     }
 }
 

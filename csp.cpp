@@ -249,7 +249,7 @@ void sndfrm04 (FeatureObject *object, double depth, Chart& chart, Environment& e
         symbols.emplace_back (prefix + "C2");
     } else {
         // Check spatial object
-        auto objectsUnder = chart.getListOfAreasUnderPoint (*object);
+        auto objectsUnder = object->primitive == 1 ? chart.getListOfSpatialsUnderPoint (*object) : chart.getListOfSpatialsUnderSpatial (*object);
         
         if (objectsUnder && objectsUnder->size () > 0) {
             auto& area = chart.features [objectsUnder->front ().areaIndex];
@@ -311,6 +311,118 @@ void sndfrm04 (FeatureObject *object, double depth, Chart& chart, Environment& e
     }
 }
 
+std::tuple<std::optional<double>, std::optional<double>> depval02 (
+    FeatureObject *object,
+    Chart& chart,
+    std::optional<int> waterLevel,
+    std::optional<int> soundingExposition
+) {
+    std::optional<double> leastDepth, seabedDepth;
+    SpatialsUnderObject *list;
+    if (object->primitive == 1 || object->primitive == 4) {
+        list = chart.getListOfSpatialsUnderPoint (*object);
+    } else {
+        list = chart.getListOfSpatialsUnderSpatial (*object);
+    }
+    if (list) {
+        for (auto& item: *list) {
+            auto& spatial = chart.features [item.areaIndex];
+
+            if (spatial.classCode == OBJ_CLASSES::UNSARE) break;
+
+            if (item.depthRangeValue1.has_value ()) {
+                if (!leastDepth.has_value ()) {
+                    leastDepth = item.depthRangeValue1.value ();
+                } else if (leastDepth.value () < item.depthRangeValue1.value ()) {
+                    leastDepth = item.depthRangeValue1.value ();
+                }
+            }
+        }
+    }
+    if (leastDepth.has_value ()) {
+        if (waterLevel.has_value () && waterLevel.value () == 3 && soundingExposition.has_value () && (soundingExposition.value () == 1 || soundingExposition.value () == 3)) {
+            seabedDepth = leastDepth.value ();
+        } else {
+            seabedDepth = leastDepth.value ();
+            leastDepth.reset ();
+        }
+    }
+    return std::tuple<std::optional<double>, std::optional<double>> (leastDepth, seabedDepth);
+}
+
+bool udwhaz05 (FeatureObject *object, double depth, Chart& chart, Environment& environment) {
+    return true;
+}
+
+bool quapnt02 (FeatureObject *object, Chart& chart, Environment& environment) {
+    return true;
+}
+
+void wrecks05 (LookupTableItem *item, FeatureObject *object, Environment& environment, Chart& chart, View& view, DrawQueue& drawQueue) {
+    auto valsou = object->getAttr (ATTRS::VALSOU);
+    double depth;
+    int viewingGroup;
+    std::vector<std::string> symbols;
+
+    if (valsou && !valsou->noValue) {
+        depth = valsou->floatValue;
+        viewingGroup = 34051;
+
+        sndfrm04 (object, depth, chart, environment, symbols);
+    } else {
+        auto watlev = object->getAttr (ATTRS::WATLEV);
+        auto expsou = object->getAttr (ATTRS::EXPSOU);
+        auto catwrk = object->getAttr (ATTRS::CATWRK);
+        std::optional<int> waterLevel, soundingExposition;
+        if (watlev && !watlev->noValue) waterLevel = watlev->intValue;
+        if (expsou && !expsou->noValue) soundingExposition = expsou->intValue;
+        auto [leastDepth, seabedDepth] = depval02 (object, chart, waterLevel, soundingExposition);
+
+        if (!leastDepth.has_value ()) {
+            if (catwrk && !catwrk->noValue) {
+                if (catwrk->intValue == 1) {
+                    depth = 20.1;
+
+                    if (seabedDepth.has_value ()) {
+                        leastDepth = seabedDepth.value () - 66.0;
+                    }
+                    if (leastDepth.value () >= 20.1) {
+                        depth = leastDepth.value ();
+                    }
+                } else {
+                    depth = -15.0;
+                }
+            } else if (watlev && !watlev->noValue) {
+                if (watlev->intValue == 3 || watlev->intValue == 5) {
+                    depth = 0.0;
+                } else {
+                    depth = -15.0;
+                }
+            } else {
+                depth = -15.0;
+            }
+        } else {
+            depth = leastDepth.value ();
+        }
+    }
+    bool isolatedDanger = udwhaz05 (object, depth, chart, environment);
+    bool lowAccuracy = quapnt02 (object, chart, environment);
+
+    if (object->primitive == 1) {
+        auto& pos = chart.nodes [object->nodeIndex].points.front ();
+        if (isolatedDanger) {
+            drawQueue.addSymbol (pos.lat, pos.lon, environment.dai.getSymbolIndex ("ISODGR01"), 0.0, environment.dai);
+            if (lowAccuracy) {
+                drawQueue.addSymbol (pos.lat, pos.lon, environment.dai.getSymbolIndex ("LOWACC01"), 0.0, environment.dai);
+            }
+        } else {
+            // cont A
+        }
+    } else {
+        // cont B
+    }
+}
+
 void soundg03 (LookupTableItem *item, FeatureObject *object, Environment& environment, Chart& chart, View& view, DrawQueue& drawQueue) {
     auto& node = chart.nodes.container [object->nodeIndex];
 
@@ -321,11 +433,7 @@ void soundg03 (LookupTableItem *item, FeatureObject *object, Environment& enviro
 
         for (auto& symbolName: symbols) {
             size_t symbolIndex = environment.dai.getSymbolIndex (symbolName.c_str ());
-if(symbolIndex == (size_t) -1){
-    int iii=0;
-    ++iii;
-    --iii;
-}
+
             drawQueue.addSymbol (pos.lat, pos.lon, symbolIndex, 0.0, environment.dai);
         }
     }
@@ -580,4 +688,5 @@ void initCSPs (Environment& environment) {
     environment.dai.addCSP ("DEPCNT03", depcnt03);
     environment.dai.addCSP ("DEPARE03", depare03);
     environment.dai.addCSP ("SOUNDG03", soundg03);
+    environment.dai.addCSP ("WRECKS05", wrecks05);
 }
