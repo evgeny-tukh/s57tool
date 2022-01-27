@@ -24,6 +24,7 @@ enum ATTRS {
     CATREA = 56,
     CONDTN = 81,
     CATSLC = 60,
+    CONRAD = 82,
 };
 
 enum OBJ_CLASSES {
@@ -46,4 +47,5 @@ enum OBJ_CLASSES {
     UWTROC = 153,
     WRECKS = 159,
     OBSTRN = 86,
+    COALNE = 30,
 };

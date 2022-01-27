@@ -8,6 +8,7 @@
 #include "s57defs.h"
 #include "data.h"
 #include "painter.h"
+#include "abstract_tools.h"
 
 void parseTextInstruction (const char *instr, Dai& dai, AttrDictionary& attrDic, TextDesc& desc);
 
@@ -1884,6 +1885,18 @@ void loadLine (std::vector<std::string>& module, Dai& dai) {
     }
 }
 
+HPEN createUserDefinedPen (int style, int width, COLORREF color) {
+    auto [ok, strokeLengthPix, gapLengthPix] = PenTool::getStrokeProps (style);
+    LOGBRUSH brush;
+    brush.lbStyle = BS_SOLID;
+    brush.lbHatch = 0;
+    brush.lbColor = color;
+    DWORD styles [2];
+    styles [0] = strokeLengthPix;
+    styles [1] = gapLengthPix;
+    return ExtCreatePen (PS_GEOMETRIC | PS_USERSTYLE, width, & brush, 2, styles);
+}
+
 void loadColorTable (const char *path, Dai& dai) {
     char *content = 0;
     size_t size = loadFileAndConvertToAnsi (path, content);
@@ -1922,6 +1935,8 @@ void loadColorTable (const char *path, Dai& dai) {
         sortedColors [item.second] = item.first;
     }
     dai.palette.basePens.resize (numOfColors);
+    dai.palette.dashedPens.resize (numOfColors);
+    dai.palette.dottedPens.resize (numOfColors);
     for (size_t i = 0; i < numOfColors; ++ i) {
         const char *colorName = sortedColors [i].c_str ();
         dai.palette.checkSolidBrush (colorName, dai.colorTable);
@@ -1930,9 +1945,21 @@ void loadColorTable (const char *path, Dai& dai) {
         dai.palette.colorIndex.emplace (colorName, i);
 
         for (int j = 0; j < 6; ++ j) {
-            dai.palette.basePens [i].day [j] = CreatePen (PS_SOLID, j + 1, RGB (colorDesc->day.red, colorDesc->day.green, colorDesc->day.blue));
-            dai.palette.basePens [i].dusk [j] = CreatePen (PS_SOLID, j + 1, RGB (colorDesc->dusk.red, colorDesc->dusk.green, colorDesc->dusk.blue));
-            dai.palette.basePens [i].night [j] = CreatePen (PS_SOLID, j + 1, RGB (colorDesc->night.red, colorDesc->night.green, colorDesc->night.blue));
+            int width = j + 1;
+            COLORREF colors [3] {
+                RGB (colorDesc->day.red, colorDesc->day.green, colorDesc->day.blue),
+                RGB (colorDesc->dusk.red, colorDesc->dusk.green, colorDesc->dusk.blue),
+                RGB (colorDesc->night.red, colorDesc->night.green, colorDesc->night.blue),
+            };
+            dai.palette.basePens [i].day [j] = CreatePen (PS_SOLID, width, colors [0]);
+            dai.palette.basePens [i].dusk [j] = CreatePen (PS_SOLID, width, colors [1]);
+            dai.palette.basePens [i].night [j] = CreatePen (PS_SOLID, width, colors [2]);
+            dai.palette.dashedPens [i].day [j] = createUserDefinedPen (PS_DASH, width, colors [0]);
+            dai.palette.dashedPens [i].dusk [j] = createUserDefinedPen (PS_DASH, width, colors [1]);
+            dai.palette.dashedPens [i].night [j] = createUserDefinedPen (PS_DASH, width, colors [2]);
+            dai.palette.dottedPens [i].day [j] = createUserDefinedPen (PS_DOT, width, colors [0]);
+            dai.palette.dottedPens [i].dusk [j] = createUserDefinedPen (PS_DOT, width, colors [1]);
+            dai.palette.dottedPens [i].night [j] = createUserDefinedPen (PS_DOT, width, colors [2]);
         }
     }
 }

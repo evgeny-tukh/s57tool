@@ -26,6 +26,35 @@ HPEN getBasePen (size_t colorIndex, int width, PaletteIndex paletteIndex, Palett
     }
 }
 
+HPEN getDashedPen (size_t colorIndex, int width, PaletteIndex paletteIndex, Palette& palette) {
+    if (width > 0 && width <= 6) {
+        auto [penExists, pens] = palette.dashedPens [colorIndex].get (paletteIndex);
+
+        return penExists ? pens [width-1] : 0;
+    } else {
+        return 0;
+    }
+}
+
+HPEN getDottedPen (size_t colorIndex, int width, PaletteIndex paletteIndex, Palette& palette) {
+    if (width > 0 && width <= 6) {
+        auto [penExists, pens] = palette.dottedPens [colorIndex].get (paletteIndex);
+
+        return penExists ? pens [width-1] : 0;
+    } else {
+        return 0;
+    }
+}
+
+HPEN getGenericPen (int style, size_t colorIndex, int width, PaletteIndex paletteIndex, Palette& palette) {
+    switch (style) {
+        case PS_SOLID: return getBasePen (colorIndex, width, paletteIndex, palette);
+        case PS_DASH: return getDashedPen (colorIndex, width, paletteIndex, palette);
+        case PS_DOT: return getDottedPen (colorIndex, width, paletteIndex, palette);
+        default: return 0;
+    }
+}
+
 HBRUSH getFillBrush (size_t colorIndex, PaletteIndex paletteIndex, Palette& palette) {
     auto [brushExists, brush] = palette.brushes [colorIndex].get (paletteIndex);
 
@@ -624,7 +653,11 @@ void paintChart (
             auto& feature = features [i];
             if (feature.primitive != 2 && feature.primitive != 3) continue;
             if (!lookupTables [i]) continue;
-
+if(feature.fidn==29142256){
+int iii=0;
+++iii;
+--iii;
+}
             auto lookupTableItem = feature.findBestItem (displayCat, getTableSet (feature), dai, prty);
             if (!lookupTableItem) continue;
 
@@ -633,8 +666,6 @@ void paintChart (
             }
 
             if (feature.primitive == 3) {
-                HBRUSH brush = 0;
-                HPEN pen = 0;
                 drawQueue.addArea (lookupTableItem->brushIndex, lookupTableItem->patternBrushIndex, chart);
                 for (auto& edgeRef: feature.edgeRefs) {
                     if (edgeRef.hidden) continue;
@@ -643,7 +674,6 @@ void paintChart (
             }
 
             if ((feature.primitive == 2 || feature.primitive == 3) && lookupTableItem->edgePenIndex != LookupTableItem::NOT_EXIST) {
-                HPEN pen = 0;
                 if (lookupTableItem->customEdgePres) {
                     for (auto& edgeRef: feature.edgeRefs) {
                         if (edgeRef.hidden) continue;
@@ -654,8 +684,11 @@ void paintChart (
                             chart
                         );
                         drawQueue.addEdge (edgeRef);
+                        if (edgeRef.customPres && edgeRef.symbolIndex) {
+                            drawQueue.addEdgeChain (edgeRef.secondPenIndex, edgeRef.secondPenStyle, edgeRef.secondPenWidth, chart);
+                            drawQueue.addEdge (edgeRef);
+                        }
                     }
-
                 } else {
                     drawQueue.addEdgeChain (lookupTableItem->edgePenIndex, lookupTableItem->edgePenStyle, lookupTableItem->edgePenWidth, chart);
                     for (auto& edgeRef: feature.edgeRefs) {
@@ -924,7 +957,7 @@ void paintLine (
     PaletteIndex paletteIndex,
     Palette& palette
 ){
-    auto pen = getBasePen (colorIndex, width, paletteIndex, palette);
+    auto pen = getGenericPen (style, colorIndex, width, paletteIndex, palette);
 
     if (pen) {
         PenTool::PolyPolygon polyPolygon;
@@ -942,10 +975,12 @@ void paintLine (
 
             //tool.removeOutOfScreenContours (client, polyPolygon);
 
+            int oldBkMode = SetBkMode (paintDC, TRANSPARENT);
             if (polyPolygon.size () > 0) {
                 tool.translatePolyPolygon<DWORD> (polyPolygon, vertices, sizes);
 
                 PolyPolyline (paintDC, vertices.data (), sizes.data (), sizes.size ());
+                SetBkMode (paintDC, oldBkMode);
             }
         }
         SelectObject (paintDC, lastPen);
@@ -967,7 +1002,7 @@ void paintArc (
     PaletteIndex paletteIndex,
     Palette& palette
 ) {
-    auto pen = getBasePen (colorIndex, width, paletteIndex, palette);
+    auto pen = getGenericPen (style, colorIndex, width, paletteIndex, palette);
 
     if (pen) {
         PenTool::PolyPolygon polyPolygon;
@@ -988,7 +1023,9 @@ void paintArc (
 
                 tool.translatePolyPolygon<DWORD> (polyPolygon, vertices, sizes);
 
+                int lastBkMode = SetBkMode (paintDC, TRANSPARENT);
                 PolyPolyline (paintDC, vertices.data (), sizes.data (), sizes.size ());
+                SetBkMode (paintDC, lastBkMode);
             }
         }
 
@@ -1057,7 +1094,7 @@ void paintPolyPolyline (
     PaletteIndex paletteIndex,
     Palette& palette
 ){
-    auto pen = getBasePen (colorIndex, width, paletteIndex, palette);
+    auto pen = getGenericPen (style, colorIndex, width, paletteIndex, palette);
 
     if (pen) {
         PenTool::PolyPolygon polyPolygon;
@@ -1066,20 +1103,15 @@ void paintPolyPolyline (
         for (auto& contour: contours) {
             polyPolygon.emplace_back ();
 
-            if (style == PS_SOLID) {
-                for (auto& vertex: contour) {
-                    tool.appendToLastLeg (vertex.lat, vertex.lon, view, polyPolygon);
-                }
-            } else {
-                for (size_t i = 1; i < contour.size (); ++ i) {
-                    auto& origin = contour [i-1];
-                    auto& dest = contour [i];
-
-                    tool.composeLeg (style, origin.lat, origin.lon, dest.lat, dest.lon, view, polyPolygon, true);
-                }
+            for (auto& vertex: contour) {
+                tool.appendToLastLeg (vertex.lat, vertex.lon, view, polyPolygon);
             }
+            /*if (style != PS_SOLID) {
+                PenTool::PolyPolygon temp;
+                tool.stylize (style, polyPolygon, temp);
+                polyPolygon.swap (temp);
+            }*/
         }
-
         HPEN lastPen = (HPEN) SelectObject (paintDC, pen);
 
         //tool.removeOutOfScreenContours (client, polyPolygon);
@@ -1091,7 +1123,9 @@ void paintPolyPolyline (
             tool.translatePolyPolygon<DWORD> (polyPolygon, vertices, sizes);
 
             if (isPolyPolylineOverlappingScreen (vertices, client)) {
+                int lastBkMode = SetBkMode (paintDC, TRANSPARENT);
                 PolyPolyline (paintDC, vertices.data (), sizes.data (), sizes.size ());
+                SetBkMode (paintDC, lastBkMode);
             }
         }
 

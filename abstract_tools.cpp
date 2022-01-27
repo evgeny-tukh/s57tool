@@ -56,6 +56,111 @@ void PenTool::appendToLastLeg (double lat, double lon, View& view, PolyPolygon& 
     polyPolygon.back ().back ().y = y;
 }
 
+void PenTool::stylize (int style, PolyPolygon& from, PolyPolygon& to) {
+    auto [ok, strokeLengthPix, gapLengthPix] = getStrokeProps (style);
+
+    to.clear ();
+
+    for (auto& fromContour: from) {
+        POINT lastPassedPt = fromContour.front ();
+        bool onStroke = true;
+        double usedLength = 0.0;
+
+        auto addStroke = [&fromContour, &to] (int startX, int startY, size_t startIndex, double startOffset, double strokeLen) {
+            auto& toContour = to.emplace_back ();
+            POINT passedPt;
+            size_t passedIndex = startIndex - 1;
+            double passedDist = startOffset;
+            
+            passedPt.x = startX;
+            passedPt.y = startY;
+
+            toContour.push_back (passedPt);
+
+            for (size_t i = startIndex; i < fromContour.size (); ++ i) {
+                auto& pt = fromContour [i];
+                double d1 = pt.x - passedPt.x;
+                double d2 = pt.y - passedPt.y;
+                double len = sqrt (d1 * d1 + d2 * d2);
+
+                if ((passedDist + len) <= strokeLen) {
+                    toContour.push_back (pt);
+                    passedPt = pt;
+                    passedIndex = i;
+                    passedDist += len;
+                } else {
+                    double overrun = passedDist + len - strokeLen;
+                    double coef = (len - overrun) / len;
+                    double x = passedPt.x + coef * d1;
+                    double y = passedPt.y + coef * d2;
+                    toContour.emplace_back ();
+                    toContour.back ().x = (int) x;
+                    toContour.back ().y = (int) y;
+
+                    return std::tuple<bool, double, size_t, int, int> (false, overrun, passedIndex, (int) x, (int) y);
+                }
+            }
+            return std::tuple<bool, double, size_t, int, int> (true, 0.0, fromContour.size (), toContour.back ().x, toContour.back ().y);
+        };
+
+        auto addGap = [&fromContour] (int startX, int startY, size_t startIndex, double startOffset, double gapLen) {
+            POINT passedPt;
+            size_t passedIndex = startIndex - 1;
+            double passedDist = startOffset;
+            
+            passedPt.x = startX;
+            passedPt.y = startY;
+
+            for (size_t i = startIndex; i < fromContour.size (); ++ i) {
+                auto& pt = fromContour [i];
+                double d1 = pt.x - passedPt.x;
+                double d2 = pt.y - passedPt.y;
+                double len = sqrt (d1 * d1 + d2 * d2);
+
+                if ((passedDist + len) <= gapLen) {
+                    passedPt = pt;
+                    passedIndex = i;
+                    passedDist += len;
+                } else {
+                    double overrun = passedDist + len - gapLen;
+                    double coef = (len - overrun) / len;
+                    double x = passedPt.x + coef * d1;
+                    double y = passedPt.y + coef * d2;
+
+                    return std::tuple<bool, double, size_t, int, int> (false, overrun, passedIndex, (int) x, (int) y);
+                }
+            }
+            return std::tuple<bool, double, size_t, int, int> (true, 0.0, fromContour.size (), fromContour.back ().x, fromContour.back ().y);
+        };
+
+        double startOffset = 0.0;
+        size_t startIndex = 1;
+        int startX = fromContour.front ().x;
+        int startY = fromContour.front ().y;
+        while (true) {
+            auto [finished, overrun, passedIndex, endX, endY] = addStroke (startX, startY, startIndex, startOffset, strokeLengthPix);
+
+            if (!finished) {
+                startIndex = passedIndex + 1;
+                startOffset = 0.0; //overrun;
+                startX = endX;
+                startY = endY;
+
+                auto [finished, overrun, passedIndex, endX, endY] = addGap (startX, startY, startIndex, startOffset, gapLengthPix);
+
+                if (finished) {
+                    break;
+                } else {
+                    startIndex = passedIndex + 1;
+                    startOffset = 0.0; //overrun;
+                    startX = endX;
+                    startY = endY;
+                }
+            }
+        }
+    }
+}
+
 void PenTool::composeLeg (
     int style,
     double lat,

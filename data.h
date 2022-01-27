@@ -89,10 +89,11 @@ struct EdgeRef {
     bool hole;
     bool unclockwise;
     bool customPres;
-    size_t penIndex;
+    bool secondPen;
+    size_t penIndex, secondPenIndex;
     size_t symbolIndex;
-    int penStyle;
-    int penWidth;
+    int penStyle, secondPenStyle;
+    int penWidth, secondPenWidth;
     int viewingGroup;
     int displayPriority;
     DisplayCat dispCat;
@@ -102,10 +103,14 @@ struct EdgeRef {
         hidden (false),
         hole (false),
         unclockwise (false),
+        secondPen (false),
         penIndex (-1),
+        secondPenIndex (-1),
         symbolIndex (-1),
         penStyle (0),
+        secondPenStyle (0),
         penWidth (0),
+        secondPenWidth (0),
         viewingGroup (0),
         dispCat (DisplayCat::DISPLAY_BASE),
         displayPriority (0) {

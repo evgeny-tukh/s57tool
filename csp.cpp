@@ -664,6 +664,59 @@ void rescp02 (Attr *restrn, FeatureObject *object, Environment& environment, Cha
     }
 }
 
+void qualin02 (LookupTableItem *item, FeatureObject *object, Environment& environment, Chart& chart, View& view, DrawQueue& drawQueue) {
+    for (auto& edgeRef: object->edgeRefs) {
+        auto quapos = object->getEdgeAttr (edgeRef, ATTRS::QUAPOS, chart.edges);
+
+        if (quapos && !quapos->noValue) {
+            if (quapos->intValue == 1 || quapos->intValue == 10 || quapos->intValue == 11) {
+                edgeRef.customPres = true;
+                edgeRef.symbolIndex = environment.dai.getSymbolIndex ("LOWACC21");
+                continue;
+            }
+        }
+        if (object->classCode == OBJ_CLASSES::COALNE) {
+            auto conrad = object->getAttr (ATTRS::CONRAD);
+
+            edgeRef.customPres = true;
+
+            if (conrad && !conrad->noValue) {
+                if (conrad->intValue = 1) {
+                    edgeRef.penIndex = environment.dai.getBasePenIndex ("CHMGF");
+                    edgeRef.penStyle = PS_SOLID;
+                    edgeRef.penWidth = 3;
+                    edgeRef.secondPen = true;
+                    edgeRef.secondPenIndex = environment.dai.getBasePenIndex ("CSTLN");
+                    edgeRef.secondPenStyle = PS_SOLID;
+                    edgeRef.secondPenWidth = 1;
+                } else {
+                    edgeRef.penIndex = environment.dai.getBasePenIndex ("CSTLN");
+                    edgeRef.penStyle = PS_SOLID;
+                    edgeRef.penWidth = 1;
+                }
+            } else {
+                edgeRef.penIndex = environment.dai.getBasePenIndex ("CSTLN");
+                edgeRef.penStyle = PS_SOLID;
+                edgeRef.penWidth = 1;
+            }
+        } else {
+            edgeRef.penIndex = environment.dai.getBasePenIndex ("CSTLN");
+            edgeRef.penStyle = PS_SOLID;
+            edgeRef.penWidth = 1;
+            continue;
+        }
+    }
+}
+
+void quapos01 (LookupTableItem *item, FeatureObject *object, Environment& environment, Chart& chart, View& view, DrawQueue& drawQueue) {
+    if (object->primitive == 2) {
+        qualin02 (item, object, environment, chart, view, drawQueue);
+    } else if (quapnt02 (object, chart, environment)) {
+        auto& pos = chart.nodes [object->nodeIndex].points.front ();
+        drawQueue.addSymbol (pos.lat, pos.lon, environment.dai.getSymbolIndex ("LOWACC01"), 0.0, environment.dai);
+    }
+}
+
 void slcons04 (LookupTableItem *item, FeatureObject *object, Environment& environment, Chart& chart, View& view, DrawQueue& drawQueue) {
     if (object->primitive == 1 || object->primitive == 4) {
         if (quapnt02 (object, chart, environment)) {
@@ -714,6 +767,11 @@ void restrn01 (LookupTableItem *item, FeatureObject *object, Environment& enviro
 }
 
 void resare04 (LookupTableItem *item, FeatureObject *object, Environment& environment, Chart& chart, View& view, DrawQueue& drawQueue) {
+if(object->fidn==29140887){
+int iii=0;
+++iii;
+--iii;
+}
     auto restrn = object->getAttr (ATTRS::RESTRN);
     auto catrea = object->getAttr (ATTRS::CATREA);
     auto catreaIncludes = [&catrea] (uint8_t *list) {
@@ -1105,4 +1163,5 @@ void initCSPs (Environment& environment) {
     environment.dai.addCSP ("RESARE04", resare04);
     environment.dai.addCSP ("RESTRN01", restrn01);
     environment.dai.addCSP ("SLCONS04", slcons04);
+    environment.dai.addCSP ("QUAPOS01", quapos01);
 }

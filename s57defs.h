@@ -839,7 +839,7 @@ struct Dai;
 struct Palette {
     std::vector<DrawToolItem <HPEN>> pens;
     std::vector<DrawToolItem <HBRUSH>> brushes, patternBrushes;
-    std::vector<DrawToolItem <Pens>> basePens;
+    std::vector<DrawToolItem <Pens>> basePens, dashedPens, dottedPens;
     StringIndex colorIndex;
     StringIndex penIndex;
     StringIndex brushIndex;
@@ -853,7 +853,7 @@ struct Palette {
         return pos == colorIndex.end () ? LookupTableItem::NOT_EXIST : pos->second;
     }
 
-    HPEN *getBasePens (const char *colorName, PaletteIndex paletteIndex) {
+    /*HPEN *getBasePens (const char *colorName, PaletteIndex paletteIndex) {
         auto pos = colorIndex.find (colorName);
 
         if (pos == colorIndex.end ()) return 0;
@@ -861,7 +861,7 @@ struct Palette {
         auto& [exists, pens] = basePens [pos->second].get (paletteIndex);
 
         return exists ? pens.handles () : 0;
-    }
+    }*/
 
     size_t checkPen (char *instr, ColorTable& colorTable);
     size_t checkSolidBrush (const char *colorName, ColorTable& colorTable);

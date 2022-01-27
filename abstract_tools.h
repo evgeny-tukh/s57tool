@@ -14,6 +14,7 @@ struct PenTool {
 
     PenTool (): curView (0.0, 0.0, 0), polygonMode (false), curPolyPolygon (0) {}
 
+    void stylize (int style, PolyPolygon& polyPolygon, PolyPolygon& temp);
     void composeLine (int style, double lat, double lon, double brg, double lengthInMm, View& view, PolyPolygon& polyPolygon, bool appendMode);
     void composeLeg (int style, double lat, double lon, double destLat, double destLon, View& view, PolyPolygon& polyPolygon, bool appendMode);
     void appendToLastLeg (double lat, double lon, View& view, PolyPolygon& polyPolygon);
@@ -25,7 +26,7 @@ struct PenTool {
     void composeSection (int x1, int y1, int x2, int y2, double lengthInPix, double strokeLengthPix, double gapLengthPix, PolyPolygon& polyPolygon);
 
     void geo2screen (double lat, double lon, View& view, int& x, int& y);
-    std::tuple<bool, double, double> getStrokeProps (int style);
+    static std::tuple<bool, double, double> getStrokeProps (int style);
 
     template<typename TYPE>
     void translatePolyPolygon (PolyPolygon& polyPolygon, std::vector<POINT>& vertices, std::vector<TYPE>& sizes) {
