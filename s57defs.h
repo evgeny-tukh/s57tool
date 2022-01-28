@@ -687,6 +687,7 @@ struct LookupTableItem {
     size_t procIndex;
     size_t edgePenIndex;
     size_t lineCharIndex;
+    size_t edgeSymbolIndex;
     int edgePenStyle;
     int edgePenWidth;
     int viewingGroup;
@@ -730,7 +731,7 @@ struct LookupTableItem {
         displayPriority = 0;
         tableSet = TableSet::PLAIN_BOUNDARIES;
         displayCat = DisplayCat::STANDARD;
-        lineCharIndex = edgePenIndex = penIndex = brushIndex = patternBrushIndex = centralSymbolIndex = procIndex = NOT_EXIST;
+        edgeSymbolIndex = lineCharIndex = edgePenIndex = penIndex = brushIndex = patternBrushIndex = centralSymbolIndex = procIndex = NOT_EXIST;
         edgePenStyle = PS_SOLID;
         edgePenWidth = 1;
         drawArc = false;
@@ -779,6 +780,7 @@ struct LookupTableItem {
         viewingGroup = source.viewingGroup;
         customEdgePres = source.customEdgePres;
         lineCharIndex = source.lineCharIndex;
+        edgeSymbolIndex = source.edgeSymbolIndex;
     }
 };
 

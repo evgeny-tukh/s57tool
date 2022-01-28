@@ -838,6 +838,72 @@ void obstrn07 (LookupTableItem *item, FeatureObject *object, Environment& enviro
             }
         } else {
             // cont c
+            bool lowAccuracy = quapnt02 (object, chart, environment);
+
+            double lat, lon;
+            getCenterPos (*object, chart, lat, lon);
+
+            if (isolatedDanger) {
+                item->brushIndex = environment.dai.getBasePenIndex ("DEPVS");
+                item->patternBrushIndex = environment.dai.getPatternIndex ("FOULAR01");
+                item->edgePenIndex = environment.dai.getBasePenIndex ("CHBLK");
+                item->edgePenStyle = PS_DOT;
+                item->edgePenWidth = 2;
+                
+                drawQueue.addSymbol (lat, lon, environment.dai.getSymbolIndex ("ISODGR01"), 0, environment.dai);
+
+                if (lowAccuracy) {
+                    drawQueue.addSymbol (lat, lon, environment.dai.getSymbolIndex ("LOWACC01"), 0, environment.dai);
+                }
+                return;
+            }
+
+            if (valsou && !valsou->noValue) {
+                if (valsou->floatValue <= environment.settings.safetyDepth) {
+                    item->edgePenIndex = environment.dai.getBasePenIndex ("CHGRD");
+                    item->edgePenStyle = PS_DASH;
+                    item->edgePenWidth = 2;
+                } else {
+                    item->edgePenIndex = environment.dai.getBasePenIndex ("CHBLK");
+                    item->edgePenStyle = PS_DOT;
+                    item->edgePenWidth = 2;
+                }
+
+                std::vector<std::string> symbols;
+                sndfrm04 (object, depth, chart, environment, symbols);
+ 
+                for (auto& symbol: symbols) {
+                    drawQueue.addSymbol (lat, lon, environment.dai.getSymbolIndex (symbol.c_str ()), 0, environment.dai);
+                }
+            } else {
+                auto catobs = object->getAttr (ATTRS::CATOBS);
+
+                if (catobs && !catobs->noValue && catobs->intValue == 6) {
+                    item->patternBrushIndex = environment.dai.getPatternIndex ("FOULAR01");
+                    item->edgePenIndex = environment.dai.getBasePenIndex ("CHBLK");
+                    item->edgePenStyle = PS_DOT;
+                    item->edgePenWidth = 2;
+                } else if (watlev && !watlev->noValue && (watlev->intValue == 1 || watlev->intValue == 2)) {
+                    item->brushIndex = environment.dai.getBasePenIndex ("CHBRN");
+                    item->edgePenIndex = environment.dai.getBasePenIndex ("CSTLN");
+                    item->edgePenStyle = PS_SOLID;
+                    item->edgePenWidth = 2;
+                } else if (watlev && !watlev->noValue && watlev->intValue == 4) {
+                    item->brushIndex = environment.dai.getBasePenIndex ("DEPIT");
+                    item->edgePenIndex = environment.dai.getBasePenIndex ("CSTLN");
+                    item->edgePenStyle = PS_DASH;
+                    item->edgePenWidth = 2;
+                } else {
+                    item->brushIndex = environment.dai.getBasePenIndex ("DEPVS");
+                    item->edgePenIndex = environment.dai.getBasePenIndex ("CHBLK");
+                    item->edgePenStyle = PS_DOT;
+                    item->edgePenWidth = 2;
+                }
+            }
+
+            if (lowAccuracy) {
+                drawQueue.addSymbol (lat, lon, environment.dai.getSymbolIndex ("LOWACC01"), 0, environment.dai);
+            }
         }
     }
 }
