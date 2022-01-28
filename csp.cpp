@@ -122,6 +122,45 @@ void seabed01 (double depthRangeVal1, double depthRangeVal2, LookupTableItem *it
     }
 }
 
+void safcon01 (FeatureObject *object, double depth, std::vector<std::string>& symbols) {
+    if (depth < 0.0 || depth > 99999.0) return;
+
+    auto addSymbol = [&symbols] (const char *prefix, int lastDigit) {
+        symbols.push_back (std::string (prefix) + (char) (lastDigit + '0'));
+    };
+
+    int integralPart = (int) depth;
+    int fractionPart = (int) ((depth - (double) integralPart) * 10.0);
+
+    if (depth < 10.0) {
+        addSymbol ("SAFCON0", integralPart);
+
+        if (fractionPart) addSymbol ("SAFCON6", fractionPart);
+    } else if (depth < 31.0 && fractionPart) {
+        addSymbol ("SAFCON2", integralPart / 10);
+        addSymbol ("SAFCON1", integralPart % 10);
+        addSymbol ("SAFCON5", fractionPart);
+    } else if (depth < 100.0) {
+        addSymbol ("SAFCON2", integralPart / 10);
+        addSymbol ("SAFCON1", integralPart % 10);
+    } else if (depth < 1000.0) {
+        addSymbol ("SAFCON8", integralPart / 100);
+        addSymbol ("SAFCON0", (integralPart % 10) / 10);
+        addSymbol ("SAFCON9", integralPart % 10);
+    } else if (depth < 10000.0) {
+        addSymbol ("SAFCON3", integralPart / 1000);
+        addSymbol ("SAFCON2", (integralPart % 1000) / 100);
+        addSymbol ("SAFCON1", (integralPart % 100) / 10);
+        addSymbol ("SAFCON7", integralPart % 10);
+    } else if (depth < 100000.0) {
+        addSymbol ("SAFCON4", integralPart / 10000);
+        addSymbol ("SAFCON3", (integralPart % 10000) / 1000);
+        addSymbol ("SAFCON2", (integralPart % 1000) / 100);
+        addSymbol ("SAFCON1", (integralPart % 100) / 10);
+        addSymbol ("SAFCON7", integralPart % 10);
+    }
+}
+
 void depare03 (LookupTableItem *item, FeatureObject *object, Environment& environment, Chart& chart, View& view, DrawQueue& drawQueue) {
     Features& features = chart.features;
     Edges& edges = chart.edges;
@@ -231,6 +270,32 @@ void depare03 (LookupTableItem *item, FeatureObject *object, Environment& enviro
 void depcnt03 (LookupTableItem *item, FeatureObject *object, Environment& environment, Chart& chart, View& view, DrawQueue& drawQueue) {
     Settings& settings = environment.settings;
     Dai& dai = environment.dai;
+
+    for (auto& edgeRef: object->edgeRefs) {
+        auto quapos = object->getEdgeAttr (edgeRef, ATTRS::QUAPOS, chart.edges);
+
+        edgeRef.customPres = true;
+        edgeRef.penWidth = 1;
+        edgeRef.penIndex = dai.getBasePenIndex ("DEPCN");
+        edgeRef.penStyle = PS_SOLID;
+
+        if (quapos && !quapos->noValue) {
+            if (quapos->intValue != 1 && quapos->intValue != 10 && quapos->intValue != 11) {
+                edgeRef.penStyle = PS_DASH;
+            }
+        }
+
+        if (environment.settings.displayContourLabels) {
+            auto valdco = object->getEdgeAttr (edgeRef, ATTRS::VALDCO, chart.edges);
+            std::vector<std::string> symbols;
+
+            safcon01 (object, (valdco && !valdco->noValue) ? valdco->floatValue : 0.0, symbols);
+
+            for (auto& symbol: symbols) {
+                edgeRef.symbols.emplace_back (environment.dai.getSymbolIndex (symbol.c_str ()));
+            }
+        }
+    }
     // TO BE DONE!!!!
     item->edgePenIndex = dai.getBasePenIndex ("DEPCN");
     item->edgePenStyle = PS_SOLID;
@@ -549,7 +614,7 @@ void wrecks05 (LookupTableItem *item, FeatureObject *object, Environment& enviro
             if (edgeQuapos && !edgeQuapos->noValue) {
                 if (edgeQuapos->intValue != 1 && edgeQuapos->intValue != 10 && edgeQuapos->intValue != 11) {
                     edgeRef.customPres = true;
-                    edgeRef.symbolIndex = environment.dai.getSymbolIndex ("LOWACC41");
+                    edgeRef.symbols.emplace_back (environment.dai.getSymbolIndex ("LOWACC41"));
                     continue;
                 }
             }
@@ -671,7 +736,7 @@ void qualin02 (LookupTableItem *item, FeatureObject *object, Environment& enviro
         if (quapos && !quapos->noValue) {
             if (quapos->intValue == 1 || quapos->intValue == 10 || quapos->intValue == 11) {
                 edgeRef.customPres = true;
-                edgeRef.symbolIndex = environment.dai.getSymbolIndex ("LOWACC21");
+                edgeRef.symbols.emplace_back (environment.dai.getSymbolIndex ("LOWACC21"));
                 continue;
             }
         }
@@ -811,11 +876,7 @@ void obstrn07 (LookupTableItem *item, FeatureObject *object, Environment& enviro
                 edgeRef.customPres = true;
 
                 if (quapos && !quapos->noValue && quapos->intValue >= 2 && quapos->intValue <= 9) {
-                    if (isolatedDanger) {
-                        edgeRef.symbolIndex = environment.dai.getSymbolIndex ("LOWACC41");
-                    } else {
-                        edgeRef.symbolIndex = environment.dai.getSymbolIndex ("LOWACC31");
-                    }
+                    edgeRef.symbols.emplace_back (environment.dai.getSymbolIndex (isolatedDanger ? "LOWACC41" : "LOWACC31"));
                     continue;
                 }
                 
@@ -928,7 +989,7 @@ void slcons04 (LookupTableItem *item, FeatureObject *object, Environment& enviro
             auto quapos = object->getEdgeAttr (edgeRef, ATTRS::QUAPOS, chart.edges);
 
             if (quapos && !quapos->noValue && (quapos->intValue == 1 || quapos->intValue == 10 || quapos->intValue == 11)) {
-                edgeRef.symbolIndex = environment.dai.getSymbolIndex ("LOWACC01");
+                edgeRef.symbols.emplace_back (environment.dai.getSymbolIndex ("LOWACC01"));
             } else {
                 auto condtn = object->getEdgeAttr (edgeRef, ATTRS::CONDTN, chart.edges);
                 auto catslc = object->getEdgeAttr (edgeRef, ATTRS::CATSLC, chart.edges);

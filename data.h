@@ -91,7 +91,7 @@ struct EdgeRef {
     bool customPres;
     bool secondPen;
     size_t penIndex, secondPenIndex;
-    size_t symbolIndex;
+    std::vector<size_t> symbols;
     int penStyle, secondPenStyle;
     int penWidth, secondPenWidth;
     int viewingGroup;
@@ -107,7 +107,6 @@ struct EdgeRef {
         secondPen (src.secondPen),
         penIndex (src.penIndex),
         secondPenIndex (src.secondPenIndex),
-        symbolIndex (src.symbolIndex),
         penStyle (src.penStyle),
         secondPenStyle (src.secondPenStyle),
         penWidth (src.penWidth),
@@ -115,6 +114,7 @@ struct EdgeRef {
         viewingGroup (src.viewingGroup),
         displayPriority (src.displayPriority),
         dispCat (src.dispCat) {
+        symbols.insert (symbols.begin (), src.symbols.begin (), src.symbols.end ());
     }
 
     EdgeRef ():
@@ -125,7 +125,6 @@ struct EdgeRef {
         secondPen (false),
         penIndex (-1),
         secondPenIndex (-1),
-        symbolIndex (-1),
         penStyle (0),
         secondPenStyle (0),
         penWidth (0),
@@ -133,6 +132,7 @@ struct EdgeRef {
         viewingGroup (0),
         dispCat (DisplayCat::DISPLAY_BASE),
         displayPriority (0) {
+        symbols.clear ();
     }
 };
 
