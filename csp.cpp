@@ -161,6 +161,47 @@ void safcon01 (FeatureObject *object, double depth, std::vector<std::string>& sy
     }
 }
 
+void rescsp03 (Attr *restrn, FeatureObject *object, Environment& environment, Chart& chart, View& view, DrawQueue& drawQueue) {
+    double lat, lon;
+    getCenterPos (*object, chart, lat, lon);
+
+    if (restrn->listIncludes (_7_8_14)) {
+        if (restrn->listIncludes (_1_2_3_4_5_6_13_16_17_23_24_25_26_27)) {
+            drawQueue.addSymbol (lat, lon, environment.dai.getSymbolIndex ("ENTRES61"), 0.0, environment.dai);
+        } else if (restrn->listIncludes (_9_10_11_12_15_18_19_20_21_22)) {
+            drawQueue.addSymbol (lat, lon, environment.dai.getSymbolIndex ("ENTRES71"), 0.0, environment.dai);
+        } else {
+            drawQueue.addSymbol (lat, lon, environment.dai.getSymbolIndex ("ENTRES51"), 0.0, environment.dai);
+        }
+    } else if (restrn->listIncludes (_1_2)) {
+        if (restrn->listIncludes (_3_4_5_6_13_16_17_23_24_25_26_27)) {
+            drawQueue.addSymbol (lat, lon, environment.dai.getSymbolIndex ("ACHRES61"), 0.0, environment.dai);
+        } else if (restrn->listIncludes (_9_10_11_12_15_18_19_20_21_22)) {
+            drawQueue.addSymbol (lat, lon, environment.dai.getSymbolIndex ("ACHRES71"), 0.0, environment.dai);
+        } else {
+            drawQueue.addSymbol (lat, lon, environment.dai.getSymbolIndex ("ACHRES51"), 0.0, environment.dai);
+        }
+    } else if (restrn->listIncludes (_3_4_5_6_24)) {
+        if (restrn->listIncludes (_13_16_17_23_25_26_27)) {
+            drawQueue.addSymbol (lat, lon, environment.dai.getSymbolIndex ("FSHRES61"), 0.0, environment.dai);
+        } else if (restrn->listIncludes (_9_10_11_12_15_18_19_20_21_22)) {
+            drawQueue.addSymbol (lat, lon, environment.dai.getSymbolIndex ("FSHRES71"), 0.0, environment.dai);
+        } else {
+            drawQueue.addSymbol (lat, lon, environment.dai.getSymbolIndex ("FSHRES51"), 0.0, environment.dai);
+        }
+    } else if (restrn->listIncludes (_13_16_17_23_25_26_27)) {
+        if (restrn->listIncludes (_9_10_11_12_15_18_19_20_21_22)) {
+            drawQueue.addSymbol (lat, lon, environment.dai.getSymbolIndex ("CTYARE71"), 0.0, environment.dai);
+        } else {
+            drawQueue.addSymbol (lat, lon, environment.dai.getSymbolIndex ("CTYARE51"), 0.0, environment.dai);
+        }
+    } else if (restrn->listIncludes (_9_10_11_12_15_18_19_20_21_22)) {
+        drawQueue.addSymbol (lat, lon, environment.dai.getSymbolIndex ("INFARE51"), 0.0, environment.dai);
+    } else {
+        drawQueue.addSymbol (lat, lon, environment.dai.getSymbolIndex ("RSRDEF51"), 0.0, environment.dai);
+    }
+}
+
 void depare03 (LookupTableItem *item, FeatureObject *object, Environment& environment, Chart& chart, View& view, DrawQueue& drawQueue) {
     Features& features = chart.features;
     Edges& edges = chart.edges;
@@ -182,7 +223,7 @@ void depare03 (LookupTableItem *item, FeatureObject *object, Environment& enviro
         auto restrn = object->getAttr (ATTRS::RESTRN);
 
         if (restrn && !restrn->noValue) {
-            // RESCSP03 call here
+            rescsp03 (restrn, object, environment, chart, view, drawQueue);
         }
     }
 
@@ -245,6 +286,7 @@ void depare03 (LookupTableItem *item, FeatureObject *object, Environment& enviro
         // Edge customization
         item->customEdgePres = true;
 
+        edgeRef.customPres = true;
         edgeRef.displayPriority = 8;
         //edgeRef.radarPriority = 'O';
         edgeRef.dispCat = DisplayCat::DISPLAY_BASE;
@@ -261,8 +303,12 @@ void depare03 (LookupTableItem *item, FeatureObject *object, Environment& enviro
         }
 
         if (settings.safetyContourLabels && locValdco.has_value ()) {
-            // 1. SAFCON02 (locValdco.value ())
-            // 2. Draw Selected Symbols from 'SAFCON02'
+            std::vector<std::string> symbols;
+            safcon01 (object, locValdco.value (), symbols);
+
+            for (auto& symbol: symbols) {
+                edgeRef.symbols.emplace_back (environment.dai.getSymbolIndex (symbol.c_str ()));
+            }
         }
     }
 }
@@ -296,10 +342,6 @@ void depcnt03 (LookupTableItem *item, FeatureObject *object, Environment& enviro
             }
         }
     }
-    // TO BE DONE!!!!
-    item->edgePenIndex = dai.getBasePenIndex ("DEPCN");
-    item->edgePenStyle = PS_SOLID;
-    item->edgePenWidth = 1;
 }
 
 void sndfrm04 (FeatureObject *object, double depth, Chart& chart, Environment& environment, std::vector<std::string>& symbols) {
@@ -688,47 +730,6 @@ void soundg03 (LookupTableItem *item, FeatureObject *object, Environment& enviro
     }
 }
 
-void rescp02 (Attr *restrn, FeatureObject *object, Environment& environment, Chart& chart, View& view, DrawQueue& drawQueue) {
-    double lat, lon;
-    getCenterPos (*object, chart, lat, lon);
-
-    if (restrn->listIncludes (_7_8_14)) {
-        if (restrn->listIncludes (_1_2_3_4_5_6_13_16_17_23_24_25_26_27)) {
-            drawQueue.addSymbol (lat, lon, environment.dai.getSymbolIndex ("ENTRES61"), 0.0, environment.dai);
-        } else if (restrn->listIncludes (_9_10_11_12_15_18_19_20_21_22)) {
-            drawQueue.addSymbol (lat, lon, environment.dai.getSymbolIndex ("ENTRES71"), 0.0, environment.dai);
-        } else {
-            drawQueue.addSymbol (lat, lon, environment.dai.getSymbolIndex ("ENTRES51"), 0.0, environment.dai);
-        }
-    } else if (restrn->listIncludes (_1_2)) {
-        if (restrn->listIncludes (_3_4_5_6_13_16_17_23_24_25_26_27)) {
-            drawQueue.addSymbol (lat, lon, environment.dai.getSymbolIndex ("ACHRES61"), 0.0, environment.dai);
-        } else if (restrn->listIncludes (_9_10_11_12_15_18_19_20_21_22)) {
-            drawQueue.addSymbol (lat, lon, environment.dai.getSymbolIndex ("ACHRES71"), 0.0, environment.dai);
-        } else {
-            drawQueue.addSymbol (lat, lon, environment.dai.getSymbolIndex ("ACHRES51"), 0.0, environment.dai);
-        }
-    } else if (restrn->listIncludes (_3_4_5_6_24)) {
-        if (restrn->listIncludes (_13_16_17_23_25_26_27)) {
-            drawQueue.addSymbol (lat, lon, environment.dai.getSymbolIndex ("FSHRES61"), 0.0, environment.dai);
-        } else if (restrn->listIncludes (_9_10_11_12_15_18_19_20_21_22)) {
-            drawQueue.addSymbol (lat, lon, environment.dai.getSymbolIndex ("FSHRES71"), 0.0, environment.dai);
-        } else {
-            drawQueue.addSymbol (lat, lon, environment.dai.getSymbolIndex ("FSHRES51"), 0.0, environment.dai);
-        }
-    } else if (restrn->listIncludes (_13_16_17_23_25_26_27)) {
-        if (restrn->listIncludes (_9_10_11_12_15_18_19_20_21_22)) {
-            drawQueue.addSymbol (lat, lon, environment.dai.getSymbolIndex ("CTYARE71"), 0.0, environment.dai);
-        } else {
-            drawQueue.addSymbol (lat, lon, environment.dai.getSymbolIndex ("CTYARE51"), 0.0, environment.dai);
-        }
-    } else if (restrn->listIncludes (_9_10_11_12_15_18_19_20_21_22)) {
-        drawQueue.addSymbol (lat, lon, environment.dai.getSymbolIndex ("INFARE51"), 0.0, environment.dai);
-    } else {
-        drawQueue.addSymbol (lat, lon, environment.dai.getSymbolIndex ("RSRDEF51"), 0.0, environment.dai);
-    }
-}
-
 void qualin02 (LookupTableItem *item, FeatureObject *object, Environment& environment, Chart& chart, View& view, DrawQueue& drawQueue) {
     for (auto& edgeRef: object->edgeRefs) {
         auto quapos = object->getEdgeAttr (edgeRef, ATTRS::QUAPOS, chart.edges);
@@ -1023,7 +1024,7 @@ void restrn01 (LookupTableItem *item, FeatureObject *object, Environment& enviro
     auto restrn = object->getAttr (ATTRS::RESTRN);
 
     if (restrn && !restrn->noValue) {
-        rescp02 (restrn, object, environment, chart, view, drawQueue);
+        rescsp03 (restrn, object, environment, chart, view, drawQueue);
     }
 }
 
