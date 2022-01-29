@@ -134,6 +134,13 @@ struct EdgeRef {
         displayPriority (0) {
         symbols.clear ();
     }
+
+    void addSymbol (size_t index) {
+        for (size_t curIndex: symbols) {
+            if (index == curIndex) return;
+        }
+        symbols.emplace_back (index);
+    }
 };
 
 struct FeatureObject: TopologyObject {

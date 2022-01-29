@@ -565,6 +565,22 @@ void paintSymbol (
     }
 }
 
+void paintSymbol (
+    RECT& client,
+    HDC paintDC,
+    int x,
+    int y,
+    size_t symbolIndex,
+    double rotAngle,
+    Dai& dai,
+    PaletteIndex paletteIndex
+) {
+    auto& symbol = dai.symbols [symbolIndex];
+    if (x >= 0 && x <= client.right && y >= 0 && y <= client.bottom) {
+        completeDrawProc (paintDC, symbol.drawProc, x, y, paletteIndex, dai, symbol.pivotPtCol, symbol.pivotPtRow, symbol.bBoxCol, symbol.bBoxRow, rotAngle);
+    }
+}
+
 void paintEdge (
     RECT& client,
     HDC paintDC,
@@ -701,6 +717,17 @@ void paintChart (
                 }
             }
 
+            if (feature.primitive == 2 || feature.primitive == 3) {
+                for (auto& edgeRef: feature.edgeRefs) {
+                    if (edgeRef.hidden || edgeRef.displayPriority && edgeRef.displayPriority != prty) continue;
+                    if (!edgeRef.symbols.empty ()) {
+                        for (size_t symbolIndex: edgeRef.symbols) {
+                            drawQueue.addCentralEdgeSymbol (chart, symbolIndex, edgeRef.index, dai);
+                        }
+                    }
+                }
+            }
+
             addAllTextDraws (feature, lookupTableItem, textDrawQueue, chart);
 
             delete lookupTableItem;
@@ -713,6 +740,9 @@ void paintChart (
             if (edgeRef.customPres && edgeRef.secondPen) {
                 drawQueue.addEdgeChain (edgeRef.secondPenIndex, edgeRef.secondPenStyle, edgeRef.secondPenWidth, chart);
                 drawQueue.addEdge (edgeRef);
+            }
+            for (size_t symbolIndex: edgeRef.symbols) {
+                drawQueue.addCentralEdgeSymbol (chart, symbolIndex, edgeRef.index, dai);
             }
         }
         
@@ -1185,3 +1215,122 @@ void paintText (
 
     auto colorDef = dai.colorTable.container [colorIndex].getColorDef (paletteIndex);
 }
+
+std::tuple<bool, int, int> getCenterPos (size_t edgeIndex, RECT& client, Chart& chart, View& view) {
+    auto& edge = chart.edges [edgeIndex];
+    std::vector<POINT> vertices;
+
+    auto addPoint = [&vertices] (int x, int y) {
+        vertices.emplace_back ();
+        vertices.back ().x = x;
+        vertices.back ().y = y;
+    };
+    auto isBetween = [] (int value, int a, int b) {
+        return value >= min (a, b) && value <= max (a, b);
+    };
+    auto crossTwoSections = [&isBetween] (int x11, int y11, int x12, int y12, int x21, int y21, int x22, int y22) {
+        double c1 = (double) (y12 - y11) / (double) (x12 - x11);
+        double c2 = (double) (y22 - y21) / (double) (x22 - x21);
+        int x = (int) (((double) y21 - (double) y11 + (double) x11 * c1 - (double) x21 * c2) / (double) (c1 - c2));
+        int y = (int) ((double) y11 + (double) (x - x11) * c1);
+        bool crossed = isBetween (x, x11, x12) && isBetween (x, x21, x22) && isBetween (y, y11, y12) && isBetween (y, y21, y22);
+        return std::tuple<bool, int, int>(crossed, x, y);
+    };
+    auto intersectSectionAndScreen = [&client, &crossTwoSections, &isBetween] (int x1, int y1, int x2, int y2) {
+        bool inside1 = isBetween (x1, 0, client.right) && isBetween (y1, 0, client.bottom);
+        bool inside2 = isBetween (x2, 0, client.right) && isBetween (y2, 0, client.bottom);
+
+        if (inside1 && inside2) {
+            return std::tuple<bool, int, int, int, int> (true, x1, y1, x2, y2);
+        }
+
+        auto [cross1, cx1, cy1] = crossTwoSections (x1, y1, x2, y2, 0, 0, client.right, 0);
+        auto [cross2, cx2, cy2] = crossTwoSections (x1, y1, x2, y2, client.right, 0, client.right, client.bottom);
+        auto [cross3, cx3, cy3] = crossTwoSections (x1, y1, x2, y2, 0, client.bottom, client.right, client.bottom);
+        auto [cross4, cx4, cy4] = crossTwoSections (x1, y1, x2, y2, 0, 0, 0, client.bottom);
+
+        if (inside1) {
+            if (cross1) return std::tuple<bool, int, int, int, int> (true, x1, y1, cx1, cy1);
+            if (cross2) return std::tuple<bool, int, int, int, int> (true, x1, y1, cx2, cy2);
+            if (cross3) return std::tuple<bool, int, int, int, int> (true, x1, y1, cx3, cy3);
+            if (cross4) return std::tuple<bool, int, int, int, int> (true, x1, y1, cx4, cy4);
+        }
+        if (inside2) {
+            if (cross1) return std::tuple<bool, int, int, int, int> (true, cx1, cy1, x2, y2);
+            if (cross2) return std::tuple<bool, int, int, int, int> (true, cx2, cy2, x2, y2);
+            if (cross3) return std::tuple<bool, int, int, int, int> (true, cx3, cy3, x2, y2);
+            if (cross4) return std::tuple<bool, int, int, int, int> (true, cx4, cy4, x2, y2);
+        }
+        return std::tuple<bool, int, int, int, int> (false, 0, 0, 0, 0);
+    };
+    auto checkAddLeg = [&vertices, &view, &addPoint, &intersectSectionAndScreen] (double lat1, double lon1, double lat2, double lon2) {
+        int x1, y1, x2, y2;
+
+        PenTool::geo2screen (lat1, lon1, view, x1, y1);
+        PenTool::geo2screen (lat2, lon2, view, x2, y2);
+
+        auto [intersects, cx1, cy1, cx2, cy2] = intersectSectionAndScreen (x1, y1, x2, y2);
+
+        if (intersects) {
+            addPoint (cx1, cy1);
+            addPoint (cx2, cy2);
+        }
+    };
+
+    auto checkAddLegByTwoPos = [&checkAddLeg] (Position& pos1, Position& pos2) {
+        checkAddLeg (pos1.lat, pos1.lon, pos2.lat, pos2.lon);
+    };
+    if (edge.internalNodes.empty ()) {
+        checkAddLegByTwoPos (
+            chart.nodes [edge.beginIndex].points.front (),
+            chart.nodes [edge.endIndex].points.front ()
+        );
+    } else {
+        checkAddLegByTwoPos (chart.nodes [edge.beginIndex].points.front (), edge.internalNodes.front ());
+        for (size_t i = 1, j = edge.internalNodes.size () - 1; i < j; ++ i) {
+            checkAddLegByTwoPos (edge.internalNodes [i-1], edge.internalNodes [i]);
+        }
+        checkAddLegByTwoPos (edge.internalNodes.back (), chart.nodes [edge.endIndex].points.front ());
+    }
+    if (vertices.empty ()) return std::tuple<bool, int, int> (false, 0, 0);
+
+    // Walk along the contour and calculate the length
+    double len = 0;
+    for (size_t i = 1, j = vertices.size (); i < j; ++ i) {
+        auto& pt1 = vertices [i-1];
+        auto& pt2 = vertices [i];
+
+        if (pt1.x != pt2.x || pt1.y != pt2.y) {
+            int dx = pt2.x - pt1.x;
+            int dy = pt2.y - pt1.y;
+            len += sqrt (dx * dx + dy * dy);
+        }
+    }
+
+    len *= 0.5;
+
+    // Walk along again until we found a middle point
+    double passed = 0;
+    for (size_t i = 1, j = vertices.size (); i < j; ++ i) {
+        auto& pt1 = vertices [i-1];
+        auto& pt2 = vertices [i];
+
+        if (pt1.x != pt2.x || pt1.y != pt2.y) {
+            int dx = pt2.x - pt1.x;
+            int dy = pt2.y - pt1.y;
+            double legLen = sqrt (dx * dx + dy * dy);
+
+            if ((passed + legLen) >= len) {
+                double coef = (len - passed) / legLen;
+                int x = pt1.x + (int) (coef * (double) dx);
+                int y = pt1.y + (int) (coef * (double) dy);
+
+                return std::tuple<bool, int, int> (true, x, y);
+            } else {
+                passed += legLen;
+            }
+        }
+    }
+    return std::tuple<bool, int, int> (false, 0, 0);
+}
+

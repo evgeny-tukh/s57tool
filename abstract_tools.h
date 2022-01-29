@@ -25,7 +25,7 @@ struct PenTool {
 
     void composeSection (int x1, int y1, int x2, int y2, double lengthInPix, double strokeLengthPix, double gapLengthPix, PolyPolygon& polyPolygon);
 
-    void geo2screen (double lat, double lon, View& view, int& x, int& y);
+    static void geo2screen (double lat, double lon, View& view, int& x, int& y);
     static std::tuple<bool, double, double> getStrokeProps (int style);
 
     template<typename TYPE>

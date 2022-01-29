@@ -132,3 +132,15 @@ void paintSymbol (
     View& view,
     PaletteIndex paletteIndex
 );
+void paintSymbol (
+    RECT& client,
+    HDC paintDC,
+    int x,
+    int y,
+    size_t symbolIndex,
+    double rotAngle,
+    Dai& dai,
+    PaletteIndex paletteIndex
+);
+
+std::tuple<bool, int, int> getCenterPos (size_t edgeIndex, RECT& client, Chart& chart, View& view);

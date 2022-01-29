@@ -48,6 +48,25 @@ struct SymbolDrawer: Drawer {
     virtual void run (RECT& client, HDC paintDC, PaletteIndex paletteIndex, Palette& palette);
 };
 
+struct CentralEdgeSymbolDrawer: Drawer {
+    size_t symbolIndex;
+    size_t edgeIndex;
+    Dai& dai;
+    Chart& chart;
+
+    virtual bool isSymbol () { return true; }
+
+    CentralEdgeSymbolDrawer (
+        Chart& _chart,
+        View& _view,
+        size_t _symbolIndex,
+        size_t _edgeIndex,
+        Dai& _dai
+    ): Drawer (0, 0, 0, _view, 0.0, 0.0, 0.0), edgeIndex (_edgeIndex), symbolIndex (_symbolIndex), dai (_dai), chart (_chart) {}
+
+    virtual void run (RECT& client, HDC paintDC, PaletteIndex paletteIndex, Palette& palette);
+};
+
 struct TextDrawer: Drawer {
     std::string text;
     TextDesc desc;
@@ -177,7 +196,13 @@ struct DrawQueue {
         container.clear ();
     }
     void run () {
-        for (auto drawer: container) drawer->run (client, paintDC, paletteIndex, dai.palette);
+        for (auto drawer: container) {
+            //POINT prevPos;
+            //MoveToEx (paintDC, 0, 0, & prevPos);
+            //MoveToEx (paintDC, prevPos.x, prevPos.y, 0);
+            drawer->run (client, paintDC, paletteIndex, dai.palette);
+            //MoveToEx (paintDC, prevPos.x, prevPos.y, 0);
+        }
     }
     void addLine (int penIndex, int penStyle, int penWidth, double lat, double lon, double brg, double rangeMm) {
         container.push_back (new LineDrawer (penIndex, penStyle, penWidth, view, lat, lon, brg, rangeMm));
@@ -190,6 +215,9 @@ struct DrawQueue {
     }
     void addSymbol (double lat, double lon, size_t symbolIndex, double rotAngle, Dai& dai) {
         container.push_back (new SymbolDrawer (view, lat, lon, symbolIndex, rotAngle, dai));
+    }
+    void addCentralEdgeSymbol (Chart& chart, size_t symbolIndex, size_t edgeIndex, Dai& dai) {
+        container.push_back (new CentralEdgeSymbolDrawer (chart, view, symbolIndex, edgeIndex, dai));
     }
     void addCompoundLightArc (
         int penIndex,

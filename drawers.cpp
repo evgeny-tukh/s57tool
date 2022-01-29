@@ -8,15 +8,21 @@
 PenTool Drawer::penTool;
 
 void LineDrawer::run (RECT& client, HDC paintDC, PaletteIndex paletteIndex, Palette& palette) {
-    paintLine (client, paintDC, penStyle, penWidth, penIndex, lat, lon, brg, rangeMm, view, paletteIndex, palette);
+    if (penIndex != LookupTableItem::NOT_EXIST) {
+        paintLine (client, paintDC, penStyle, penWidth, penIndex, lat, lon, brg, rangeMm, view, paletteIndex, palette);
+    }
 }
 
 void ArcDrawer::run (RECT& client, HDC paintDC, PaletteIndex paletteIndex, Palette& palette) {
-    paintArc (client, paintDC, penStyle, penWidth, penIndex, lat, lon, start, end, rangeMm, view, paletteIndex, palette);
+    if (penIndex != LookupTableItem::NOT_EXIST) {
+        paintArc (client, paintDC, penStyle, penWidth, penIndex, lat, lon, start, end, rangeMm, view, paletteIndex, palette);
+    }
 }
 
 void PolyPolylineDrawer::run (RECT& client, HDC paintDC, PaletteIndex paletteIndex, Palette& palette) {
-    paintPolyPolyline (client, paintDC, penStyle, penWidth, penIndex, polyPolyline, view, paletteIndex, palette);
+    if (penIndex != LookupTableItem::NOT_EXIST) {
+        paintPolyPolyline (client, paintDC, penStyle, penWidth, penIndex, polyPolyline, view, paletteIndex, palette);
+    }
 }
 
 void PolyPolylineDrawer::addNode (size_t nodeIndex) {
@@ -300,7 +306,18 @@ void TextDrawer::run (RECT& client, HDC paintDC, PaletteIndex paletteIndex, Pale
 };
 
 void SymbolDrawer::run (RECT& client, HDC paintDC, PaletteIndex paletteIndex, Palette& palette) {
-    paintSymbol (client, paintDC, lat, lon, symbolIndex, rotAngle, dai, view, paletteIndex);
+    if (symbolIndex != LookupTableItem::NOT_EXIST) {
+        paintSymbol (client, paintDC, lat, lon, symbolIndex, rotAngle, dai, view, paletteIndex);
+    }
+}
+
+void CentralEdgeSymbolDrawer::run (RECT& client, HDC paintDC, PaletteIndex paletteIndex, Palette& palette) {
+    if (symbolIndex != LookupTableItem::NOT_EXIST) {
+        auto [exists, x, y] = getCenterPos (edgeIndex, client, chart, view);
+        if (exists) {
+            paintSymbol (client, paintDC, x, y, symbolIndex, 0.0, dai, paletteIndex);
+        }
+    }
 }
 
 void DrawQueue::addCompoundLightArc (

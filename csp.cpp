@@ -307,7 +307,7 @@ void depare03 (LookupTableItem *item, FeatureObject *object, Environment& enviro
             safcon01 (object, locValdco.value (), symbols);
 
             for (auto& symbol: symbols) {
-                edgeRef.symbols.emplace_back (environment.dai.getSymbolIndex (symbol.c_str ()));
+                edgeRef.addSymbol (environment.dai.getSymbolIndex (symbol.c_str ()));
             }
         }
     }
@@ -338,7 +338,7 @@ void depcnt03 (LookupTableItem *item, FeatureObject *object, Environment& enviro
             safcon01 (object, (valdco && !valdco->noValue) ? valdco->floatValue : 0.0, symbols);
 
             for (auto& symbol: symbols) {
-                edgeRef.symbols.emplace_back (environment.dai.getSymbolIndex (symbol.c_str ()));
+                edgeRef.addSymbol (environment.dai.getSymbolIndex (symbol.c_str ()));
             }
         }
     }
@@ -655,8 +655,7 @@ void wrecks05 (LookupTableItem *item, FeatureObject *object, Environment& enviro
 
             if (edgeQuapos && !edgeQuapos->noValue) {
                 if (edgeQuapos->intValue != 1 && edgeQuapos->intValue != 10 && edgeQuapos->intValue != 11) {
-                    edgeRef.customPres = true;
-                    edgeRef.symbols.emplace_back (environment.dai.getSymbolIndex ("LOWACC41"));
+                    edgeRef.addSymbol (environment.dai.getSymbolIndex ("LOWACC41"));
                     continue;
                 }
             }
@@ -736,8 +735,7 @@ void qualin02 (LookupTableItem *item, FeatureObject *object, Environment& enviro
 
         if (quapos && !quapos->noValue) {
             if (quapos->intValue == 1 || quapos->intValue == 10 || quapos->intValue == 11) {
-                edgeRef.customPres = true;
-                edgeRef.symbols.emplace_back (environment.dai.getSymbolIndex ("LOWACC21"));
+                edgeRef.addSymbol (environment.dai.getSymbolIndex ("LOWACC21"));
                 continue;
             }
         }
@@ -877,7 +875,7 @@ void obstrn07 (LookupTableItem *item, FeatureObject *object, Environment& enviro
                 edgeRef.customPres = true;
 
                 if (quapos && !quapos->noValue && quapos->intValue >= 2 && quapos->intValue <= 9) {
-                    edgeRef.symbols.emplace_back (environment.dai.getSymbolIndex (isolatedDanger ? "LOWACC41" : "LOWACC31"));
+                    edgeRef.addSymbol (environment.dai.getSymbolIndex (isolatedDanger ? "LOWACC41" : "LOWACC31"));
                     continue;
                 }
                 
@@ -990,7 +988,7 @@ void slcons04 (LookupTableItem *item, FeatureObject *object, Environment& enviro
             auto quapos = object->getEdgeAttr (edgeRef, ATTRS::QUAPOS, chart.edges);
 
             if (quapos && !quapos->noValue && (quapos->intValue == 1 || quapos->intValue == 10 || quapos->intValue == 11)) {
-                edgeRef.symbols.emplace_back (environment.dai.getSymbolIndex ("LOWACC01"));
+                edgeRef.addSymbol (environment.dai.getSymbolIndex ("LOWACC01"));
             } else {
                 auto condtn = object->getEdgeAttr (edgeRef, ATTRS::CONDTN, chart.edges);
                 auto catslc = object->getEdgeAttr (edgeRef, ATTRS::CATSLC, chart.edges);
