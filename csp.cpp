@@ -316,6 +316,7 @@ void depare03 (LookupTableItem *item, FeatureObject *object, Environment& enviro
 void depcnt03 (LookupTableItem *item, FeatureObject *object, Environment& environment, Chart& chart, View& view, DrawQueue& drawQueue) {
     Settings& settings = environment.settings;
     Dai& dai = environment.dai;
+    auto valdco = object->getAttr (ATTRS::VALDCO);
 
     for (auto& edgeRef: object->edgeRefs) {
         auto quapos = object->getEdgeAttr (edgeRef, ATTRS::QUAPOS, chart.edges);
@@ -332,7 +333,6 @@ void depcnt03 (LookupTableItem *item, FeatureObject *object, Environment& enviro
         }
 
         if (environment.settings.displayContourLabels) {
-            auto valdco = object->getEdgeAttr (edgeRef, ATTRS::VALDCO, chart.edges);
             std::vector<std::string> symbols;
 
             safcon01 (object, (valdco && !valdco->noValue) ? valdco->floatValue : 0.0, symbols);
