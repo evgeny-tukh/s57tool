@@ -8,6 +8,7 @@
 #include "data.h"
 #include "settings.h"
 #include "drawers.h"
+#include "parser.h"
 
 uint8_t _7_8_14 [] { 7, 8, 14, 0 };
 uint8_t _1_2 [] { 1, 2, 0 };
@@ -19,6 +20,29 @@ uint8_t _3_4_5_6_13_16_17_23_24_25_26_27 [] { 3, 4, 5, 6, 13, 16, 17, 23, 24, 25
 uint8_t _1_8_9_12_14_18_19_21_24_25_26 [] { 1, 8, 9, 12, 14, 18, 19, 21, 24, 25, 26, 0 };
 uint8_t _13_16_17_23_24_25_26_27 [] { 13, 16, 17, 23, 24, 25, 26, 27, 0 };
 uint8_t _4_5_6_7_10_20_22_23 [] { 4, 5, 6, 7, 10, 20, 22, 23, 0 };
+
+bool isFloating (FeatureObject& object) {
+    switch (object.classCode) {
+        case OBJ_CLASSES::LITFLT:
+        case OBJ_CLASSES::LITVES:
+        case OBJ_CLASSES::BOYCAR:
+        case OBJ_CLASSES::BOYINB:
+        case OBJ_CLASSES::BOYISD:
+        case OBJ_CLASSES::BOYLAT:
+        case OBJ_CLASSES::BOYSAW:
+        case OBJ_CLASSES::BOYSPP: {
+            return true;
+        }
+        case OBJ_CLASSES::MORFAC: {
+            auto catmor = object.getAttr (ATTRS::CATMOR);
+
+            return catmor && !catmor->noValue && catmor->intValue == 7;
+        }
+        default: {
+            return false;
+        }
+    }
+}
 
 bool isEdgeSharedWithTg1Object (FeatureObject *thisObject, size_t edgeIndex, Features& features) {
     for (size_t i = 0; i < features.size (); ++ i) {
@@ -772,6 +796,70 @@ void qualin02 (LookupTableItem *item, FeatureObject *object, Environment& enviro
     }
 }
 
+void symins02 (LookupTableItem *item, FeatureObject *object, Environment& environment, Chart& chart, View& view, DrawQueue& drawQueue) {
+    auto symins = object->getAttr (ATTRS::SYMINS);
+
+    if (symins && !symins->noValue) {
+        std::vector<std::string> instrList;
+        splitString (symins->strValue, instrList, ';');
+        processInstructions (environment.dai, environment.attrDictionary, item, instrList);
+    } else if (object->primitive == 1 || object->primitive == 4) {
+        item->symbols.emplace_back (environment.dai.getSymbolIndex ("NEWOBJ01"));
+    } else if (object->primitive == 2) {
+        item->edgeSymbolIndex = environment.dai.getSymbolIndex ("NEWOBJ01");
+    } else {
+        item->centralSymbolIndex = environment.dai.getSymbolIndex ("NEWOBJ01");
+        item->penIndex = environment.dai.getBasePenIndex ("CHGMD");
+        item->edgePenIndex = item->penIndex;
+        item->edgePenStyle = PS_DASH;
+        item->edgePenWidth = 2;
+    }
+}
+
+void topmar01 (LookupTableItem *item, FeatureObject *object, Environment& environment, Chart& chart, View& view, DrawQueue& drawQueue) {
+    auto topshp = object->getAttr (ATTRS::TOPSHP);
+    auto& pos = chart.nodes [object->nodeIndex].points.front ();
+
+    std::string symbolName;
+
+    if (topshp && !topshp->noValue) {
+        bool floating = false;
+
+        for (auto& anotherObject: chart.features) {
+            if (anotherObject.primitive == 1 && anotherObject.nodeIndex == object->nodeIndex && isFloating (anotherObject)) {
+                floating = true; break;
+            }
+        }
+
+        switch (topshp->intValue) {
+            case 1: case 24: case 29: symbolName = floating ? "TOPMAR02" : "TOPMAR22"; break;
+            case 25: case 2: symbolName = floating ? "TOPMAR04" : "TOPMAR24"; break;
+            case 32: case 26: case 3: symbolName = floating ? "TOPMAR10" : "TOPMAR30"; break;
+            case 4: symbolName = floating ? "TOPMAR12" : "TOPMAR32"; break;
+            case 7: symbolName = floating ? "TOPMAR65" : "TOPMAR85"; break;
+            case 27: case 8: symbolName = floating ? "TOPMAR17" : "TOPMAR86"; break;
+            case 9: symbolName = floating ? "TOPMAR16" : "TOPMAR36"; break;
+            case 10: symbolName = floating ? "TOPMAR08" : "TOPMAR28"; break;
+            case 11: symbolName = floating ? "TOPMAR07" : "TOPMAR27"; break;
+            case 31: case 12: symbolName = "TOPMAR14"; break;
+            case 13: symbolName = floating ? "TOPMAR05" : "TOPMAR25"; break;
+            case 14: symbolName = floating ? "TOPMAR06" : "TOPMAR26"; break;
+            case 15: symbolName = floating ? "TMARDEF2" : "TOPMAR88"; break;
+            case 16: symbolName = floating ? "TMARDEF2" : "TOPMAR87"; break;
+            case 18: symbolName = floating ? "TOPMAR10" : "TOPMAR30"; break;
+            case 5: case 21: case 19: symbolName = floating ? "TOPMAR13" : "TOPMAR33"; break;
+            case 6: case 22: case 23: case 20: symbolName = floating ? "TOPMAR14" : "TOPMAR34"; break;
+            case 28: symbolName = floating ? "TOPMAR18" : "TOPMAR89"; break;
+            case 30: symbolName = floating ? "TOPMAR17" : "TOPMAR86"; break;
+            case 33: case 17: default: symbolName = floating ? "TMARDEF2" : "TMARDEF1";
+        }
+    } else {
+        symbolName = "QUESMRK1";
+    }
+
+    drawQueue.addSymbol (pos.lat, pos.lon, environment.dai.getSymbolIndex (symbolName.c_str ()), 0.0, environment.dai);
+}
+
 void obstrn07 (LookupTableItem *item, FeatureObject *object, Environment& environment, Chart& chart, View& view, DrawQueue& drawQueue) {
     auto valsou = object->getAttr (ATTRS::VALSOU);
     double depth;
@@ -1027,11 +1115,6 @@ void restrn01 (LookupTableItem *item, FeatureObject *object, Environment& enviro
 }
 
 void resare04 (LookupTableItem *item, FeatureObject *object, Environment& environment, Chart& chart, View& view, DrawQueue& drawQueue) {
-if(object->fidn==29140887){
-int iii=0;
-++iii;
---iii;
-}
     auto restrn = object->getAttr (ATTRS::RESTRN);
     auto catrea = object->getAttr (ATTRS::CATREA);
     auto catreaIncludes = [&catrea] (uint8_t *list) {
@@ -1418,6 +1501,7 @@ void initCSPs (Environment& environment) {
     environment.dai.addCSP ("LIGHTS06", lights06);
     environment.dai.addCSP ("DEPCNT03", depcnt03);
     environment.dai.addCSP ("DEPARE03", depare03);
+    environment.dai.addCSP ("SOUNDG02", soundg03);
     environment.dai.addCSP ("SOUNDG03", soundg03);
     environment.dai.addCSP ("WRECKS05", wrecks05);
     environment.dai.addCSP ("RESARE04", resare04);
@@ -1425,4 +1509,7 @@ void initCSPs (Environment& environment) {
     environment.dai.addCSP ("SLCONS04", slcons04);
     environment.dai.addCSP ("QUAPOS01", quapos01);
     environment.dai.addCSP ("OBSTRN07", obstrn07);
+    environment.dai.addCSP ("TOPMAR01", topmar01);
+    environment.dai.addCSP ("TOPMAR02", topmar01);
+    environment.dai.addCSP ("SYMINS02", symins02);
 }

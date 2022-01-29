@@ -26,6 +26,9 @@ enum ATTRS {
     CATSLC = 60,
     CONRAD = 82,
     CATOBS = 42,
+    TOPSHP = 171,
+    CATMOR = 40,
+    SYMINS = 192,
 };
 
 enum OBJ_CLASSES {
@@ -49,4 +52,13 @@ enum OBJ_CLASSES {
     WRECKS = 159,
     OBSTRN = 86,
     COALNE = 30,
+    LITFLT = 76,
+    LITVES = 77,
+    BOYCAR = 14,
+    BOYINB = 15,
+    BOYISD = 16,
+    BOYLAT = 17,
+    BOYSAW = 18,
+    BOYSPP = 19,
+    MORFAC = 84,
 };
