@@ -4,6 +4,7 @@ Settings::Settings ():
     fullSectorLength (false),
     safetyContourLabels (false),
     displayContourLabels (true),
+    showLightDescriptions (true),
     twoShades (false),
     symbolizedBoundaries (false),
     showIsolatedDanger (false),

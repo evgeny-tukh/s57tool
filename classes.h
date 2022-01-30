@@ -29,6 +29,11 @@ enum ATTRS {
     TOPSHP = 171,
     CATMOR = 40,
     SYMINS = 192,
+    SIGGRP = 141,
+    SIGPER = 142,
+    SIGSEQ = 143,
+    HEIGHT = 95,
+
 };
 
 enum OBJ_CLASSES {

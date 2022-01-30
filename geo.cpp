@@ -365,25 +365,32 @@ void buildPointLocationInfo (Chart& chart) {
 
 void getCenterPos (FeatureObject& object, Chart& chart, double& lat, double& lon) {
     Nodes& nodes = chart.nodes;
-    Edges& edges = chart.edges;
-    double sumLat = 0.0;
-    double sumLon = 0.0;
-    size_t count = 0;
-    for (auto& edgeRef: object.edgeRefs) {
-        auto& edge = edges.container [edgeRef.index];
-        auto& begin = nodes.container [edge.beginIndex].points [0];
-        auto& end = nodes.container [edge.endIndex].points [0];
-        sumLat += begin.lat + end.lat;
-        sumLon += begin.lon + end.lon;
 
-        for (auto& pos: edge.internalNodes) {
-            sumLat += pos.lat;
-            sumLon += pos.lon;
+    if (object.primitive == 1 || object.primitive == 4) {
+        auto& pos = nodes [object.nodeIndex].points.front ();
+        lat = pos.lat;
+        lon = pos.lon;
+    } else {
+        Edges& edges = chart.edges;
+        double sumLat = 0.0;
+        double sumLon = 0.0;
+        size_t count = 0;
+        for (auto& edgeRef: object.edgeRefs) {
+            auto& edge = edges.container [edgeRef.index];
+            auto& begin = nodes.container [edge.beginIndex].points [0];
+            auto& end = nodes.container [edge.endIndex].points [0];
+            sumLat += begin.lat + end.lat;
+            sumLon += begin.lon + end.lon;
+
+            for (auto& pos: edge.internalNodes) {
+                sumLat += pos.lat;
+                sumLon += pos.lon;
+            }
+
+            count += 2 + edge.internalNodes.size ();
         }
-
-        count += 2 + edge.internalNodes.size ();
+        lat = sumLat / (double) count;
+        lon = sumLon / (double) count;
     }
-    lat = sumLat / (double) count;
-    lon = sumLon / (double) count;
 }
 

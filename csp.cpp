@@ -802,7 +802,7 @@ void symins02 (LookupTableItem *item, FeatureObject *object, Environment& enviro
     if (symins && !symins->noValue) {
         std::vector<std::string> instrList;
         splitString (symins->strValue, instrList, ';');
-        processInstructions (environment.dai, environment.attrDictionary, item, instrList);
+        processInstructions (environment.dai, environment.attrDictionary, *item, instrList);
     } else if (object->primitive == 1 || object->primitive == 4) {
         item->symbols.emplace_back (environment.dai.getSymbolIndex ("NEWOBJ01"));
     } else if (object->primitive == 2) {
@@ -1254,6 +1254,67 @@ void resare04 (LookupTableItem *item, FeatureObject *object, Environment& enviro
     }
 }
 
+std::string litdsn02 (FeatureObject *object, Chart& chart, Environment& environment) {
+    std::string result;
+
+    auto catlit = object->getAttr (ATTRS::CATLIT);
+    auto litchr = object->getAttr (ATTRS::LITCHR);
+    auto siggrp = object->getAttr (ATTRS::SIGGRP);
+    auto colour = object->getAttr (ATTRS::COLOUR);
+    auto sigper = object->getAttr (ATTRS::SIGPER);
+    auto height = object->getAttr (ATTRS::HEIGHT);
+    auto valnmr = object->getAttr (ATTRS::VALNMR);
+    auto status = object->getAttr (ATTRS::STATUS);
+
+    if (catlit && !catlit->noValue) {
+        switch (catlit->intValue) {
+            case 1: result += "Dir "; break;
+            case 5: result += "Aero "; break;
+            case 7: result += "Fog Det Lt "; break;
+        }
+    }
+    if (status && !status->noValue) {
+        switch (status->intValue) {
+            case 2: result += "occas "; break;
+            case 7: result += "temp "; break;
+            case 8: result += "priv "; break;
+            case 11: result += "exting "; break;
+            case 17: result += "U "; break;
+        }
+    }
+    if (litchr && !litchr->noValue) {
+        switch (litchr->intValue) {
+            case 1: result += "F "; break;
+            case 2: result += "Fl "; break;
+            case 3: result += "LFl "; break;
+            case 4: result += "Q "; break;
+            case 5: result += "VQ "; break;
+            case 6: result += "UQ "; break;
+            case 7: result += "Iso "; break;
+            case 8: result += "Oc "; break;
+            case 9: result += "IQ "; break;
+            case 10: result += "IVQ "; break;
+            case 11: result += "IUQ "; break;
+            case 12: result += "Mo "; break;
+            case 13: result += "FFl "; break;
+            case 14: result += "Fl+LFl "; break;
+            case 15: result += "OcFl "; break;
+            case 16: result += "FLFl "; break;
+            case 17: result += "AlOc "; break;
+            case 18: result += "AlLFl "; break;
+            case 19: result += "AlFl "; break;
+            case 20: result += "Al "; break;
+            case 25: result += "Q+LFl "; break;
+            case 26: result += "VQ+LFl "; break;
+            case 27: result += "UQ+LFl "; break;
+            case 28: result += "Al "; break;
+            case 29: result += "AlF Fl "; break;
+        }
+    }
+
+    return result;
+}
+
 void lights06 (LookupTableItem *item, FeatureObject *object, Environment& environment, Chart& chart, View& view, DrawQueue& drawQueue) {
     Nodes& nodes = chart.nodes;
     Features& features = chart.features;
@@ -1298,7 +1359,9 @@ void lights06 (LookupTableItem *item, FeatureObject *object, Environment& enviro
 
     bool flareAt45Deg = false;
 
-    int colorValue = (!colour || colour->noValue) ? 12 : 0;
+    std::optional<int> colorValue;
+    
+    if (!colour || colour->noValue) colorValue = 12;
 
     bool noSector = (
         !sectr1 ||
@@ -1337,16 +1400,31 @@ void lights06 (LookupTableItem *item, FeatureObject *object, Environment& enviro
             auto& pos = nodes [object->nodeIndex].points.front ();
 
             drawQueue.addCompoundLightArc (dai.getBasePenIndex (arcColorName.c_str ()), PS_SOLID, 2, pos.lat, pos.lon, 26, 0.0, 360.0);
-            /*item->drawArc = true;
-            item->arcDef.start = 0.0;
-            item->arcDef.end = 359.9999999;
-            item->arcDef.nodeIndex = object->nodeIndex;
-            item->arcDef.internalColor = dai.getBasePenIndex (arcColorName.c_str ());
-            item->arcDef.radius = 26.0 / PIXEL_SIZE_IN_MM;*/
         } else {
             flareAt45Deg = false;
 
-            if (false/*NoSectorLightsPlus*/) {
+            // Is there any 'No Sector' lights located at the same point as the calling object?
+            bool noSectorLightsPlus = false;
+            for (auto& curObj: chart.features) {
+                if (curObj.fidn != object->fidn && curObj.classCode == OBJ_CLASSES::LIGHTS && curObj.nodeIndex == object->nodeIndex) {
+                    // colocated light found
+                    // check if it is "no-sector"
+                    auto curSectr1 = curObj.getAttr (ATTRS::SECTR1);
+                    auto curSectr2 = curObj.getAttr (ATTRS::SECTR2);
+                    if (
+                        !curSectr1 ||
+                        curSectr1->noValue ||
+                        !curSectr2 ||
+                        curSectr2->noValue ||
+                        curSectr1->floatValue == curSectr2->floatValue ||
+                        curSectr1->floatValue == 0.0 && curSectr2->floatValue == 360.0
+                    ) {
+                        noSectorLightsPlus = true; break;
+                    }
+                }
+            }
+
+            if (noSectorLightsPlus) {
                 if (colour && !colour->noValue && (colour->listIncludes (1) || colour->listIncludes (6) || colour->listIncludes (11))) {
                     flareAt45Deg = true;
                 }
@@ -1378,6 +1456,9 @@ void lights06 (LookupTableItem *item, FeatureObject *object, Environment& enviro
                 if (orient && !orient->noValue) {
                     // +/- 180
                     item->symbols.emplace_back (dai.getSymbolIndex (symbolName.c_str ()), 180.0);
+                    item->textInstructions.emplace_back ("TE(‘%03.0lf deg’,’ORIENT’,3,3,3,'15110',3,1,CHBLK,23)");
+                    auto &desc = item->textDescriptions.emplace_back ();
+                    parseTextInstruction (item->textInstructions.back ().c_str (), dai, environment.attrDictionary, desc);
                 } else {
                     item->symbols.push_back (dai.getSymbolIndex ("QUESMRK1"));
                 }
@@ -1387,6 +1468,20 @@ void lights06 (LookupTableItem *item, FeatureObject *object, Environment& enviro
             } else {
                 // 135
                 item->symbols.emplace_back (dai.getSymbolIndex (symbolName.c_str ()), 135);
+            }
+
+            if (environment.settings.showLightDescriptions) {
+                // LITDSN02
+                std::string lightDesc = litdsn02 (object, chart, environment);
+                std::string instr;
+                if (flareAt45Deg) {
+                    instr = "TX('*" + lightDesc + "',3,1,3,'15110',2,-1,CHBLK,23)";
+                } else {
+                    instr = "TX('*" + lightDesc + "',3,2,3,'15110',2,0,CHBLK,23)";
+                }
+                item->textInstructions.emplace_back (instr);
+                auto &desc = item->textDescriptions.emplace_back ();
+                parseTextInstruction (item->textInstructions.back ().c_str (), dai, environment.attrDictionary, desc);
             }
         }
     } else {

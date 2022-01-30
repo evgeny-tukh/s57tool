@@ -92,9 +92,13 @@ TextDrawer::TextDrawer (
     Dai& _dai
 ) : Drawer (LookupTableItem::NOT_EXIST, PS_SOLID, 1, _view, _lat, _lon, 0.0), desc (_desc), dai (_dai) {
     if (_desc.paramDescs.size () == 1) {
-        auto attr = _object->getAttr (_desc.paramDescs.front ().classCode);
+        if (!_desc.paramDescs.front ().plainText.empty ()) {
+            text = _desc.paramDescs.front ().plainText;
+        } else {
+            auto attr = _object->getAttr (_desc.paramDescs.front ().classCode);
 
-        if (attr && !attr->noValue) text = attr->strValue;
+            if (attr && !attr->noValue) text = attr->strValue;
+        }
     } else {
         text = _desc.plainTextParts.front ();
         for (size_t i = 0; i < _desc.paramDescs.size (); ++ i) {
@@ -169,11 +173,15 @@ void prepareSingleArg (const char *acronym, AttrDictionary& attrDic, TextDesc& d
     desc.paramDescs.clear ();
     desc.plainTextParts.clear ();
 
-    auto attrDesc = attrDic.findByAcronym (acronym);
-
     auto& paramDesc = desc.paramDescs.emplace_back ();
-    paramDesc.classCode = attrDesc ? attrDesc->code : 0;
     paramDesc.type = TextDesc::ParamType::STRING_VAL;
+
+    if (*acronym == '*') {
+        paramDesc.plainText = acronym + 1;
+    } else {
+        auto attrDesc = attrDic.findByAcronym (acronym);
+        paramDesc.classCode = attrDesc ? attrDesc->code : 0;
+    }
 }
 
 std::string s57format (const char *format, std::vector<std::string>& args, FeatureObject *object, Dai& dai, AttrDictionary& attrDic) {

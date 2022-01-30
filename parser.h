@@ -20,3 +20,5 @@ size_t parseRecord (const char *start);
 std::string formatLat (double lat);
 std::string formatLon (double lon);
 void processInstructions (Dai& dai, AttrDictionary& attrDic, LookupTableItem& item, std::vector<std::string>& instructions);
+void parseTextInstruction (const char *instr, Dai& dai, AttrDictionary& attrDic, TextDesc& desc);
+

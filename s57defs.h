@@ -1041,6 +1041,7 @@ struct TextDesc {
         ParamType type;
         std::string format;
         size_t classCode;
+        std::string plainText;
     };
 
     HorJust horJust;
