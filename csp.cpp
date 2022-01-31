@@ -1254,9 +1254,67 @@ void resare04 (LookupTableItem *item, FeatureObject *object, Environment& enviro
     }
 }
 
-std::string litdsn02 (FeatureObject *object, Chart& chart, Environment& environment) {
-    std::string result;
+std::string getSignalCode (int signalCharacteristics) {
+    std::string code;
+    switch (signalCharacteristics) {
+        case 1: code = "F"; break;
+        case 2: code = "Fl"; break;
+        case 3: code = "LFl"; break;
+        case 4: code = "Q"; break;
+        case 5: code = "VQ"; break;
+        case 6: code = "UQ"; break;
+        case 7: code = "Iso"; break;
+        case 8: code = "Oc"; break;
+        case 9: code = "IQ"; break;
+        case 10: code = "IVQ"; break;
+        case 11: code = "IUQ"; break;
+        case 12: code = "Mo"; break;
+        case 13: code = "FFl"; break;
+        case 14: code = "Fl+LFl"; break;
+        case 15: code = "OcFl"; break;
+        case 16: code = "FLFl"; break;
+        case 17: code = "AlOc"; break;
+        case 18: code = "AlLFl"; break;
+        case 19: code = "AlFl"; break;
+        case 20: code = "Al"; break;
+        case 25: code = "Q+LFl"; break;
+        case 26: code = "VQ+LFl"; break;
+        case 27: code = "UQ+LFl"; break;
+        case 28: code = "Al"; break;
+        case 29: code = "AlFFl"; break;
+    }
+    return code;
+}
 
+std::string insertColorIntoSignalGroup (const char *signalGroup, char color) {
+    std::string result = signalGroup;
+    if (result.back () == ')') {
+        result.insert (result.begin () + result.length () - 2, color);
+    } else {
+        result += color;
+    }
+    return result;
+}
+
+std::string insertColorIntoCompoundSignalGroup (const char *signalGroup, char color1, int color2) {
+    std::string group { signalGroup };
+    std::string result;
+    size_t plusPos = group.find ('+');
+    if (plusPos != std::string::npos) {
+        std::string part1 = group.substr (1, plusPos);
+        std::string part2 = group.substr (plusPos + 1, group.length () - 3 - plusPos);
+        result += '(';
+        result += part1;
+        result += color1;
+        result += '+';
+        result += part2;
+        result += color2;
+        result += ')';
+    }
+    return result;
+}
+
+std::string litdsn02 (FeatureObject *object, Chart& chart, Environment& environment) {
     auto catlit = object->getAttr (ATTRS::CATLIT);
     auto litchr = object->getAttr (ATTRS::LITCHR);
     auto siggrp = object->getAttr (ATTRS::SIGGRP);
@@ -1266,53 +1324,288 @@ std::string litdsn02 (FeatureObject *object, Chart& chart, Environment& environm
     auto valnmr = object->getAttr (ATTRS::VALNMR);
     auto status = object->getAttr (ATTRS::STATUS);
 
+    std::string lightCatValue;
+    std::string lightCharsValue;
+    std::string statusValue;
+    std::string heightValue;
+    std::string signalPeriod;
+    std::string rangeValue;
+    std::vector<std::string> signalGroups;
+    std::vector<char> colors;
+
+    if (height && !height->noValue) heightValue = std::to_string (height->floatValue) + 'm';
+    if (sigper && !sigper->noValue) signalPeriod = std::to_string ((int) sigper->floatValue) + 's';
+    if (valnmr && !valnmr->noValue) rangeValue = std::to_string ((int) valnmr->floatValue) + 'M';
+    if (colour && !colour->noValue) {
+        static char	COLOR_CHARS [] { "\0W\0RGBY\0\0AVO" };
+        for (uint8_t clr: colour->listValue) {
+            if (clr > 0 && clr < sizeof (COLOR_CHARS)) {
+                colors.emplace_back (COLOR_CHARS [clr]);
+            }
+        }
+    }
+    if (siggrp && !siggrp->noValue) {
+        std::string group;
+        auto checkAddGroup = [&group, &signalGroups] () {
+            if (!group.empty ()) signalGroups.emplace_back (group.c_str ());
+        };
+        for (char chr: siggrp->strValue) {
+            if (chr == '(') {
+                checkAddGroup (); group = chr;
+            } else {
+                group += chr;
+            }
+        }
+        checkAddGroup ();
+    }
     if (catlit && !catlit->noValue) {
-        switch (catlit->intValue) {
-            case 1: result += "Dir "; break;
-            case 5: result += "Aero "; break;
-            case 7: result += "Fog Det Lt "; break;
+        if (catlit->listIncludes (1)) {
+            lightCatValue += "Dir";
+        }
+        if (catlit->listIncludes (5)) {
+            if (!lightCatValue.empty ()) statusValue += ';';
+            lightCatValue += "Aero";
+        }
+        if (catlit->listIncludes (7)) {
+            if (!lightCatValue.empty ()) statusValue += ';';
+            lightCatValue += "Fog Det Lt";
         }
     }
     if (status && !status->noValue) {
-        switch (status->intValue) {
-            case 2: result += "occas "; break;
-            case 7: result += "temp "; break;
-            case 8: result += "priv "; break;
-            case 11: result += "exting "; break;
-            case 17: result += "U "; break;
+        if (status->listIncludes (2)) {
+            statusValue = "occas";
+        }
+        if (status->listIncludes (7)) {
+            if (!statusValue.empty ()) statusValue += ';';
+            statusValue += "temp";
+        }
+        if (status->listIncludes (8)) {
+            if (!statusValue.empty ()) statusValue += ';';
+            statusValue += "priv";
+        }
+        if (status->listIncludes (11)) {
+            if (!statusValue.empty ()) statusValue += ';';
+            statusValue += "exting";
+        }
+        if (status->listIncludes (17)) {
+            if (!statusValue.empty ()) statusValue += ';';
+            statusValue += "U";
         }
     }
+    std::string desc;
     if (litchr && !litchr->noValue) {
+        desc = getSignalCode (litchr->intValue) + ' ';
         switch (litchr->intValue) {
-            case 1: result += "F "; break;
-            case 2: result += "Fl "; break;
-            case 3: result += "LFl "; break;
-            case 4: result += "Q "; break;
-            case 5: result += "VQ "; break;
-            case 6: result += "UQ "; break;
-            case 7: result += "Iso "; break;
-            case 8: result += "Oc "; break;
-            case 9: result += "IQ "; break;
-            case 10: result += "IVQ "; break;
-            case 11: result += "IUQ "; break;
-            case 12: result += "Mo "; break;
-            case 13: result += "FFl "; break;
-            case 14: result += "Fl+LFl "; break;
-            case 15: result += "OcFl "; break;
-            case 16: result += "FLFl "; break;
-            case 17: result += "AlOc "; break;
-            case 18: result += "AlLFl "; break;
-            case 19: result += "AlFl "; break;
-            case 20: result += "Al "; break;
-            case 25: result += "Q+LFl "; break;
-            case 26: result += "VQ+LFl "; break;
-            case 27: result += "UQ+LFl "; break;
-            case 28: result += "Al "; break;
-            case 29: result += "AlF Fl "; break;
+            case 1: /*Fixed*/ {
+                if (!colors.empty ()) desc += colors.front ();
+                break;
+            }
+            case 7: /*Isophased*/
+            case 20: /*Group alternated*/ {
+                if (!signalGroups.empty ()) desc += signalGroups.front ();
+                if (!colors.empty ()) desc += colors.front ();
+                break;
+            }
+            case 2: /*Flashing*/
+            case 3: /*Long Flashing*/
+            case 19: /*Flashing Alternated*/
+            case 4: /*Quick Flashing*/
+            case 5: /*Very Quick Flashing*/
+            case 6: /*Ultra Quick Flashing*/
+            case 8: /*Occulting*/
+            case 9: /*Interrupted Quick Flashing*/ {
+            case 10: /*Interrupted Very Quick Flashing*/
+            case 11: /*Interrupted Ultra Quick Flashing*/
+            case 12: /*Morse*/
+                if (!signalGroups.empty ()) {
+                    auto& group = signalGroups.front ();
+                    switch (colors.size ()) {
+                        case 0: {
+                            desc += group; break;
+                        }
+                        case 1: {
+                            desc += group;
+                            desc += colors.front ();
+                            break;
+                        }
+                        default: {
+                            desc += insertColorIntoCompoundSignalGroup (group.c_str (), colors [0], colors [1]);
+                        }
+                    } 
+                }
+                break;
+            }
+            case 18: /*Long Flashing Alternating*/
+            case 17: /*Occulting Alternating*/
+            case 28: /*Alternating*/
+            case 29: /*Fixed and Alternating Flashing*/
+            case 13: /*Fixed/Flashing*/
+            case 16: /*Fixed/Long Flashing*/ {
+                switch (signalGroups.size ()) {
+                    case 1: {
+                        auto& group = signalGroups.front ();
+                        switch (colors.size ()) {
+                            case 0:
+                                desc += group;
+                                break;
+                            case 1:
+                                desc += group;
+                                desc += colors [0];
+                                break;
+                            default:
+                                desc += group;
+                                desc += colors [0];
+                                desc += colors [1];
+                                break;
+                        }
+                        break;
+                    }
+                    case 2: {
+                        auto& group1 = signalGroups [0];
+                        auto& group2 = signalGroups [1];
+                        switch (colors.size ()) {
+                            case 0:
+                                desc += group1;
+                                desc += group2;
+                                break;
+                            case 1:
+                                desc += group1;
+                                desc += group2;
+                                desc += colors [0];
+                                break;
+                            case 2:
+                                desc += insertColorIntoSignalGroup (group1.c_str (), colors [0]);
+                                desc += insertColorIntoSignalGroup (group2.c_str (), colors [1]);
+                                break;
+                            default:
+                                desc += insertColorIntoSignalGroup (group1.c_str (), colors [0]);
+                                desc += insertColorIntoCompoundSignalGroup (group2.c_str (), colors [1], colors [2]);
+                                break;
+                        }
+                        break;
+                    }
+                }
+                break;
+            }
+            case 15: /*Occulting/Flashing*/ {
+                switch (signalGroups.size ()) {
+                    case 1: {
+                        auto& group = signalGroups.front ();
+                        switch (colors.size ()) {
+                            case 0:
+                                desc += group;
+                                break;
+                            case 1:
+                                desc += group;
+                                desc += colors [0];
+                                break;
+                            case 2:
+                                desc += group;
+                                desc += colors [0];
+                                desc += colors [1];
+                                break;
+                            default:
+                                desc += group;
+                                desc += colors [0];
+                                desc += colors [1];
+                                desc += colors [2];
+                        }
+                        break;
+                    }
+                    case 2: {
+                        auto& group1 = signalGroups [0];
+                        auto& group2 = signalGroups [1];
+                        switch (colors.size ()) {
+                            case 0:
+                                desc += group1;
+                                desc += group2;
+                                break;
+                            case 1:
+                                desc += group1;
+                                desc += group2;
+                                desc += colors [0];
+                                break;
+                            case 2:
+                                desc += insertColorIntoSignalGroup (group1.c_str (), colors [0]);
+                                desc += insertColorIntoSignalGroup (group2.c_str (), colors [1]);
+                                break;
+                            case 3:
+                                desc += insertColorIntoSignalGroup (group1.c_str (), colors [0]);
+                                desc += insertColorIntoCompoundSignalGroup (group2.c_str (), colors [2], colors [3]);
+                                break;
+                            default:
+                                desc += insertColorIntoCompoundSignalGroup (group1.c_str (), colors [0], colors [1]);
+                                desc += insertColorIntoCompoundSignalGroup (group2.c_str (), colors [2], colors [3]);
+                                break;
+                        }
+                        break;
+                    }
+                }
+                break;
+            }
+            case 14: /*Flashing/Long Flashing*/
+            case 25: /*Quick Flashing Plus Long Flashing*/
+            case 26: /*Very Quick Flashing Plus Long Flashing*/
+            case 27: /*Ultra Quick Flashing Plus Long Flashing*/ {
+                switch (signalGroups.size ()) {
+                    case 1: {
+                        auto& group = signalGroups.front ();
+                        switch (colors.size ()) {
+                            case 0:
+                                desc += group;
+                                break;
+                            case 1:
+                                desc += group;
+                                desc += colors [0];
+                                break;
+                            default:
+                                // can't fit more than two colors here
+                                desc += group;
+                                desc += colors [0];
+                                desc += colors [1];
+                                break;
+                        }
+                        break;
+                    }
+                    case 2: {
+                        auto& group1 = signalGroups [0];
+                        auto& group2 = signalGroups [1];
+                        switch (colors.size ()) {
+                            case 0:
+                                desc += group1;
+                                desc += group2;
+                                break;
+                            case 1:
+                                desc += group1;
+                                desc += group2;
+                                desc += colors [0];
+                                break;
+                            case 2:
+                            case 3:
+                                // We can't process 3 colors as it is not clear where to fit it; both parts are flashing and may have one or two colors!
+                                desc += insertColorIntoSignalGroup (group1.c_str (), colors [0]);
+                                desc += insertColorIntoSignalGroup (group2.c_str (), colors [1]);
+                                break;
+                            default:
+                                desc += insertColorIntoCompoundSignalGroup (group1.c_str (), colors [0], colors [1]);
+                                desc += insertColorIntoCompoundSignalGroup (group2.c_str (), colors [2], colors [3]);
+                                break;
+                        }
+                        break;
+                    }
+                }
+                break;
+            }
         }
     }
 
-    return result;
+    desc += ' ';
+    desc += signalPeriod;
+    desc += heightValue;
+    desc += rangeValue;
+    desc += statusValue;
+
+    return desc;
 }
 
 void lights06 (LookupTableItem *item, FeatureObject *object, Environment& environment, Chart& chart, View& view, DrawQueue& drawQueue) {

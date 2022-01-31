@@ -121,7 +121,21 @@ TextDrawer::TextDrawer (
 
 bool parseInstr (const char *instr, std::vector<std::string>& parts) {
     char *leftBracket = strchr ((char *) instr, '(');
-    char *rightBracket = leftBracket ? strchr (leftBracket + 1, ')') : 0;
+    char *rightBracket = 0;
+    
+    if (leftBracket) {
+        bool inQuote = false;
+        for (char *chr = (char *) instr; *chr && !rightBracket; ++ chr) {
+            switch (*chr) {
+                case '\'':
+                    inQuote = !inQuote; break;
+                case ')':
+                    if (!inQuote) rightBracket = chr;
+                    break;
+            }
+        }
+    }
+
     bool result = false;
 
     if (rightBracket) {
