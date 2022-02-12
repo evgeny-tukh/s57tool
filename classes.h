@@ -33,6 +33,7 @@ enum ATTRS {
     SIGPER = 142,
     SIGSEQ = 143,
     HEIGHT = 95,
+    CATCOV = 18,
 
 };
 
@@ -66,4 +67,5 @@ enum OBJ_CLASSES {
     BOYSAW = 18,
     BOYSPP = 19,
     MORFAC = 84,
+    M_COVR = 302,
 };

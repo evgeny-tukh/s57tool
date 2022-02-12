@@ -9,6 +9,7 @@
 #include "data.h"
 #include "painter.h"
 #include "abstract_tools.h"
+#include "classes.h"
 
 void parseTextInstruction (const char *instr, Dai& dai, AttrDictionary& attrDic, TextDesc& desc);
 
@@ -122,7 +123,7 @@ bool processDataDesciptiveField (
 
     item.name = fieldName;
 
-    if (fieldValue.front () == '(' && fieldValue.back () == ')') {
+    if (!fieldValue.empty () && fieldValue.front () == '(' && fieldValue.back () == ')') {
         splitString (fieldValue.substr (1, fieldValue.length () - 2), formats, ',');
     } else {
         // Unproper format list, should be enclosed with ()
@@ -2037,3 +2038,98 @@ void loadDai (const char *path, Environment& environment) {
     // Create pattern tools
     createPatternTools (dai);
 }
+
+std::string getAttrStringValue (Attr *attr, AttrDictionary& dic) {
+    static const std::string EMPTY;
+
+    if (!attr || attr->noValue) return EMPTY;
+
+    AttrDesc *desc = (AttrDesc *) dic.findByCode (attr->classCode);
+
+    if (!desc) return EMPTY;
+
+    switch (desc->domain) {
+        case 'I': {
+            return std::to_string (attr->intValue);
+        }
+        case 'E': {
+            return desc->listValue (attr->intValue);
+        }
+        case 'L': {
+            std::string result;
+
+            for (uint8_t code: attr->listValue) {
+                if (!result.empty ()) result += ' ';
+                result += desc->listValue (code);
+            }
+
+            return result;
+        }
+        case 'A': case 'S': {
+            return attr->strValue;
+        }
+        case 'F': {
+            if (desc->format.empty ()) return std::to_string (attr->floatValue);
+
+            char buffer [100];
+            sprintf (buffer, desc->format.c_str (), attr->floatValue);
+
+            return std::string (buffer);
+        }
+        default: {
+            return EMPTY;
+        }
+    }
+}
+
+std::tuple<bool, int, double, double, double, double> getCoverageRect (Features& features, Nodes& nodes, Edges& edges) {
+    int zoom = 0;
+    bool hasCoverage = false;
+    double west = 1.0e10, east = -1.0e10, north = -1.0e10, south = 1.0e10;
+    for (auto& feature: features) {
+        auto checkPoint = [&west, &east, &north, &south] (double lat, double lon) {
+            west = min (west, lon);
+            east = max (east, lon);
+            north = max (north, lat);
+            south = min (south, lat);
+        };
+
+        if (feature.classCode == OBJ_CLASSES::M_COVR && feature.primitive == 3) {
+            auto coverage = feature.getAttr (ATTRS::CATCOV);
+
+            if (coverage && !coverage->noValue && coverage->intValue == 1) {
+                for (auto& edgeRef: feature.edgeRefs) {
+                    auto& edge = edges [edgeRef.index];
+                    auto& begin = nodes [edge.beginIndex].points.front ();
+                    auto& end = nodes [edge.endIndex].points.front ();
+                    checkPoint (begin.lat, begin.lon);
+                    checkPoint (end.lat, end.lon);
+
+                    for (auto& pos: edge.internalNodes) {
+                        checkPoint (pos.lat, pos.lon);
+                    }
+                }
+
+                hasCoverage = true; break;
+            }
+        }
+
+        if (hasCoverage) break;
+    }
+
+    if (hasCoverage) {
+        double actualLatDiff = north - south;
+        double actualLonDiff = east - west;
+        double latDiff = 180.0;
+        double lonDiff = 360.0;
+
+        while (latDiff > actualLatDiff || lonDiff > actualLonDiff) {
+            ++ zoom;
+            latDiff *= 0.5;
+            lonDiff *= 0.5;
+        }
+    }
+
+    return std::tuple<bool, int, double, double, double, double> (hasCoverage, zoom, north, west, south, east);
+}
+

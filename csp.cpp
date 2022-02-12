@@ -1667,8 +1667,8 @@ void lights06 (LookupTableItem *item, FeatureObject *object, Environment& enviro
     if (noSector) {
         if (
             nominalRange >= 10.0 &&
-            (catlit->noValue || !catlit->listIncludes (5) && !catlit->listIncludes (6)) &&
-            (litchr->noValue || litchr->intValue != 12)
+            (!catlit || catlit->noValue || !catlit->listIncludes (5) && !catlit->listIncludes (6)) &&
+            (!litchr || litchr->noValue || litchr->intValue != 12)
         ) {
             std::string arcColorName = "CHMGD";
             if (colour && !colour->noValue) {

@@ -4,6 +4,7 @@
 #include "drawers.h"
 #include "painter.h"
 #include "abstract_tools.h"
+#include "parser.h"
 
 PenTool Drawer::penTool;
 
@@ -89,15 +90,16 @@ TextDrawer::TextDrawer (
     double _lon,
     TextDesc& _desc,
     FeatureObject *_object,
-    Dai& _dai
-) : Drawer (LookupTableItem::NOT_EXIST, PS_SOLID, 1, _view, _lat, _lon, 0.0), desc (_desc), dai (_dai) {
+    Dai& _dai,
+    AttrDictionary& _dic
+) : Drawer (LookupTableItem::NOT_EXIST, PS_SOLID, 1, _view, _lat, _lon, 0.0), desc (_desc), dai (_dai), dic (_dic) {
     if (_desc.paramDescs.size () == 1) {
         if (!_desc.paramDescs.front ().plainText.empty ()) {
             text = _desc.paramDescs.front ().plainText;
         } else {
             auto attr = _object->getAttr (_desc.paramDescs.front ().classCode);
 
-            if (attr && !attr->noValue) text = attr->strValue;
+            if (attr && !attr->noValue) text = getAttrStringValue (attr, dic);
         }
     } else {
         text = _desc.plainTextParts.front ();

@@ -71,6 +71,7 @@ struct TextDrawer: Drawer {
     std::string text;
     TextDesc desc;
     Dai& dai;
+    AttrDictionary& dic;
 
     TextDrawer (
         View& _view,
@@ -78,7 +79,8 @@ struct TextDrawer: Drawer {
         double _lon,
         TextDesc& _desc,
         FeatureObject *_object,
-        Dai& _dai
+        Dai& _dai,
+        AttrDictionary& _dic
     );
 
     virtual void run (RECT& client, HDC paintDC, PaletteIndex paletteIndex, Palette& palette);
@@ -211,7 +213,7 @@ struct DrawQueue {
         container.push_back (new ArcDrawer (penIndex, penStyle, penWidth, view, centerLat, centerLon, radiusMm, start, end));
     }
     void addText (double lat, double lon, TextDesc& desc, FeatureObject *object) {
-        container.push_back (new TextDrawer (view, lat, lon, desc, object, dai)); 
+        container.push_back (new TextDrawer (view, lat, lon, desc, object, dai, attrDic)); 
     }
     void addSymbol (double lat, double lon, size_t symbolIndex, double rotAngle, Dai& dai) {
         container.push_back (new SymbolDrawer (view, lat, lon, symbolIndex, rotAngle, dai));

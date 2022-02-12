@@ -3,6 +3,7 @@
 #include "geo.h"
 #include "abstract_tools.h"
 #include "drawers.h"
+#include "classes.h"
 
 HBRUSH createPatternBrush (PatternDesc& pattern, PaletteIndex paletteIndex, Dai& dai);
 void paintLine (RECT& client, HDC paintDC, Dai& dai, View& view, LineDraw& line, PaletteIndex paletteIndex);
@@ -673,7 +674,11 @@ void paintChart (
 
             auto lookupTableItem = feature.findBestItem (displayCat, getTableSet (feature), dai, prty);
             if (!lookupTableItem) continue;
-
+if(feature.fidn==29142253){
+int iii=0;
+++iii;
+--iii;
+}
             if (lookupTableItem->procIndex != LookupTableItem::NOT_EXIST) {
                 environment.runCSP (lookupTableItem, & feature, chart, view, drawQueue);
             }
@@ -1198,7 +1203,7 @@ void paintText (
     x += xOffset - westX;
     y += yOffset - northY;
 
-    if (x > client.right || y > client.bottom) return;
+    if (x > client.right || y > client.bottom || y < -5 || x < -50) return;
 
     RECT textRect;
     textRect.left = x;

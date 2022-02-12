@@ -10,11 +10,8 @@
 #include "parser.h"
 #include "geo.h"
 #include "painter.h"
+#include "common_defs.h"
 
-const char *MAIN_CLASS = "S57ToolMainWnd";
-const char *SPLASH_CLASS = "S57ToolSplashScreen";
-const char *CHART_CLASS = "S57ToolChartWnd";
-const char *CHART_AREA_CLASS = "S57ToolChartAreaWnd";
 const int COL_FILENAME = 0;
 const int COL_VOLUME = 1;
 const int COL_IMPL = 2;
@@ -88,6 +85,9 @@ struct Ctx {
         DestroyMenu (mainMenu);
     }
 };
+
+void openFile (Ctx *ctx, char *path);
+void openFile (Ctx *ctx, CatalogItem *item);
 
 bool queryExit (HWND wnd) {
     return MessageBox (wnd, "Do you want to quit the application?", "Confirmation", MB_YESNO | MB_ICONQUESTION) == IDYES;
@@ -213,6 +213,29 @@ void initWindow (HWND wnd, void *data) {
     addColumn (ctx->nodeList, COL_NODE_DEPTH, "Depth", 100);
 }
 
+void loadChart (Ctx *ctx) {
+    OPENFILENAME ofn;
+    char path [MAX_PATH];
+
+    static char *CHART_FILTER = "S57 Charts (*.000)\0*.000\0All files\0*.*\0\0";
+
+    memset (path, 0, sizeof (path));
+    memset (& ofn, 0, sizeof (ofn));
+
+    ofn.Flags = OFN_FILEMUSTEXIST | OFN_HIDEREADONLY;
+    ofn.hInstance = ctx->instance;
+    ofn.lpstrFile = path;
+    ofn.lpstrTitle = "Open Chart";
+    ofn.lStructSize = sizeof (ofn);
+    ofn.nMaxFile = sizeof (path);
+    ofn.hwndOwner = ctx->mainWnd;
+    ofn.lpstrFilter = CHART_FILTER;
+
+    if (GetOpenFileName (& ofn)) {
+        openFile (ctx, path);
+    }
+}
+
 void loadCatalog (Ctx *ctx) {
     OPENFILENAME ofn;
     char path [MAX_PATH];
@@ -325,11 +348,7 @@ const char *posMeasurementName (PUNI unit) {
     }
 }
 
-void openFile (Ctx *ctx, CatalogItem *item) {
-    char path [MAX_PATH];
-
-    PathCombine (path, ctx->basePath.c_str (), item->fileName.c_str ());
-
+void openFile (Ctx *ctx, char *path) {
     std::vector<std::vector<FieldInstance>> records;
     //std::vector<FeatureDesc> objects;
     DatasetParams datasetParams;
@@ -342,6 +361,14 @@ void openFile (Ctx *ctx, CatalogItem *item) {
     extractFeatureObjects (records, ctx->chart);
     deformatAttrValues (ctx->environment.attrDictionary, ctx->chart);
     buildPointLocationInfo (ctx->chart);
+
+    auto [hasCoverage, zoom, north, west, south, east] = getCoverageRect (ctx->chart.features, ctx->chart.nodes, ctx->chart.edges);
+
+    if (hasCoverage) {
+        ctx->view.north = north;
+        ctx->view.west = west;
+        ctx->view.zoom = zoom;
+    }
     
     SendMessage (ctx->recordTree, TVM_DELETEITEM, (WPARAM) TVI_ROOT, 0);
     SendMessage (ctx->propsList, LVM_DELETEALLITEMS, 0, 0);
@@ -715,7 +742,14 @@ void openFile (Ctx *ctx, CatalogItem *item) {
         addEdgeNodeItem (ctx->chart.nodes [edge.endIndex], "End");
     }
 
+int cnt=0;
     for (auto& rec: records) {
+++cnt;
+if(cnt==5832){
+int iii=0;
+++iii;
+--iii;
+}
         TV_INSERTSTRUCT data;
         char rcidText [50];
 
@@ -749,22 +783,28 @@ void openFile (Ctx *ctx, CatalogItem *item) {
 
             HTREEITEM fieldItem = (HTREEITEM) SendMessage (ctx->recordTree, TVM_INSERTITEM, 0, (LPARAM) & data);
 
+            auto formatSubField = [] (std::pair<const std::string, SubFieldInstance> &subField) {
+                std::string result = subField.first + ": ";
+
+                switch (subField.second.type) {
+                    case 'B': result.append (subField.second.binaryValue.size () > 0 ? subField.second.getBinaryValueString () : "<no value>"); break;
+                    case 'A': result.append (subField.second.stringValue.has_value () ? subField.second.stringValue.value () : "<no value>"); break;
+                    case 'b':
+                    case 'I': result.append (subField.second.intValue.has_value () ? std::to_string (subField.second.intValue.value ()).c_str () : "<no value>"); break;
+                    case 'R': result.append (subField.second.floatValue.has_value () ? std::to_string (subField.second.floatValue.value ()) : "<no value>"); break;
+                    default: result.append ("?");
+                }
+                return result;
+            };
+            
             if (field.instanceValues.size () == 1) {
                 for (auto& subField: field.instanceValues.front ()) {
                     memset (& data, 0, sizeof (data));
 
-                    switch (subField.second.type) {
-                        case 'B': sprintf (label, "%s: %s", subField.first.c_str (), subField.second.binaryValue.size () > 0 ? subField.second.getBinaryValueString ().c_str () : "<no value>"); break;
-                        case 'A': sprintf (label, "%s: %s", subField.first.c_str (), subField.second.stringValue.has_value () ? subField.second.stringValue.value ().c_str () : "<no value>"); break;
-                        case 'b': case 'I': sprintf (label, "%s: %s", subField.first.c_str (), subField.second.intValue.has_value () ? std::to_string (subField.second.intValue.value ()).c_str () : "<no value>"); break;
-                        case 'R': sprintf (label, "%s: %s", subField.first.c_str (), subField.second.floatValue.has_value () ? std::to_string (subField.second.floatValue.value ()).c_str () : "<no value>"); break;
-                        default: sprintf (label, "%s: ?", subField.first.c_str ());
-                    }
-
                     data.hParent = fieldItem;
                     data.hInsertAfter = TVI_LAST;
                     data.item.mask = TVIF_TEXT;
-                    data.item.pszText = label;
+                    data.item.pszText = formatSubField (subField).data ();
 
                     HTREEITEM subFieldItem = (HTREEITEM) SendMessage (ctx->recordTree, TVM_INSERTITEM, 0, (LPARAM) & data);
                 }
@@ -782,18 +822,12 @@ void openFile (Ctx *ctx, CatalogItem *item) {
                     for (auto& subField: field.instanceValues [valueIndex]) {
                         memset (& data, 0, sizeof (data));
 
-                        switch (subField.second.type) {
-                            case 'B': sprintf (label, "%s: %s", subField.first.c_str (), subField.second.binaryValue.size () > 0 ? subField.second.getBinaryValueString ().c_str () : "<no value>"); break;
-                            case 'A': sprintf (label, "%s: %s", subField.first.c_str (), subField.second.stringValue.has_value () ? subField.second.stringValue.value ().c_str () : "<no value>"); break;
-                            case 'b': case 'I': sprintf (label, "%s: %s", subField.first.c_str (), subField.second.intValue.has_value () ? std::to_string (subField.second.intValue.value ()).c_str () : "<no value>"); break;
-                            case 'R': sprintf (label, "%s: %s", subField.first.c_str (), subField.second.floatValue.has_value () ? std::to_string (subField.second.floatValue.value ()).c_str () : "<no value>"); break;
-                            default: sprintf (label, "%s: ?", subField.first.c_str ());
-                        }
+                        std::string textValue;
 
                         data.hParent = valueItem;
                         data.hInsertAfter = TVI_LAST;
                         data.item.mask = TVIF_TEXT;
-                        data.item.pszText = (char *) label;
+                        data.item.pszText =formatSubField (subField).data ();
 
                         HTREEITEM subFieldItem = (HTREEITEM) SendMessage (ctx->recordTree, TVM_INSERTITEM, 0, (LPARAM) & data);
                     }
@@ -803,6 +837,12 @@ void openFile (Ctx *ctx, CatalogItem *item) {
     }
 
     InvalidateRect (ctx->chartWnd, 0, 1);
+}
+
+void openFile (Ctx *ctx, CatalogItem *item) {
+    char path [MAX_PATH];
+    PathCombine (path, ctx->basePath.c_str (), item->fileName.c_str ());
+    openFile (ctx, path);
 }
 
 void openFileByIndex (Ctx *ctx, int itemIndex) {
@@ -830,11 +870,12 @@ void doCommand (HWND wnd, uint16_t command, uint16_t notification) {
             break;
         }
         case ID_OPEN_FILE: {
-            int selection = (int) SendMessage (ctx->catalogCtl, LVM_GETNEXTITEM, -1, LVNI_SELECTED);
+            loadChart (ctx); break;
+            /*int selection = (int) SendMessage (ctx->catalogCtl, LVM_GETNEXTITEM, -1, LVNI_SELECTED);
 
             if (selection >= 0) openFileByIndex (ctx, selection);
 
-            break;
+            break;*/
         }
     }
 }
@@ -1180,54 +1221,6 @@ LRESULT wndProc (HWND wnd, UINT msg, WPARAM param1, LPARAM param2) {
     return result;
 }
 
-void registerClasses (Ctx& ctx) {
-    WNDCLASS classInfo;
-
-    memset (& classInfo, 0, sizeof (classInfo));
-
-    classInfo.hbrBackground = (HBRUSH) GetStockObject (WHITE_BRUSH);
-    classInfo.hCursor = (HCURSOR) LoadCursor (0, IDC_ARROW);
-    classInfo.hIcon = (HICON) LoadIcon (0, IDI_APPLICATION);
-    classInfo.hInstance = ctx.instance;
-    classInfo.lpfnWndProc = wndProc;
-    classInfo.lpszClassName = MAIN_CLASS;
-    classInfo.style = CS_HREDRAW | CS_VREDRAW;
-
-    RegisterClass (& classInfo);
-
-    memset (& classInfo, 0, sizeof (classInfo));
-
-    classInfo.hbrBackground = (HBRUSH) GetStockObject (GRAY_BRUSH);
-    classInfo.hCursor = (HCURSOR) LoadCursor (0, IDC_ARROW);
-    classInfo.hIcon = (HICON) LoadIcon (0, IDI_APPLICATION);
-    classInfo.hInstance = ctx.instance;
-    classInfo.lpfnWndProc = wndSplashScreenProc;
-    classInfo.lpszClassName = SPLASH_CLASS;
-    classInfo.style = CS_HREDRAW | CS_VREDRAW;
-
-    RegisterClass (& classInfo);
-
-    classInfo.hbrBackground = (HBRUSH) GetStockObject (WHITE_BRUSH);
-    classInfo.hCursor = (HCURSOR) LoadCursor (0, IDC_HAND);
-    classInfo.hIcon = (HICON) LoadIcon (0, IDI_APPLICATION);
-    classInfo.hInstance = ctx.instance;
-    classInfo.lpfnWndProc = chartWndProc;
-    classInfo.lpszClassName = CHART_CLASS;
-    classInfo.style = CS_HREDRAW | CS_VREDRAW;
-
-    RegisterClass (& classInfo);
-
-    classInfo.hbrBackground = (HBRUSH) GetStockObject (WHITE_BRUSH);
-    classInfo.hCursor = (HCURSOR) LoadCursor (0, IDC_HAND);
-    classInfo.hIcon = (HICON) LoadIcon (0, IDI_APPLICATION);
-    classInfo.hInstance = ctx.instance;
-    classInfo.lpfnWndProc = chartAreaWndProc;
-    classInfo.lpszClassName = CHART_AREA_CLASS;
-    classInfo.style = CS_HREDRAW | CS_VREDRAW;
-
-    RegisterClass (& classInfo);
-}
-
 void loadProc (Ctx *ctx) {
     char path [MAX_PATH];
 
@@ -1267,7 +1260,7 @@ int WINAPI WinMain (HINSTANCE instance, HINSTANCE prevInstance, char *cmd, int s
     comCtlData.dwICC = ICC_LISTVIEW_CLASSES | ICC_STANDARD_CLASSES | ICC_TAB_CLASSES | ICC_TREEVIEW_CLASSES;
     
     InitCommonControlsEx (& comCtlData);
-    registerClasses (ctx);
+    registerClasses (ctx.instance);
 
     ctx.splashScreen = CreateWindow (SPLASH_CLASS, "", WS_POPUP | WS_VISIBLE, 200, 200, 500, 200, 0, 0, instance, & ctx);
     ctx.mainWnd = CreateWindow (MAIN_CLASS, "S57 Tool", WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, 800, 500, 0, ctx.mainMenu, instance, & ctx);

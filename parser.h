@@ -21,4 +21,6 @@ std::string formatLat (double lat);
 std::string formatLon (double lon);
 void processInstructions (Dai& dai, AttrDictionary& attrDic, LookupTableItem& item, std::vector<std::string>& instructions);
 void parseTextInstruction (const char *instr, Dai& dai, AttrDictionary& attrDic, TextDesc& desc);
+std::string getAttrStringValue (Attr *attr, AttrDictionary& dic);
+std::tuple<bool, int, double, double, double, double> getCoverageRect (Features& features, Nodes& nodes, Edges& edges);
 
