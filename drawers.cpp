@@ -353,9 +353,9 @@ void DrawQueue::addCompoundLightArc (
     double radiusMm,
     double start,
     double end) {
-    addArc (dai.getBasePenIndex ("OUTLW"), penStyle, 2, centerLat, centerLon, radiusMm + 2.0 * PIXEL_SIZE_IN_MM, start, end);
-    addArc (dai.getBasePenIndex ("OUTLW"), penStyle, 2, centerLat, centerLon, radiusMm - 2.0 * PIXEL_SIZE_IN_MM, start, end);
     addArc (penIndex, PS_SOLID, 4, centerLat, centerLon, radiusMm, start, end);
+    addArc (dai.getBasePenIndex ("OUTLW"), penStyle, 2, centerLat, centerLon, radiusMm + /*2.0 **/ PIXEL_SIZE_IN_MM, start, end);
+    addArc (dai.getBasePenIndex ("OUTLW"), penStyle, 2, centerLat, centerLon, radiusMm - /*2.0 **/ PIXEL_SIZE_IN_MM, start, end);
 }
 
 void DrawQueue::addEdgeChain (int penIndex, int penStyle, int penWidth, Chart& chart) {

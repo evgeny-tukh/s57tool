@@ -16,14 +16,16 @@ IDR_MAINMENU MENU
 {
     POPUP "&File"
     {
-        MENUITEM "Open Catalog...", ID_OPEN_CATALOG
+        MENUITEM "Open S-57 catalog...", ID_OPEN_CATALOG
         MENUITEM SEPARATOR
-        MENUITEM "Open File...", ID_OPEN_FILE
+        MENUITEM "Open S-57 chart...", ID_OPEN_FILE
+        MENUITEM "Open S-57 charts...", ID_OPEN_FILES
         MENUITEM "E&xit\tAlt-F4", ID_EXIT
     }
     POPUP "&Options"
     {
-        MENUITEM "&Settings...", IDM__SETTINGS___1
+        MENUITEM "&Settings...", ID_SETTINGS
+        MENUITEM "Only paint chart after loading", ID_ONLY_PAINT_CHART, CHECKED
     }
 }
 
@@ -40,7 +42,7 @@ FONT 8, "Ms Shell Dlg"
 {
     DEFPUSHBUTTON   "OK", IDOK, 173, 99, 50, 14
     PUSHBUTTON      "Cancel", IDCANCEL, 173, 116, 50, 14
-    AUTOCHECKBOX    "Full sector length", IDC_FULL_SECTOT_LENGTH, 6, 7, 69, 8
+    AUTOCHECKBOX    "Full sector length", IDC_FULL_SECTOR_LENGTH, 6, 7, 69, 8
     AUTOCHECKBOX    "Safety contour labels", IDC_SAFETY_CONTOUR_LABELS, 6, 20, 82, 8
     AUTOCHECKBOX    "Two shades", IDC_TWO_SHADES, 6, 34, 55, 8
     AUTOCHECKBOX    "Shallow pattern", IDC_SHALLOW_PATTERN, 6, 48, 65, 8
@@ -52,9 +54,9 @@ FONT 8, "Ms Shell Dlg"
     LTEXT           "Safety contour", IDC_STATIC, 115, 7, 47, 8, SS_LEFT
     EDITTEXT        IDC_SAFETY_CONTOUR, 169, 4, 52, 14, ES_AUTOHSCROLL
     LTEXT           "Shallow contour", IDC_STATIC, 115, 27, 52, 8, SS_LEFT
-    EDITTEXT        IDC_SHALLOW_CONTOUR1, 169, 24, 52, 14, ES_AUTOHSCROLL
+    EDITTEXT        IDC_SHALLOW_CONTOUR, 169, 24, 52, 14, ES_AUTOHSCROLL
     LTEXT           "Deep contour", IDC_STATIC, 115, 47, 44, 8, SS_LEFT
-    EDITTEXT        IDC_DEEP_CONTOUR1, 169, 44, 52, 14, ES_AUTOHSCROLL
+    EDITTEXT        IDC_DEEP_CONTOUR, 169, 44, 52, 14, ES_AUTOHSCROLL
     LTEXT           "Safety depth", IDC_STATIC, 115, 67, 41, 8, SS_LEFT
     EDITTEXT        IDC_SAFETY_DEPTH, 169, 64, 52, 14, ES_AUTOHSCROLL
 }

@@ -23,4 +23,8 @@ void processInstructions (Dai& dai, AttrDictionary& attrDic, LookupTableItem& it
 void parseTextInstruction (const char *instr, Dai& dai, AttrDictionary& attrDic, TextDesc& desc);
 std::string getAttrStringValue (Attr *attr, AttrDictionary& dic);
 std::tuple<bool, int, double, double, double, double> getCoverageRect (Features& features, Nodes& nodes, Edges& edges);
+int getZoomToCover (double north, double west, double south, double east);
+void openChart (char *path, DatasetParams& datasetParams, Chart& chart, Environment& env, View& view, std::vector<std::vector<FieldInstance>>& records, bool extendView = false);
+
+
 

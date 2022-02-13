@@ -356,6 +356,7 @@ struct Chart {
     Features features;
     UnderlyingObjectsList objectsUnderPoints, objectsUnderSpatials;
     AreaTopologyMap areaTopologyMap;
+    DatasetParams params;
 
     SpatialsUnderObject *getListOfSpatialsUnderPoint (FeatureObject& point) {
         auto& pos = objectsUnderPoints.find (point.fidn);

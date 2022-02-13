@@ -986,9 +986,9 @@ void paintCompoundArc (RECT& client, HDC paintDC, ArcDef& arcDef, Dai& dai, View
         AngleArc (paintDC, centerX, centerY, (DWORD) radius, (float) start + 90.0f, (float) end);
     };
 
+    drawArc (pens [3], arcDef.radius, arcDef.start, arcDef.end);
+    drawArc (outlinePens [1], arcDef.radius - 1, arcDef.start, arcDef.end);
     drawArc (outlinePens [1], arcDef.radius + 1, arcDef.start, arcDef.end);
-    drawArc (pens [3], arcDef.radius + 4, arcDef.start, arcDef.end);
-    drawArc (outlinePens [1], arcDef.radius + 6, arcDef.start, arcDef.end);
 }
 
 void paintLine (

@@ -11,6 +11,7 @@
 #include "geo.h"
 #include "painter.h"
 #include "common_defs.h"
+#include "ui.h"
 
 const int COL_FILENAME = 0;
 const int COL_VOLUME = 1;
@@ -64,7 +65,7 @@ struct Ctx {
     HWND mainWnd, catalogCtl, recordTree, propsList, splashScreen, tabCtl, nodeList, edgeTree, featureTree, chartWnd, chartAreaWnd, chartCtlBar;
     HMENU mainMenu;
     View view;
-    bool keepRunning, loaded, mouseDown;
+    bool keepRunning, loaded, mouseDown, onlyPaintCharts;
     int mouseDownX, mouseDownY;
     std::vector<CatalogItem> catalog;
     std::string basePath;
@@ -78,7 +79,10 @@ struct Ctx {
         keepRunning (true),
         loaded (false),
         view (Coord (32.0, 28.457, true), Coord (60.0, 54.605), 13),
-        mouseDown (false) {
+        mouseDown (false),
+        onlyPaintCharts (true) {
+        auto optionsMenu = GetSubMenu (mainMenu, 1);
+        CheckMenuItem (optionsMenu, ID_ONLY_PAINT_CHART, (onlyPaintCharts ? MF_CHECKED : MF_UNCHECKED) | MF_BYCOMMAND);
     }
 
     virtual ~Ctx () {
@@ -348,6 +352,486 @@ const char *posMeasurementName (PUNI unit) {
     }
 }
 
+#if 1
+void showChartStructure (Ctx *ctx, DatasetParams& datasetParams, std::vector<std::vector<FieldInstance>>& records) {
+    SendMessage (ctx->recordTree, TVM_DELETEITEM, (WPARAM) TVI_ROOT, 0);
+    SendMessage (ctx->propsList, LVM_DELETEALLITEMS, 0, 0);
+    SendMessage (ctx->nodeList, LVM_DELETEALLITEMS, 0, 0);
+
+    auto addListItem = [] (HWND list, char *text, LVITEM& item) {
+        memset (& item, 0, sizeof (item));
+
+        item.pszText = text;
+        item.iItem = 0x7FFFFFFF;
+        item.mask = LVIF_TEXT;
+        
+        return (int) SendMessage (list, LVM_INSERTITEM, 0, (LPARAM) & item);
+    };
+
+    auto setListItemText = [] (HWND list, int index, int column, char *text, LVITEM& item) {
+        item.pszText = text;
+        item.iItem = index;
+        item.iSubItem = column;
+        item.mask = LVIF_TEXT;
+        
+        SendMessage (list, LVM_SETITEMTEXT, index, (LPARAM) & item);
+    };
+
+    auto addParam = [ctx, addListItem, setListItemText] (char *name, char *value) {
+        LVITEM item;
+
+        int itemIndex = addListItem (ctx->propsList, name, item);
+        setListItemText (ctx->propsList, itemIndex, 1, value, item);
+    };
+
+    auto getNodeType = [] (uint8_t nodeFlags) {
+        std::string result { (nodeFlags & NodeFlags::CONNECTED) ? "Connected" : "Isolated" };
+
+        if (nodeFlags & NodeFlags::SOUNDING_ARRAY) result += "; Soundings";
+
+        return result;
+    };
+
+    auto addNode = [ctx, getNodeType, addListItem, setListItemText] (size_t index, struct Nodes& nodes) {
+        if (nodes [index].points.size () == 0) return;
+
+        LVITEM item;
+        auto& node = nodes [index];
+
+        std::string id { std::to_string (node.id) };
+        std::string lat { formatLat (node.points.front ().lat) };
+        std::string lon { formatLon (node.points.front ().lon) };
+        std::string type { getNodeType (node.flags) };
+        std::string depth { (node.flags & NodeFlags::SOUNDING_ARRAY) ? std::to_string (node.points.front ().depth) : "" };
+
+        int itemIndex = addListItem (ctx->nodeList, id.data (), item);
+        setListItemText (ctx->nodeList, itemIndex, COL_NODE_TYPE, type.data (), item);
+        setListItemText (ctx->nodeList, itemIndex, COL_NODE_LAT, lat.data (), item);
+        setListItemText (ctx->nodeList, itemIndex, COL_NODE_LON, lon.data (), item);
+        setListItemText (ctx->nodeList, itemIndex, COL_NODE_DEPTH, depth.data (), item);
+
+        for (size_t i = 1; i < node.points.size (); ++ i) {
+            std::string lat { formatLat (node.points [i].lat) };
+            std::string lon { formatLon (node.points [i].lon) };
+            std::string depth { (node.flags & NodeFlags::SOUNDING_ARRAY) ? std::to_string (node.points [i].depth) : "" };
+
+            itemIndex = addListItem (ctx->nodeList, "", item);
+            setListItemText (ctx->nodeList, itemIndex, COL_NODE_TYPE, "", item);
+            setListItemText (ctx->nodeList, itemIndex, COL_NODE_LAT, lat.data (), item);
+            setListItemText (ctx->nodeList, itemIndex, COL_NODE_LON, lon.data (), item);
+            setListItemText (ctx->nodeList, itemIndex, COL_NODE_DEPTH, depth.data (), item);
+        }
+    };
+
+    addParam ("Comment", datasetParams.comment.has_value () ? datasetParams.comment.value ().c_str () : "N/A");
+    addParam ("Coord multiplier", datasetParams.coordMultiplier.has_value () ? std::to_string (datasetParams.coordMultiplier.value ()).c_str () : "N/A");
+    addParam ("Coord units", datasetParams.coordMultiplier.has_value () ? coordUnitName (datasetParams.coordUnit.value ()) : "N/A");
+    addParam ("Compilation scale", datasetParams.compilationScale.has_value () ? std::to_string (datasetParams.compilationScale.value ()).c_str () : "N/A");
+    addParam ("Depth measurement", datasetParams.depthMeasurement.has_value () ? depthMeasurementName (datasetParams.depthMeasurement.value ()) : "N/A");
+    addParam ("Pos measurement", datasetParams.posMeasurement.has_value () ? posMeasurementName (datasetParams.posMeasurement.value ()) : "N/A");
+    addParam ("Sounding datum", datasetParams.soundingDatum.has_value () ? std::to_string (datasetParams.soundingDatum.value ()).c_str () : "N/A");
+    addParam ("Sounding multiplier", datasetParams.soundingMultiplier.has_value () ? std::to_string (datasetParams.soundingMultiplier.value ()).c_str () : "N/A");
+    addParam ("Horizontal datum", datasetParams.horDatum.has_value () ? std::to_string (datasetParams.horDatum.value ()).c_str () : "N/A");
+    addParam ("Vertical datum", datasetParams.verDatum.has_value () ? std::to_string (datasetParams.verDatum.value ()).c_str () : "N/A");
+
+    for (size_t i = 0; i < ctx->chart.nodes.size (); ++ i) {
+        addNode (i, ctx->chart.nodes);
+    }
+
+    TV_INSERTSTRUCTA data;
+
+    memset (& data, 0, sizeof (data));
+
+    data.hParent = TVI_ROOT;
+    data.hInsertAfter = TVI_LAST;
+    data.item.mask = TVIF_TEXT;
+    data.item.pszText = "Points";
+
+    HTREEITEM featureGroupItem [5];
+
+    featureGroupItem [0] = (HTREEITEM) SendMessage (ctx->featureTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+
+    data.item.pszText = "Lines";
+
+    featureGroupItem [1] = (HTREEITEM) SendMessage (ctx->featureTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+
+    data.item.pszText = "Areas";
+
+    featureGroupItem [2] = (HTREEITEM) SendMessage (ctx->featureTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+
+    data.item.pszText = "3D Points";
+
+    featureGroupItem [3] = (HTREEITEM) SendMessage (ctx->featureTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+
+    data.item.pszText = "Non-spatial objects";
+
+    featureGroupItem [4] = (HTREEITEM) SendMessage (ctx->featureTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+
+    for (auto& feature: ctx->chart.features) {
+        std::string featureID ("Feature id: " + std::to_string (feature.fidn));
+        std::string id ("ID: " + std::to_string (feature.id));
+        std::string classInfo ("Class: " + std::to_string (feature.classCode));
+        std::string group ("Group: " + std::to_string (feature.group));
+        static char *geometries [] { "Point", "Line", "Area", "3D points" };
+
+        auto objectDesc = ctx->environment.objectDictionary.findByCode (feature.classCode);
+
+        classInfo +=  " [";
+        classInfo += objectDesc ? objectDesc->name : "N/A";
+        classInfo += "]";
+
+        data.hParent = (feature.primitive > 0 && feature.primitive < 5) ? featureGroupItem [feature.primitive-1] : featureGroupItem [4];
+        data.hInsertAfter = TVI_LAST;
+        data.item.mask = TVIF_TEXT;
+        data.item.pszText = (char *) featureID.c_str ();
+
+        HTREEITEM objectItem = (HTREEITEM) SendMessage (ctx->featureTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+
+        data.hParent = objectItem;
+        data.hInsertAfter = TVI_LAST;
+        data.item.mask = TVIF_TEXT;
+        data.item.pszText = (char *) id.c_str ();
+
+        SendMessage (ctx->featureTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+
+        data.item.pszText = (char *) classInfo.c_str ();
+
+        SendMessage (ctx->featureTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+
+        data.item.pszText = (char *) group.c_str ();
+
+        SendMessage (ctx->featureTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+
+        if (feature.agency) {
+            std::string agency ("Agency: " + std::to_string (feature.agency));
+
+            data.item.pszText = (char *) agency.c_str ();
+
+            SendMessage (ctx->featureTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+        }
+
+        if (feature.subDiv) {
+            std::string subDiv ("Subdivision: " + std::to_string (feature.subDiv));
+
+            data.item.pszText = (char *) subDiv.c_str ();
+
+            SendMessage (ctx->featureTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+        }
+
+        data.item.pszText = "Attributes";
+
+        HTREEITEM attrsItem = (HTREEITEM) SendMessage (ctx->featureTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+
+        for (auto& attr: feature.attributes) {
+            std::string attrInfo (std::to_string (attr.classCode));
+
+            AttrDesc *attrDesc = (AttrDesc *) ctx->environment.attrDictionary.findByCode (attr.classCode);
+
+            attrInfo +=  " [";
+            attrInfo += attrDesc ? attrDesc->name : "N/A";
+            attrInfo += "]";
+
+            data.hParent = attrsItem;
+            data.item.pszText = (char *) attrInfo.c_str ();
+
+            HTREEITEM attrItem = (HTREEITEM) SendMessage (ctx->featureTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+
+            std::string attrType { "Type: " };
+
+            switch (attrDesc->domain) {
+                case 'E': attrType += "Enumeration"; break;
+                case 'I': attrType += "Integer"; break;
+                case 'F': attrType += "Float"; break;
+                case 'L': attrType += "List"; break;
+                case 'A': attrType += "ANSI string"; break;
+                case 'S': attrType += "String"; break;
+                default: attrType += "Unknown";
+            }
+
+            data.hParent = attrItem;
+            data.item.pszText = (char *) attrType.c_str ();
+
+            SendMessage (ctx->featureTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+
+            std::string attrValue { "Value: " };
+
+            if (attr.noValue) {
+                attrValue += "<No value>";
+            } else {
+                switch (attrDesc->domain) {
+                    case 'E': {
+                        attrValue += attrDesc->listValue (attr.intValue); break;
+                    }
+                    case 'I': {
+                        attrValue += std::to_string (attr.intValue); break;
+                    }
+                    case 'F': {
+                        attrValue += std::to_string (attr.floatValue); break;
+                    }
+                    case 'L': {
+                        for (uint8_t value: attr.listValue) {
+                            attrValue += attrDesc->listValue (value);
+                            attrValue += ";";
+                        }
+                        break;
+                    }
+                    case 'A': {
+                        attrValue += attr.strValue; break;
+                    }
+                    case 'S': {
+                        attrValue += attr.strValue; break;
+                    }
+                    default: {
+                        attrType += "Unknown";
+                    }
+                }
+            }
+
+            data.item.pszText = (char *) attrValue.c_str ();
+
+            SendMessage (ctx->featureTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+        }
+
+        auto addPointItem = [&data, &ctx, &objectItem] (Position& pos, char *label, HTREEITEM parentItem) {
+            data.hParent = parentItem;
+            data.item.pszText = label;
+            
+            HTREEITEM posItem = (HTREEITEM) SendMessage (ctx->featureTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+
+            std::string lat = formatLat (pos.lat);
+            std::string lon = formatLon (pos.lon);
+
+            data.item.pszText = lat.data ();
+            data.hParent = posItem;
+            SendMessage (ctx->featureTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+            data.item.pszText = lon.data ();
+            SendMessage (ctx->featureTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+        };
+        if (feature.primitive == PRIM::Point) {
+            auto& pointsArray = ctx->chart.nodes [feature.nodeIndex].points;
+            if (pointsArray.size () == 1) {
+                addPointItem (pointsArray.front (), "Position", objectItem);
+            } else if (pointsArray.size () > 1) {
+                data.item.pszText = "Soundings";
+                data.hParent = objectItem;
+                HTREEITEM soundingsItem = (HTREEITEM) SendMessage (ctx->featureTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+                for (size_t i = 0; i < pointsArray.size (); ++ i) {
+                    addPointItem (pointsArray [i], std::to_string (i).data (), soundingsItem);
+                }
+            }
+        } else if (feature.primitive == PRIM::Area || feature.primitive == PRIM::Line) {
+            data.item.pszText = "Edges";
+            data.hParent = objectItem;
+            HTREEITEM edgesItem = (HTREEITEM) SendMessage (ctx->featureTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+            data.item.pszText = "Faces";
+            HTREEITEM facesItem = (HTREEITEM) SendMessage (ctx->featureTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+            for (size_t i = 0; i < feature.edgeRefs.size (); ++ i) {
+                auto& ref = feature.edgeRefs [i];
+                std::string label = std::to_string (i);
+                data.item.pszText = label.data ();
+                data.hParent = edgesItem;
+                HTREEITEM edgeItem = (HTREEITEM) SendMessage (ctx->featureTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+                std::string props;
+                if (ref.hidden) {
+                    props += "<MASKED>";
+                }
+                if (ref.hole) {
+                    props += "<HOLE>";
+                }
+                if (ref.unclockwise) {
+                    props += "<UNCLK>";
+                }
+                if (!props.empty ()) {
+                    data.item.pszText = props.data ();
+                    data.hParent = edgeItem;
+                    (HTREEITEM) SendMessage (ctx->featureTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+                }
+                auto& edge = ctx->chart.edges [feature.edgeRefs [i].index];
+                addPointItem (ctx->chart.nodes [edge.beginIndex].points [0], "Begin", edgeItem);
+                for (size_t j = 0; j < edge.internalNodes.size (); ++ j) {
+                    addPointItem (edge.internalNodes [j], std::to_string (j).data (), edgeItem);
+                }
+                addPointItem (ctx->chart.nodes [edge.endIndex].points [0], "End", edgeItem);
+            }
+        }
+    }
+
+    for (auto& edge: ctx->chart.edges) {
+        TV_INSERTSTRUCT data;
+        char buffer [200];
+
+        memset (& data, 0, sizeof (data));
+
+        std::string edgeID = "ID " + std::to_string (edge.id);
+
+        data.hParent = TVI_ROOT;
+        data.hInsertAfter = TVI_LAST;
+        data.item.mask = TVIF_TEXT;
+        data.item.pszText = edgeID.data ();
+
+        HTREEITEM edgeItem = (HTREEITEM) SendMessage (ctx->edgeTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+
+        auto addEdgeNodeItem = [&data, ctx, edgeItem] (GeoNode& node, char *label) {
+            data.hParent = edgeItem;
+            data.item.pszText = label;
+
+            HTREEITEM nodeItem = (HTREEITEM) SendMessage (ctx->edgeTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+
+            std::string lat = "Lat " + formatLat (node.points [0].lat);
+            std::string lon = "Lon " + formatLon (node.points [0].lon);
+
+            data.hParent = nodeItem;
+            data.item.pszText = lat.data ();
+
+            SendMessage (ctx->edgeTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+
+            data.item.pszText = lon.data ();
+
+            SendMessage (ctx->edgeTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+        };
+
+        addEdgeNodeItem (ctx->chart.nodes [edge.beginIndex], "Begin");
+
+        if (edge.internalNodes.size () > 0) {
+            size_t count = 0;
+
+            std::string label = std::to_string (edge.internalNodes.size ()) + " internal";
+            data.hParent = edgeItem;
+            data.item.pszText = label.data ();
+
+            HTREEITEM internalNodesItem = (HTREEITEM) SendMessage (ctx->edgeTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+
+            for (auto& node: edge.internalNodes) {
+                label = std::to_string (count++);
+                
+                data.hParent = internalNodesItem;
+                data.item.pszText = label.data ();
+
+                HTREEITEM nodeItem = (HTREEITEM) SendMessage (ctx->edgeTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+
+                std::string lat = "Lat " + formatLat (node.lat);
+                std::string lon = "Lon " + formatLon (node.lon);
+
+                data.hParent = nodeItem;
+                data.item.pszText = lat.data ();
+
+                SendMessage (ctx->edgeTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+
+                data.item.pszText = lon.data ();
+
+                SendMessage (ctx->edgeTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+            }
+        }
+
+        addEdgeNodeItem (ctx->chart.nodes [edge.endIndex], "End");
+    }
+
+int cnt=0;
+    for (auto& rec: records) {
+++cnt;
+if(cnt==5832){
+int iii=0;
+++iii;
+--iii;
+}
+        TV_INSERTSTRUCT data;
+        char rcidText [50];
+
+        auto rcidField = rec [0].instanceValues.front ().begin ();
+
+        if (rcidField->second.intValue.has_value ()) {
+            sprintf (rcidText, "RCID %d", rcidField->second.intValue.value ());
+        } else {
+            strcpy (rcidText, "N/A");
+        }
+        
+        memset (& data, 0, sizeof (data));
+
+        data.hParent = TVI_ROOT;
+        data.hInsertAfter = TVI_LAST;
+        data.item.mask = TVIF_TEXT;
+        data.item.pszText = rcidText;
+
+        HTREEITEM recItem = (HTREEITEM) SendMessage (ctx->recordTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+
+        for (auto& field: rec) {
+            memset (& data, 0, sizeof (data));
+            char label [200];
+
+            sprintf (label, "[%s] %s", field.tag.c_str (), field.name.c_str ());
+
+            data.hParent = recItem;
+            data.hInsertAfter = TVI_LAST;
+            data.item.mask = TVIF_TEXT;
+            data.item.pszText = label;
+
+            HTREEITEM fieldItem = (HTREEITEM) SendMessage (ctx->recordTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+
+            auto formatSubField = [] (std::pair<const std::string, SubFieldInstance> &subField) {
+                std::string result = subField.first + ": ";
+
+                switch (subField.second.type) {
+                    case 'B': result.append (subField.second.binaryValue.size () > 0 ? subField.second.getBinaryValueString () : "<no value>"); break;
+                    case 'A': result.append (subField.second.stringValue.has_value () ? subField.second.stringValue.value () : "<no value>"); break;
+                    case 'b':
+                    case 'I': result.append (subField.second.intValue.has_value () ? std::to_string (subField.second.intValue.value ()).c_str () : "<no value>"); break;
+                    case 'R': result.append (subField.second.floatValue.has_value () ? std::to_string (subField.second.floatValue.value ()) : "<no value>"); break;
+                    default: result.append ("?");
+                }
+                return result;
+            };
+            
+            if (field.instanceValues.size () == 1) {
+                for (auto& subField: field.instanceValues.front ()) {
+                    memset (& data, 0, sizeof (data));
+
+                    data.hParent = fieldItem;
+                    data.hInsertAfter = TVI_LAST;
+                    data.item.mask = TVIF_TEXT;
+                    data.item.pszText = formatSubField (subField).data ();
+
+                    HTREEITEM subFieldItem = (HTREEITEM) SendMessage (ctx->recordTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+                }
+            } else {
+                for (size_t valueIndex = 0; valueIndex < field.instanceValues.size (); ++ valueIndex) {
+                    data.hParent = fieldItem;
+                    data.hInsertAfter = TVI_LAST;
+                    data.item.mask = TVIF_TEXT;
+                    data.item.pszText = label;
+                    
+                    strcpy (label, std::to_string (valueIndex).c_str ());
+
+                    HTREEITEM valueItem = (HTREEITEM) SendMessage (ctx->recordTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+
+                    for (auto& subField: field.instanceValues [valueIndex]) {
+                        memset (& data, 0, sizeof (data));
+
+                        std::string textValue;
+
+                        data.hParent = valueItem;
+                        data.hInsertAfter = TVI_LAST;
+                        data.item.mask = TVIF_TEXT;
+                        data.item.pszText =formatSubField (subField).data ();
+
+                        HTREEITEM subFieldItem = (HTREEITEM) SendMessage (ctx->recordTree, TVM_INSERTITEM, 0, (LPARAM) & data);
+                    }
+                }
+            }
+        }
+    }
+}
+
+void openFile (Ctx *ctx, char *path) {
+    std::vector<std::vector<FieldInstance>> records;
+    DatasetParams datasetParams;
+
+    openChart (path, datasetParams, ctx->chart, ctx->environment, ctx->view, records);
+
+    InvalidateRect (ctx->chartWnd, 0, TRUE);
+
+    if (!ctx->onlyPaintCharts) showChartStructure (ctx, datasetParams, records);
+}
+#else
 void openFile (Ctx *ctx, char *path) {
     std::vector<std::vector<FieldInstance>> records;
     //std::vector<FeatureDesc> objects;
@@ -838,7 +1322,7 @@ int iii=0;
 
     InvalidateRect (ctx->chartWnd, 0, 1);
 }
-
+#endif
 void openFile (Ctx *ctx, CatalogItem *item) {
     char path [MAX_PATH];
     PathCombine (path, ctx->basePath.c_str (), item->fileName.c_str ());
@@ -858,25 +1342,29 @@ void openFileByIndex (Ctx *ctx, int itemIndex) {
     openFile (ctx, (CatalogItem *) item.lParam);
 }
 
+void toggleChartLoadMode (HWND wnd) {
+    Ctx *ctx = (Ctx *) GetWindowLongPtr (wnd, GWLP_USERDATA);
+
+    ctx->onlyPaintCharts = !ctx->onlyPaintCharts;
+
+    CheckMenuItem (GetSubMenu (GetMenu (wnd), 1), ID_ONLY_PAINT_CHART, MF_BYCOMMAND | (ctx->onlyPaintCharts ? MF_CHECKED : MF_UNCHECKED));
+}
+
 void doCommand (HWND wnd, uint16_t command, uint16_t notification) {
     Ctx *ctx = (Ctx *) GetWindowLongPtr (wnd, GWLP_USERDATA);
 
     switch (command) {
-        case ID_OPEN_CATALOG: {
+        case ID_ONLY_PAINT_CHART:
+            toggleChartLoadMode (wnd); break;
+        case ID_OPEN_CATALOG:
             loadCatalog (ctx); break;
-        }
-        case ID_EXIT: {
+        case ID_EXIT:
             if (queryExit (wnd)) DestroyWindow (wnd);
             break;
-        }
-        case ID_OPEN_FILE: {
+        case ID_OPEN_FILE:
             loadChart (ctx); break;
-            /*int selection = (int) SendMessage (ctx->catalogCtl, LVM_GETNEXTITEM, -1, LVNI_SELECTED);
-
-            if (selection >= 0) openFileByIndex (ctx, selection);
-
-            break;*/
-        }
+        case ID_SETTINGS:
+            editSettings (ctx->instance, wnd, & ctx->environment.settings); break;
     }
 }
 

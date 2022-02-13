@@ -2082,6 +2082,23 @@ std::string getAttrStringValue (Attr *attr, AttrDictionary& dic) {
     }
 }
 
+int getZoomToCover (double north, double west, double south, double east) {
+    int zoom = 0;
+
+    double actualLatDiff = north - south;
+    double actualLonDiff = east - west;
+    double latDiff = 180.0;
+    double lonDiff = 360.0;
+
+    while (latDiff > actualLatDiff || lonDiff > actualLonDiff) {
+        ++ zoom;
+        latDiff *= 0.5;
+        lonDiff *= 0.5;
+    }
+
+    return zoom;
+}
+
 std::tuple<bool, int, double, double, double, double> getCoverageRect (Features& features, Nodes& nodes, Edges& edges) {
     int zoom = 0;
     bool hasCoverage = false;
@@ -2118,18 +2135,45 @@ std::tuple<bool, int, double, double, double, double> getCoverageRect (Features&
     }
 
     if (hasCoverage) {
-        double actualLatDiff = north - south;
-        double actualLonDiff = east - west;
-        double latDiff = 180.0;
-        double lonDiff = 360.0;
-
-        while (latDiff > actualLatDiff || lonDiff > actualLonDiff) {
-            ++ zoom;
-            latDiff *= 0.5;
-            lonDiff *= 0.5;
-        }
+        zoom = getZoomToCover (north, west, south, east);
     }
 
     return std::tuple<bool, int, double, double, double, double> (hasCoverage, zoom, north, west, south, east);
+}
+
+void openChart (
+    char *path,
+    DatasetParams& datasetParams,
+    Chart& chart,
+    Environment& env,
+    View& view,
+    std::vector<std::vector<FieldInstance>>& records,
+    bool extendView = false) {
+    loadParseS57File (path, records);
+    extractDatasetParameters (records, datasetParams);
+    extractNodes (records, chart, datasetParams);
+    extractEdges (records, chart, datasetParams);
+    extractFeatureObjects (records, chart);
+    deformatAttrValues (env.attrDictionary, chart);
+    buildPointLocationInfo (chart);
+
+    auto [hasCoverage, zoom, north, west, south, east] = getCoverageRect (chart.features, chart.nodes, chart.edges);
+
+    if (hasCoverage) {
+        if (extendView) {
+            view.north = max (view.north, north);
+            view.south = min (view.south, south);
+            view.west = min (view.west, west);
+            view.east = max (view.east, east);
+            view.zoom = getZoomToCover (view.north, view.west, view.south, view.east);
+        } else {
+            view.north = north;
+            view.south = south;
+            view.west = west;
+            view.east = east;
+            view.zoom = zoom;
+        }
+    }
+    
 }
 

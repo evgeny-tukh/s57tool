@@ -605,7 +605,7 @@ void wrecks05 (LookupTableItem *item, FeatureObject *object, Environment& enviro
                     if (seabedDepth.has_value ()) {
                         leastDepth = seabedDepth.value () - 66.0;
                     }
-                    if (leastDepth.value () >= 20.1) {
+                    if (leastDepth.has_value () && leastDepth.value () >= 20.1) {
                         depth = leastDepth.value ();
                     }
                 } else {

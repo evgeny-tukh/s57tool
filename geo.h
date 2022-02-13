@@ -14,7 +14,7 @@ static const double PIXEL_SIZE_IN_MM = 0.264583333;
 static const double EARTH_RADIUS = 6366707.0194937074958298109629434;
 
 struct View {
-    double north, west;
+    double north, west, south, east;
     int zoom;
 
     View (double _north, double _west, int _zoom): north (_north), west (_west), zoom (_zoom) {}
@@ -54,7 +54,9 @@ inline double turnBackDeg (double brg) {
 double getPixelSizeInMm ();
 
 inline bool isAngleBetween (double angle, double a, double b) {
-    if (a < b) {
+    if (a == b) {
+        return angle == a;
+    } else if (a < b) {
         return angle >= a && angle <= b;
     } else {
         return isAngleBetween (angle, a, 360.0) || isAngleBetween (angle, 0, b);
