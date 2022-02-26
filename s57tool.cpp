@@ -823,13 +823,12 @@ int iii=0;
 
 void openFile (Ctx *ctx, char *path) {
     std::vector<std::vector<FieldInstance>> records;
-    DatasetParams datasetParams;
 
-    openChart (path, datasetParams, ctx->chart, ctx->environment, ctx->view, records);
+    openChart (path, ctx->chart, ctx->environment, ctx->view, records);
 
     InvalidateRect (ctx->chartWnd, 0, TRUE);
 
-    if (!ctx->onlyPaintCharts) showChartStructure (ctx, datasetParams, records);
+    if (!ctx->onlyPaintCharts) showChartStructure (ctx, ctx->chart.params, records);
 }
 #else
 void openFile (Ctx *ctx, char *path) {

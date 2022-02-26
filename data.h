@@ -369,6 +369,9 @@ struct Chart {
         return pos == objectsUnderSpatials.end () ? 0 : & pos->second;
     }
 };
+struct ChartCollection {
+    std::map<uint32_t, Chart
+};
 struct Environment {
     ObjectDictionary objectDictionary;
     AttrDictionary attrDictionary;

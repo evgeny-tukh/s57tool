@@ -495,7 +495,7 @@ void deformatAttrValues (AttrDictionary& attrDictionary, Chart& chart) {
     }
 }
 
-void extractEdges (std::vector<std::vector<FieldInstance>>& records, Chart& chart, DatasetParams datasetParams) {
+void extractEdges (std::vector<std::vector<FieldInstance>>& records, Chart& chart) {
     Edges& edges = chart.edges;
     Nodes& points = chart.nodes;
     edges.clear ();
@@ -585,13 +585,13 @@ void extractEdges (std::vector<std::vector<FieldInstance>>& records, Chart& char
                     for (auto& subField: instanceValue) {
                         if (subField.first.compare ("*YCOO") == 0) {
                             auto& point = edge.internalNodes.emplace_back ();
-                            if (subField.second.intValue.has_value () && datasetParams.coordMultiplier) {
-                                point.lat = (double) (int32_t) subField.second.intValue.value () / (double) datasetParams.coordMultiplier.value ();
+                            if (subField.second.intValue.has_value () && chart.params.coordMultiplier) {
+                                point.lat = (double) (int32_t) subField.second.intValue.value () / (double) chart.params.coordMultiplier.value ();
                             }
                         } else if (subField.first.compare ("XCOO") == 0) {
                             auto& point = edge.internalNodes.back ();
                             if (subField.second.intValue.has_value ()) {
-                                point.lon = (double) (int32_t) subField.second.intValue.value () / (double) datasetParams.coordMultiplier.value ();
+                                point.lon = (double) (int32_t) subField.second.intValue.value () / (double) chart.params.coordMultiplier.value ();
                             }
                         }
                     }
@@ -650,7 +650,7 @@ void extractEdges (std::vector<std::vector<FieldInstance>>& records, Chart& char
     edges.buildIndex ();
 }
 
-void extractNodes (std::vector<std::vector<FieldInstance>>& records, Chart& chart, DatasetParams datasetParams) {
+void extractNodes (std::vector<std::vector<FieldInstance>>& records, Chart& chart) {
     Nodes& points = chart.nodes;
     points.clear ();
 
@@ -709,13 +709,13 @@ void extractNodes (std::vector<std::vector<FieldInstance>>& records, Chart& char
                 for (auto& subField: firstFieldValue) {
                     if (subField.first.compare ("*YCOO") == 0) {
                         auto& point = curPoint.points.emplace_back ();
-                        if (subField.second.intValue.has_value () && datasetParams.coordMultiplier) {
-                            point.lat = (double) (int32_t) subField.second.intValue.value () / (double) datasetParams.coordMultiplier.value ();
+                        if (subField.second.intValue.has_value () && chart.params.coordMultiplier) {
+                            point.lat = (double) (int32_t) subField.second.intValue.value () / (double) chart.params.coordMultiplier.value ();
                         }
                     } else if (subField.first.compare ("XCOO") == 0) {
                         auto& point = curPoint.points.back ();
                         if (subField.second.intValue.has_value ()) {
-                            point.lon = (double) (int32_t) subField.second.intValue.value () / (double) datasetParams.coordMultiplier.value ();
+                            point.lon = (double) (int32_t) subField.second.intValue.value () / (double) chart.params.coordMultiplier.value ();
                         }
                     }
                 }
@@ -727,16 +727,16 @@ void extractNodes (std::vector<std::vector<FieldInstance>>& records, Chart& char
                     for (auto& subField: instanceValue) {
                         if (subField.first.compare ("*YCOO") == 0) {
                             auto& point = soundings.emplace_back ();
-                            if (subField.second.intValue.has_value () && datasetParams.coordMultiplier) {
-                                point.lat = (double) (int32_t) subField.second.intValue.value () / (double) datasetParams.coordMultiplier.value ();
+                            if (subField.second.intValue.has_value () && chart.params.coordMultiplier) {
+                                point.lat = (double) (int32_t) subField.second.intValue.value () / (double) chart.params.coordMultiplier.value ();
                             }
-                        } else if (subField.first.compare ("VE3D") == 0 && datasetParams.soundingMultiplier) {
+                        } else if (subField.first.compare ("VE3D") == 0 && chart.params.soundingMultiplier) {
                             auto& point = soundings.back ();
                             if (subField.second.intValue.has_value ()) {
-                                point.depth = (double) (int32_t) subField.second.intValue.value () / (double) datasetParams.soundingMultiplier.value ();
+                                point.depth = (double) (int32_t) subField.second.intValue.value () / (double) chart.params.soundingMultiplier.value ();
 
-                                if (datasetParams.depthMeasurement.has_value ()) {
-                                    switch (datasetParams.depthMeasurement.value ()) {
+                                if (chart.params.depthMeasurement.has_value ()) {
+                                    switch (chart.params.depthMeasurement.value ()) {
                                         case DUNI::DepthFeet: {
                                             point.depth *= 0.3048; break;
                                         }
@@ -753,10 +753,10 @@ void extractNodes (std::vector<std::vector<FieldInstance>>& records, Chart& char
                                     }
                                 }
                             }
-                        } else if (subField.first.compare ("XCOO") == 0 && datasetParams.coordMultiplier) {
+                        } else if (subField.first.compare ("XCOO") == 0 && chart.params.coordMultiplier) {
                             auto& point = soundings.back ();
                             if (subField.second.intValue.has_value ()) {
-                                point.lon = (double) (int32_t) subField.second.intValue.value () / (double) datasetParams.coordMultiplier.value ();
+                                point.lon = (double) (int32_t) subField.second.intValue.value () / (double) chart.params.coordMultiplier.value ();
                             }
                         }
                     }
@@ -2143,16 +2143,15 @@ std::tuple<bool, int, double, double, double, double> getCoverageRect (Features&
 
 void openChart (
     char *path,
-    DatasetParams& datasetParams,
     Chart& chart,
     Environment& env,
     View& view,
     std::vector<std::vector<FieldInstance>>& records,
     bool extendView = false) {
     loadParseS57File (path, records);
-    extractDatasetParameters (records, datasetParams);
-    extractNodes (records, chart, datasetParams);
-    extractEdges (records, chart, datasetParams);
+    extractDatasetParameters (records, chart.params);
+    extractNodes (records, chart);
+    extractEdges (records, chart);
     extractFeatureObjects (records, chart);
     deformatAttrValues (env.attrDictionary, chart);
     buildPointLocationInfo (chart);
