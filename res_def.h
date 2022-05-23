@@ -129,3 +129,16 @@
 #define ES_READONLY         0x0800L
 #define ES_WANTRETURN       0x1000L
 #define ES_NUMBER           0x2000L
+#define CBS_SIMPLE            0x0001L
+#define CBS_DROPDOWN          0x0002L
+#define CBS_DROPDOWNLIST      0x0003L
+#define CBS_OWNERDRAWFIXED    0x0010L
+#define CBS_OWNERDRAWVARIABLE 0x0020L
+#define CBS_AUTOHSCROLL       0x0040L
+#define CBS_OEMCONVERT        0x0080L
+#define CBS_SORT              0x0100L
+#define CBS_HASSTRINGS        0x0200L
+#define CBS_NOINTEGRALHEIGHT  0x0400L
+#define CBS_DISABLENOSCROLL   0x0800L
+#define CBS_UPPERCASE         0x2000L
+#define CBS_LOWERCASE         0x4000L

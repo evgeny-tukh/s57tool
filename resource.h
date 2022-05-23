@@ -13,9 +13,13 @@
 #define ID_OPEN_CATALOG                         201
 #define ID_OPEN_FILE                            202
 #define ID_OPEN_FILES                           203
-#define ID_SETTINGS                             204
-#define ID_ONLY_PAINT_CHART                     205
-
+#define ID_CHART_SETTINGS                       204
+#define ID_NMEA_SETTINGS                        205
+#define ID_ONLY_PAINT_CHART                     206
+#define ID_GPS_PORT                             207
+#define ID_GYRO_PORT                            208
+#define ID_GPS_BAUD                             209
+#define ID_GYRO_BAUD                            210
 
 #define IDC_CATALOG                             300
 #define IDC_RECORDS                             301
@@ -47,4 +51,6 @@
 #define IDC_DEEP_CONTOUR                        522
 #define IDC_SAFETY_DEPTH                        524
 
-#define IDD_SETTINGS                            1000
+#define IDD_CHART_SETTINGS                            1000
+#define IDD_NMEA_SETTINGS                       1001
+

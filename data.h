@@ -8,7 +8,7 @@
 #include <tuple>
 #include "s57defs.h"
 #include "geo.h"
-#include "settings.h"
+#include "chart_settings.h"
 
 enum NodeFlags {
     CONNECTED = 1,
@@ -370,13 +370,20 @@ struct Chart {
     }
 };
 struct ChartCollection {
-    std::map<uint32_t, Chart
+    std::map<uint32_t, Chart *> charts;
+
+    void addChart (Chart *chart) {
+        uint32_t compilationScale = chart->params.compilationScale.value_or (0x7FFFFFFF);
+
+        charts.emplace (std::pair<uint32_t, Chart *> (compilationScale, chart));
+    }
 };
+
 struct Environment {
     ObjectDictionary objectDictionary;
     AttrDictionary attrDictionary;
     Dai dai;
-    Settings settings;
+    ChartSettings settings;
 
     Environment () {
         initCSPs (*this);

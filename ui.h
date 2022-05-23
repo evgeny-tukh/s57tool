@@ -2,4 +2,5 @@
 
 #include <Windows.h>
 
-bool editSettings (HINSTANCE instance, HWND parent, struct Settings *settings);
+bool editChartSettings (HINSTANCE instance, HWND parent, struct ChartSettings *settings);
+bool editNmeaSettings (HINSTANCE instance, HWND parent, struct NmeaSettings *settings);

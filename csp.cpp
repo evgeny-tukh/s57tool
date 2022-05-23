@@ -6,7 +6,7 @@
 #include "s57defs.h"
 #include "classes.h"
 #include "data.h"
-#include "settings.h"
+#include "chart_settings.h"
 #include "drawers.h"
 #include "parser.h"
 
@@ -110,7 +110,7 @@ bool isEdgeSharedWithLinerStructure (FeatureObject *thisObject, size_t edgeIndex
 }
 
 void seabed01 (double depthRangeVal1, double depthRangeVal2, LookupTableItem *item, Environment& environment) {
-    Settings& settings = environment.settings;
+    ChartSettings& settings = environment.settings;
     std::string colorName { "DEPIT" };
     bool shallow = true;
 
@@ -229,7 +229,7 @@ void rescsp03 (Attr *restrn, FeatureObject *object, Environment& environment, Ch
 void depare03 (LookupTableItem *item, FeatureObject *object, Environment& environment, Chart& chart, View& view, DrawQueue& drawQueue) {
     Features& features = chart.features;
     Edges& edges = chart.edges;
-    Settings& settings = environment.settings;
+    ChartSettings& settings = environment.settings;
     Dai& dai = environment.dai;
     auto drval1 = object->getAttr (ATTRS::DRVAL1);
     auto drval2 = object->getAttr (ATTRS::DRVAL2);
@@ -338,7 +338,7 @@ void depare03 (LookupTableItem *item, FeatureObject *object, Environment& enviro
 }
 
 void depcnt03 (LookupTableItem *item, FeatureObject *object, Environment& environment, Chart& chart, View& view, DrawQueue& drawQueue) {
-    Settings& settings = environment.settings;
+    ChartSettings& settings = environment.settings;
     Dai& dai = environment.dai;
     auto valdco = object->getAttr (ATTRS::VALDCO);
 
@@ -369,7 +369,7 @@ void depcnt03 (LookupTableItem *item, FeatureObject *object, Environment& enviro
 }
 
 void sndfrm04 (FeatureObject *object, double depth, Chart& chart, Environment& environment, std::vector<std::string>& symbols) {
-    Settings& settings = environment.settings;
+    ChartSettings& settings = environment.settings;
     std::string prefix;
     if (depth <= settings.safetyDepth) {
         prefix = "SOUNDS";
@@ -1612,7 +1612,7 @@ void lights06 (LookupTableItem *item, FeatureObject *object, Environment& enviro
     Nodes& nodes = chart.nodes;
     Features& features = chart.features;
     Dai& dai = environment.dai;
-    Settings& settings = environment.settings;
+    ChartSettings& settings = environment.settings;
     auto valnmr = object->getAttr (ATTRS::VALNMR);
     Attr *orient = 0;
     auto position = nodes [object->nodeIndex].points.front ();

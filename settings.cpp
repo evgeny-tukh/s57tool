@@ -1,6 +1,6 @@
-#include "settings.h"
+#include "chart_settings.h"
 
-Settings::Settings ():
+ChartSettings::ChartSettings ():
     fullSectorLength (false),
     safetyContourLabels (false),
     displayContourLabels (true),

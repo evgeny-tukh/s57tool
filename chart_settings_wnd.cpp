@@ -1,11 +1,13 @@
 #include <Windows.h>
 #include <cstdint>
 #include <stdio.h>
-#include "settings.h"
+#include "chart_settings.h"
+#include "nmea_settings.h"
 #include "resource.h"
+#include "serial.h"
 
 void initSettingsWnd (HWND wnd, void *data) {
-    Settings *settings = (Settings *) data;
+    ChartSettings *settings = (ChartSettings *) data;
     RECT client;
 
     GetClientRect (wnd, & client);
@@ -31,7 +33,7 @@ LRESULT settingsWndProc (HWND wnd, UINT msg, WPARAM param1, LPARAM param2) {
 }
 
 void saveSettings (HWND wnd) {
-    Settings *settings = (Settings *) GetWindowLongPtr (wnd, GWLP_USERDATA);
+    ChartSettings *settings = (ChartSettings *) GetWindowLongPtr (wnd, GWLP_USERDATA);
     auto getBtnStatus = [&wnd] (uint16_t id, bool& flag) {
         flag = IsDlgButtonChecked (wnd, id) == BST_CHECKED;
     };
@@ -56,15 +58,43 @@ void saveSettings (HWND wnd) {
     getFloatValue (IDC_SAFETY_DEPTH, settings->safetyDepth);
 }
 
-void doSettingsWndCommand (HWND wnd, uint16_t cmd) {
+void doChartSettingsWndCommand (HWND wnd, uint16_t cmd) {
     switch (cmd) {
         case IDOK: saveSettings (wnd);
         case IDCANCEL: EndDialog (wnd, cmd);
     }
 }
 
-void showSettings (HWND wnd) {
-    Settings *settings = (Settings *) GetWindowLongPtr (wnd, GWLP_USERDATA);
+void showNmeaSettings (HWND wnd) {
+    NmeaSettings *settings = (NmeaSettings *) GetWindowLongPtr (wnd, GWLP_USERDATA);
+    auto checkBtn = [&wnd] (uint16_t id, bool flag) {
+        CheckDlgButton (wnd, id, flag ? BST_CHECKED : BST_UNCHECKED);
+    };
+    auto setFloatValue = [&wnd] (uint16_t id, double value, const char *format = "%.1f") {
+        char buffer [100];
+        sprintf (buffer, format, value);
+        SetDlgItemText (wnd, id, buffer);
+    };
+    
+    std::vector<std::string> ports;
+    getSerialPortsList (ports);
+
+    for (auto& port: ports) {
+        SendDlgItemMessage (wnd, ID_GPS_PORT, CB_ADDSTRING, 0, (LPARAM) port.c_str ());
+        SendDlgItemMessage (wnd, ID_GYRO_PORT, CB_ADDSTRING, 0, (LPARAM) port.c_str ());
+    }
+
+    std::vector<int> bauds { 4800, 9600, 38400, 115200 };
+    for (auto baud: bauds) {
+        auto item = SendDlgItemMessage (wnd, ID_GPS_BAUD, CB_ADDSTRING, 0, (LPARAM) std::to_string (baud).c_str ());
+        SendDlgItemMessage (wnd, ID_GPS_BAUD, CB_SETITEMDATA, item, baud);
+        item = SendDlgItemMessage (wnd, ID_GYRO_BAUD, CB_ADDSTRING, 0, (LPARAM) std::to_string (baud).c_str ());
+        SendDlgItemMessage (wnd, ID_GYRO_BAUD, CB_SETITEMDATA, item, baud);
+    }
+}
+
+void showChartSettings (HWND wnd) {
+    ChartSettings *settings = (ChartSettings *) GetWindowLongPtr (wnd, GWLP_USERDATA);
     auto checkBtn = [&wnd] (uint16_t id, bool flag) {
         CheckDlgButton (wnd, id, flag ? BST_CHECKED : BST_UNCHECKED);
     };
@@ -89,13 +119,13 @@ void showSettings (HWND wnd) {
     setFloatValue (IDC_SAFETY_DEPTH, settings->safetyDepth);
 }
 
-INT_PTR CALLBACK settingsDlgProc (HWND wnd, UINT msg, WPARAM param1, LPARAM param2) {
+INT_PTR CALLBACK chartSettingsDlgProc (HWND wnd, UINT msg, WPARAM param1, LPARAM param2) {
     switch (msg) {
         case WM_COMMAND:
-            doSettingsWndCommand (wnd, LOWORD (param1)); break;
+            doChartSettingsWndCommand (wnd, LOWORD (param1)); break;
         case WM_INITDIALOG: {
             SetWindowLongPtr (wnd, GWLP_USERDATA, param2);
-            showSettings (wnd);
+            showChartSettings (wnd);
             return true;
         }
     }
@@ -103,6 +133,24 @@ INT_PTR CALLBACK settingsDlgProc (HWND wnd, UINT msg, WPARAM param1, LPARAM para
     return false;
 }
 
-bool editSettings (HINSTANCE instance, HWND parent, struct Settings *settings) {
-    return DialogBoxParam (instance, MAKEINTRESOURCE (IDD_SETTINGS), parent, settingsDlgProc, (LPARAM) settings) == IDOK;
+INT_PTR CALLBACK nmeaSettingsDlgProc (HWND wnd, UINT msg, WPARAM param1, LPARAM param2) {
+    switch (msg) {
+        case WM_COMMAND:
+            doChartSettingsWndCommand (wnd, LOWORD (param1)); break;
+        case WM_INITDIALOG: {
+            SetWindowLongPtr (wnd, GWLP_USERDATA, param2);
+            showNmeaSettings (wnd);
+            return true;
+        }
+    }
+    
+    return false;
+}
+
+bool editChartSettings (HINSTANCE instance, HWND parent, struct ChartSettings *settings) {
+    return DialogBoxParam (instance, MAKEINTRESOURCE (IDD_CHART_SETTINGS), parent, chartSettingsDlgProc, (LPARAM) settings) == IDOK;
+}
+
+bool editNmeaSettings (HINSTANCE instance, HWND parent, struct NmeaSettings *settings) {
+    return DialogBoxParam (instance, MAKEINTRESOURCE (IDD_NMEA_SETTINGS), parent, nmeaSettingsDlgProc, (LPARAM) settings) == IDOK;
 }

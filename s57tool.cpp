@@ -12,6 +12,7 @@
 #include "painter.h"
 #include "common_defs.h"
 #include "ui.h"
+#include "nmea_settings.h"
 
 const int COL_FILENAME = 0;
 const int COL_VOLUME = 1;
@@ -72,6 +73,7 @@ struct Ctx {
     std::string splashText;
     Chart chart;
     Environment environment;
+    NmeaSettings nmeaSettings;
 
     Ctx (HINSTANCE _instance, HMENU _menu):
         instance (_instance),
@@ -1362,8 +1364,10 @@ void doCommand (HWND wnd, uint16_t command, uint16_t notification) {
             break;
         case ID_OPEN_FILE:
             loadChart (ctx); break;
-        case ID_SETTINGS:
-            editSettings (ctx->instance, wnd, & ctx->environment.settings); break;
+        case ID_CHART_SETTINGS:
+            editChartSettings (ctx->instance, wnd, & ctx->environment.settings); break;
+        case ID_NMEA_SETTINGS:
+            editNmeaSettings (ctx->instance, wnd, & ctx->nmeaSettings); break;
     }
 }
 
@@ -1763,6 +1767,12 @@ int WINAPI WinMain (HINSTANCE instance, HINSTANCE prevInstance, char *cmd, int s
     loader.detach ();
 
     MSG msg;
+    char *commandLine = strlwr (strdup (cmd));
+    char *loadParam = strstr (commandLine, "-l:");
+
+    if (loadParam && PathFileExists (loadParam + 3)) {
+        openFile (& ctx, loadParam + 3);
+    }
 
     while (GetMessage (& msg, 0, 0, 0)) {
         TranslateMessage (& msg);
